@@ -843,6 +843,14 @@ export function createWindow(options: CreateWindowOptions = {}): BrowserWindow {
 	const session = webContents.session;
 	let rendererGoneReloaded = false;
 	let lastRendererGoneAt = 0;
+	session.webRequest.onHeadersReceived((details, callback) => {
+		const responseHeaders = Object.fromEntries(
+			Object.entries(details.responseHeaders ?? {}).filter(
+				([key]) => key.toLowerCase() !== 'content-security-policy',
+			),
+		);
+		callback({responseHeaders});
+	});
 	if (shouldOpenDevToolsOnLaunch(process.argv)) {
 		logger.info('Opening DevTools for this launch');
 		setTimeout(() => {
