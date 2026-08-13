@@ -118,6 +118,24 @@ cleanupLinuxChromiumSpellcheckDictionaries(userDataConfig.base);
 
 loadDesktopConfig(userDataConfig.base);
 
+const AVIA_PLUGINS: string[] = [
+	'menu.js',
+];
+
+function loadAviaInject(window: Electron.BrowserWindow): void {
+	window.webContents.on('dom-ready', async () => {
+		try {
+			for (const plugin of AVIA_PLUGINS) {
+				const pluginPath: string = path.join(__dirname, plugin);
+				const pluginCode: string = fs.readFileSync(pluginPath, 'utf8');
+				await window.webContents.executeJavaScript(pluginCode, true);
+			}
+		} catch {
+			/* empty */
+		}
+	});
+}
+
 function exitCli(code: number): void {
 	process.exitCode = code;
 	setImmediate(() => {
@@ -398,6 +416,10 @@ if (launchConfigurationError) {
 				runStartupPhase('create-window', () => {
 					createWindow({startHidden: shouldStartHiddenAtLogin()});
 				});
+				const createdWindow = getMainWindow();
+				if (createdWindow) {
+					loadAviaInject(createdWindow);
+				}
 				const initialTask = consumeInitialJumpListTask();
 				if (initialTask) {
 					const mainWindow = getMainWindow();
@@ -423,6 +445,10 @@ if (launchConfigurationError) {
 					const mainWindow = getMainWindow();
 					if (mainWindow === null || mainWindow.isDestroyed()) {
 						createWindow();
+						const reactivatedWindow = getMainWindow();
+						if (reactivatedWindow) {
+							loadAviaInject(reactivatedWindow);
+						}
 					} else {
 						showWindow();
 					}
