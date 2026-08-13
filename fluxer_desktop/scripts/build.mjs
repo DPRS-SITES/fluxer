@@ -10,6 +10,7 @@ const ROOT_DIR = path.resolve(import.meta.dirname, '..');
 const SRC_DIR = path.join(ROOT_DIR, 'src');
 const DIST_DIR = path.join(ROOT_DIR, 'dist');
 const NATIVE_DIR = path.join(ROOT_DIR, 'native');
+const PLUGINS_SOURCE_DIR = path.join(ROOT_DIR, 'plugins');
 const requireModule = createRequire(import.meta.url);
 const isProduction =
 	process.env.NODE_ENV === 'production' ||
@@ -624,6 +625,17 @@ async function buildPreload() {
 	console.log('Preload script build complete.');
 }
 
+function copyPlugins() {
+	const pluginsTargetDir = path.join(DIST_DIR, 'main', 'plugins');
+	if (!fs.existsSync(PLUGINS_SOURCE_DIR)) {
+		console.log(`No plugins directory found at ${path.relative(ROOT_DIR, PLUGINS_SOURCE_DIR)}; skipping plugin copy.`);
+		return;
+	}
+	fs.cpSync(PLUGINS_SOURCE_DIR, pluginsTargetDir, {recursive: true});
+	const pluginCount = fs.readdirSync(PLUGINS_SOURCE_DIR).filter((fileName) => fileName.toLowerCase().endsWith('.js')).length;
+	console.log(`Copied ${pluginCount} plugin file(s) into ${path.relative(ROOT_DIR, pluginsTargetDir)}`);
+}
+
 function ensureBuildChannelFile() {
 	execFileSync(
 		'cargo',
@@ -653,6 +665,7 @@ async function build() {
 	fs.mkdirSync(path.join(DIST_DIR, 'preload'), {recursive: true});
 	buildNativeAddons();
 	await Promise.all([buildMain(), buildPreload()]);
+	copyPlugins();
 	console.log('Build complete!');
 }
 
