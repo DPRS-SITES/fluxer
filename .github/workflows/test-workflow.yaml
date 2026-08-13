@@ -1,4 +1,4 @@
-name: build artifact test
+name: build desktop maybe
 
 on:
   workflow_dispatch:
@@ -10,49 +10,36 @@ on:
         options:
           - stable
           - canary
-        default: stable
-      test_build:
-        description: Stash artifacts under desktop-test/ instead of desktop/ (API will not pick these up as a release).
-        required: false
-        default: false
-        type: boolean
+        default: canary
       build_version:
         description: Explicit Fluxer CalVer build version (YYYY.MDD.MICRO, UTC HHMMSS without leading zeroes) to use instead of automatic UTC clock allocation.
         required: false
         default: ""
         type: string
-      skip_targets:
-        description: Comma-separated platforms or targets to skip, such as windows, macos-arm64, linux-x64.
-        required: false
-        default: ""
-        type: string
+
 permissions:
-  contents: write
-  id-token: write
+  contents: read
   actions: read
 
 concurrency:
-  group: desktop-${{ inputs.channel }}-${{ inputs.test_build && 'test' || 'release' }}
+  group: desktop-free-${{ inputs.channel }}
   cancel-in-progress: true
 
 env:
   CHANNEL: ${{ inputs.channel }}
   BUILD_CHANNEL: ${{ inputs.channel == 'canary' && 'canary' || 'stable' }}
-  TEST_BUILD: ${{ inputs.test_build && 'true' || 'false' }}
+  TEST_BUILD: "true"
 
 jobs:
   meta:
     name: Resolve build metadata
-    runs-on: ubuntu-24.04-arm
-    environment: desktop-releases
+    runs-on: ubuntu-latest
     timeout-minutes: 25
     outputs:
       version: ${{ steps.meta.outputs.version }}
       pub_date: ${{ steps.meta.outputs.pub_date }}
       channel: ${{ steps.meta.outputs.channel }}
       build_channel: ${{ steps.meta.outputs.build_channel }}
-      test_build: ${{ steps.meta.outputs.test_build }}
-      s3_prefix: ${{ steps.meta.outputs.s3_prefix }}
       source_sha: ${{ steps.meta.outputs.source_sha }}
     steps:
       - name: Checkout source
@@ -74,48 +61,24 @@ jobs:
           cargo run --locked --quiet --manifest-path tools/ci/Cargo.toml -- build-desktop
           --step set_metadata
           --channel "${{ inputs.channel }}"
-          --test-build "${{ inputs.test_build }}"
-
-  matrix:
-    name: Resolve build matrix
-    runs-on: ubuntu-24.04-arm
-    environment: desktop-releases
-    timeout-minutes: 25
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-      windows_x64: ${{ steps.set-matrix.outputs.windows_x64 }}
-      windows_arm64: ${{ steps.set-matrix.outputs.windows_arm64 }}
-      windows_x64_default: ${{ steps.set-matrix.outputs.windows_x64_default }}
-      windows_arm64_default: ${{ steps.set-matrix.outputs.windows_arm64_default }}
-      windows_game_capture_x64: ${{ steps.set-matrix.outputs.windows_game_capture_x64 }}
-      windows_game_capture_arm64: ${{ steps.set-matrix.outputs.windows_game_capture_arm64 }}
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
-
-      - name: Set up Rust toolchain (CI helpers)
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9
-        with:
-          toolchain: "1.93.0"
-
-      - name: Build platform matrix
-        id: set-matrix
-        run: >-
-          cargo run --locked --quiet --manifest-path tools/ci/Cargo.toml -- build-desktop
-          --step set_matrix
-          --skip-targets "${{ inputs.skip_targets }}"
+          --test-build "true"
 
   build:
-    name: Build ${{ matrix.platform }} (${{ matrix.arch }}, ${{ matrix.desktop_variant }})
+    name: Build ${{ matrix.platform }} (${{ matrix.arch }})
     needs:
       - meta
-      - matrix
-    runs-on: ${{ matrix.platform == 'windows' && (matrix.arch == 'arm64' && 'windows-11-arm' || 'windows-2022') || matrix.platform == 'macos' && (matrix.arch == 'arm64' && 'macos-15' || 'macos-15-intel') || (matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04') }}
-    environment: desktop-releases
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.matrix.outputs.matrix) }}
+      matrix:
+        include:
+          - platform: linux
+            arch: x64
+            os: ubuntu-latest
+          - platform: windows
+            arch: x64
+            os: windows-latest
     env:
       CHANNEL: ${{ needs.meta.outputs.channel }}
       BUILD_CHANNEL: ${{ needs.meta.outputs.build_channel }}
@@ -126,20 +89,12 @@ jobs:
       PUBLIC_BUILD_VERSION: ${{ needs.meta.outputs.version }}
       PUB_DATE: ${{ needs.meta.outputs.pub_date }}
       SOURCE_SHA: ${{ needs.meta.outputs.source_sha }}
-      S3_DESKTOP_PREFIX: ${{ needs.meta.outputs.s3_prefix }}
-      DESKTOP_HANDOFF_PREFIX: _handoff/desktop/${{ needs.meta.outputs.build_channel }}/${{ needs.meta.outputs.version }}/${{ needs.meta.outputs.source_sha }}
-      S3_ENDPOINT: https://ewr1.vultrobjects.com
-      S3_BUCKET: fluxer-downloads
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       DESKTOP_PLATFORM: ${{ matrix.platform }}
       DESKTOP_ARCH: ${{ matrix.arch }}
-      DESKTOP_VARIANT: ${{ matrix.desktop_variant }}
-      FLUXER_DESKTOP_BUILD_VARIANT: ${{ matrix.desktop_variant }}
+      DESKTOP_VARIANT: default
       PLATFORM: ${{ matrix.platform }}
       ARCH: ${{ matrix.arch }}
-      ELECTRON_ARCH: ${{ matrix.electron_arch }}
-      FLUXER_WINDOWS_GAME_CAPTURE_MODULE_ENABLED: ${{ matrix.desktop_variant == 'windows-game-capture' && 'true' || 'false' }}
+      ELECTRON_ARCH: ${{ matrix.arch }}
     steps:
       - name: Checkout CI helpers
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
@@ -157,18 +112,6 @@ jobs:
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9
         with:
           toolchain: "1.93.0"
-
-      - name: Set up Python (Windows)
-        if: runner.os == 'Windows'
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: "3.13"
-
-      - name: Ensure python3 command (Windows)
-        if: runner.os == 'Windows'
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step ensure_python3_windows
 
       - name: Shorten Windows paths and pin pnpm store
         if: runner.os == 'Windows'
@@ -216,18 +159,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-pnpm-store-
 
-      - name: Install Python setuptools (Windows ARM64)
-        if: matrix.platform == 'windows' && matrix.arch == 'arm64'
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step install_setuptools_windows_arm64
-
-      - name: Install Python setuptools (macOS)
-        if: matrix.platform == 'macos'
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step install_setuptools_macos
-
       - name: Install Linux dependencies
         if: matrix.platform == 'linux'
         env:
@@ -241,19 +172,13 @@ jobs:
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9
         with:
           toolchain: "1.93.0"
-          targets: ${{ matrix.platform == 'macos' && (matrix.arch == 'arm64' && 'aarch64-apple-darwin' || 'x86_64-apple-darwin') || (matrix.arch == 'arm64' && 'aarch64-unknown-linux-gnu' || 'x86_64-unknown-linux-gnu') }}
-
-      - name: Install MSVC ARM64 build tools
-        if: matrix.platform == 'windows' && matrix.arch == 'arm64'
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step install_msvc_arm64_tools
+          targets: x86_64-unknown-linux-gnu
 
       - name: Set up MSVC env (Windows)
         if: matrix.platform == 'windows'
         uses: TheMrMilchmann/setup-msvc-dev@79dac248aac9d0059f86eae9d8b5bfab4e95e97c
         with:
-          arch: ${{ matrix.arch == 'arm64' && 'amd64_arm64' || 'amd64' }}
+          arch: amd64
 
       - name: Set up Rust toolchain (Windows)
         if: matrix.platform == 'windows'
@@ -291,29 +216,6 @@ jobs:
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step build_electron_main
 
-      - name: Build Electron app (macOS)
-        if: matrix.platform == 'macos'
-        working-directory: ${{ env.WORKDIR }}/fluxer_desktop
-        env:
-          BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
-          CSC_LINK: ${{ secrets.APPLE_CERTIFICATE }}
-          CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step build_app_macos
-
-      - name: Verify macOS artifact (bundle ID + profile + signature)
-        if: matrix.platform == 'macos'
-        working-directory: ${{ env.WORKDIR }}/fluxer_desktop
-        env:
-          BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step verify_bundle_id
-
       - name: Build Electron app (Windows)
         if: matrix.platform == 'windows'
         working-directory: ${{ env.WORKDIR }}/fluxer_desktop
@@ -326,6 +228,15 @@ jobs:
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step build_app_windows
 
+      - name: Create portable ZIP (Windows)
+        if: matrix.platform == 'windows'
+        working-directory: ${{ env.WORKDIR }}/fluxer_desktop
+        env:
+          BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
+        run: >-
+          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
+          --step create_portable_zip_windows
+
       - name: Build Electron app (Linux)
         if: matrix.platform == 'linux'
         working-directory: ${{ env.WORKDIR }}/fluxer_desktop
@@ -336,55 +247,10 @@ jobs:
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step build_app_linux
 
-      - name: Create portable ZIP (Windows)
-        if: matrix.platform == 'windows'
-        working-directory: ${{ env.WORKDIR }}/fluxer_desktop
-        env:
-          BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step create_portable_zip_windows
-
-      - name: Prepare artifacts (Windows)
-        if: runner.os == 'Windows'
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step prepare_artifacts_windows
-
-      - name: Prepare artifacts (Unix)
-        if: runner.os != 'Windows'
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step prepare_artifacts_unix
-
-      - name: Normalize updater YAML (arm64)
-        if: matrix.arch == 'arm64'
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step normalise_updater_yaml
-
-      - name: Generate SHA256 checksums (Unix)
-        if: runner.os != 'Windows'
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step generate_checksums_unix
-
-      - name: Generate SHA256 checksums (Windows)
-        if: runner.os == 'Windows'
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step generate_checksums_windows
-
-      - name: Build desktop source tarball
-        if: matrix.platform == 'linux' && matrix.arch == 'x64' && needs.meta.outputs.build_channel == 'canary'
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step build_source_tarball
-
       - name: Upload artifacts to GitHub Actions
         uses: actions/upload-artifact@v4
         with:
-          name: fluxer-${{ matrix.platform }}-${{ matrix.arch }}-${{ matrix.desktop_variant }}
-          path: upload_staging/**
+          name: fluxer-${{ matrix.platform }}-${{ matrix.arch }}-unsigned
+          path: ${{ env.WORKDIR }}/fluxer_desktop/dist-electron/**
           if-no-files-found: warn
           retention-days: 14
