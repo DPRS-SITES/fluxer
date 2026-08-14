@@ -2,6 +2,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {
 	getConfiguredChromiumSwitches,
 	getDesktopTroubleshootingSettings,
@@ -117,6 +118,8 @@ log.info('Configured user data storage', {
 cleanupLinuxChromiumSpellcheckDictionaries(userDataConfig.base);
 
 loadDesktopConfig(userDataConfig.base);
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const AVIA_PLUGINS: string[] = [
 	'menu.js',
