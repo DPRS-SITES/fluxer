@@ -124,14 +124,17 @@ const AVIA_PLUGINS: string[] = [
 
 function loadAviaInject(window: Electron.BrowserWindow): void {
 	window.webContents.on('dom-ready', async () => {
+		log.info('[AviaInject] dom-ready fired, injecting plugins');
 		try {
 			for (const plugin of AVIA_PLUGINS) {
-				const pluginPath: string = path.join(__dirname, plugin);
+				const pluginPath: string = path.join(__dirname, 'plugins', plugin);
+				log.info(`[AviaInject] loading ${pluginPath}`);
 				const pluginCode: string = fs.readFileSync(pluginPath, 'utf8');
 				await window.webContents.executeJavaScript(pluginCode, true);
+				log.info(`[AviaInject] injected ${plugin}`);
 			}
-		} catch {
-			/* empty */
+		} catch (error) {
+			log.error('[AviaInject] plugin injection failed:', error);
 		}
 	});
 }
