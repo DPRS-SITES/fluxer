@@ -67,6 +67,7 @@ import ChatInputSettings from '@app/features/messaging/state/ChatInputSettings';
 import {isIMEComposing} from '@app/features/messaging/utils/IMECompositionUtils';
 import type {MentionSegment} from '@app/features/messaging/utils/TextareaSegmentManager';
 import markupStyles from '@app/features/theme/styles/Markup.module.css';
+import FocusRing from '@app/features/ui/focus_ring/FocusRing';
 import MobileLayout from '@app/features/ui/state/MobileLayout';
 import {flxElementClassName} from '@app/lib/react';
 import type {InitialConfigType} from '@lexical/react/LexicalComposer';
@@ -127,6 +128,8 @@ export interface LexicalComposerInputProps {
 	guildId?: string;
 	selectionToolbar?: boolean;
 	submitOnEnter?: boolean;
+	focusRingTarget?: React.RefObject<Element | null>;
+	focusRingEnabled?: boolean;
 	className?: string;
 	id?: string;
 	ariaLabel?: string;
@@ -187,9 +190,14 @@ export const LexicalComposerInput = observer((props: LexicalComposerInputProps) 
 		theme: THEME,
 	};
 	return (
-		<LexicalComposer initialConfig={config}>
+		<LexicalComposer initialConfig={config} data-flx="lexical.composer.lexical-composer-input.lexical-composer">
 			<ComposerMentionContext.Provider value={mentionContext}>
-				<ComposerInner {...props} plainText={plainText} selectionToolbar={selectionToolbar} />
+				<ComposerInner
+					data-flx="lexical.composer.lexical-composer-input.composer-inner"
+					{...props}
+					plainText={plainText}
+					selectionToolbar={selectionToolbar}
+				/>
 			</ComposerMentionContext.Provider>
 		</LexicalComposer>
 	);
@@ -207,6 +215,8 @@ const ComposerInner = ({
 	emojiShortcodeResolver,
 	selectionToolbar = true,
 	submitOnEnter = true,
+	focusRingTarget,
+	focusRingEnabled = false,
 	className,
 	id,
 	ariaLabel,
@@ -711,37 +721,49 @@ const ComposerInner = ({
 		<>
 			<PlainTextPlugin
 				contentEditable={
-					<ContentEditable
-						className={clsx(styles.editable, className)}
-						id={id}
-						spellCheck
-						onKeyDown={handleEditableKeyDown}
-						onPointerDown={handleEditablePointerDown}
-						onContextMenu={handleEditableContextMenu}
-						onFocus={onFocus}
-						onBlur={onBlur}
-						aria-label={ariaLabelledBy == null ? (ariaLabel == null ? placeholder : ariaLabel) : undefined}
-						aria-labelledby={ariaLabelledBy}
-						aria-describedby={ariaDescribedBy}
-						aria-errormessage={ariaErrorMessage}
-						aria-invalid={ariaInvalid}
-						aria-disabled={disabled}
-						aria-multiline="true"
-						aria-autocomplete={autocompleteEnabled ? 'list' : 'none'}
-						aria-haspopup={autocompleteEnabled ? 'listbox' : undefined}
-						aria-placeholder={placeholder}
-						placeholder={
-							<flx-lexical-composer-input-placeholder className={flxElementClassName(styles.placeholder)}>
-								{placeholder}
-							</flx-lexical-composer-input-placeholder>
-						}
-						data-channel-textarea
-						data-composer-render-mode={plainText ? 'plain' : 'rich'}
-					/>
+					<FocusRing
+						offset={-2}
+						ringTarget={focusRingTarget}
+						enabled={focusRingEnabled}
+						data-flx="lexical.composer.lexical-composer-input.composer-inner.focus-ring"
+					>
+						<ContentEditable
+							className={clsx(styles.editable, className)}
+							id={id}
+							spellCheck
+							onKeyDown={handleEditableKeyDown}
+							onPointerDown={handleEditablePointerDown}
+							onContextMenu={handleEditableContextMenu}
+							onFocus={onFocus}
+							onBlur={onBlur}
+							aria-label={ariaLabelledBy == null ? (ariaLabel == null ? placeholder : ariaLabel) : undefined}
+							aria-labelledby={ariaLabelledBy}
+							aria-describedby={ariaDescribedBy}
+							aria-errormessage={ariaErrorMessage}
+							aria-invalid={ariaInvalid}
+							aria-disabled={disabled}
+							aria-multiline="true"
+							aria-autocomplete={autocompleteEnabled ? 'list' : 'none'}
+							aria-haspopup={autocompleteEnabled ? 'listbox' : undefined}
+							aria-placeholder={placeholder}
+							placeholder={
+								<flx-lexical-composer-input-placeholder
+									className={flxElementClassName(styles.placeholder)}
+									data-flx="lexical.composer.lexical-composer-input.composer-inner.placeholder"
+								>
+									{placeholder}
+								</flx-lexical-composer-input-placeholder>
+							}
+							data-channel-textarea
+							data-composer-render-mode={plainText ? 'plain' : 'rich'}
+							data-flx="lexical.composer.lexical-composer-input.composer-inner.editable"
+						/>
+					</FocusRing>
 				}
 				ErrorBoundary={LexicalErrorBoundary}
+				data-flx="lexical.composer.lexical-composer-input.composer-inner.plain-text-plugin"
 			/>
-			<HistoryPlugin />
+			<HistoryPlugin data-flx="lexical.composer.lexical-composer-input.composer-inner.history-plugin" />
 			<ComposerTypeaheadPlugin
 				options={autocompleteOptions}
 				type={autocompleteType}
@@ -751,6 +773,7 @@ const ComposerInner = ({
 				enabled={autocompleteEnabled && !slotMenuActive}
 				onSelect={onAutocompleteSelect}
 				activeRef={composerTypeaheadActiveRef}
+				data-flx="lexical.composer.lexical-composer-input.composer-inner.composer-typeahead-plugin.autocomplete-select"
 			/>
 			<SlashSlotAutocompletePlugin
 				options={autocompleteOptions}
@@ -761,8 +784,12 @@ const ComposerInner = ({
 				enabled={autocompleteEnabled && slotMenuActive}
 				onSelect={onAutocompleteSelect}
 				activeRef={slashSlotTypeaheadActiveRef}
+				data-flx="lexical.composer.lexical-composer-input.composer-inner.slash-slot-autocomplete-plugin.autocomplete-select"
 			/>
-			<SelectionFormattingToolbarPlugin enabled={selectionToolbar && !plainText} />
+			<SelectionFormattingToolbarPlugin
+				enabled={selectionToolbar && !plainText}
+				data-flx="lexical.composer.lexical-composer-input.composer-inner.selection-formatting-toolbar-plugin"
+			/>
 		</>
 	);
 };

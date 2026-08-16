@@ -1624,6 +1624,21 @@
 				"msgid": "Single community mode"
 			},
 			{
+				"msgid": "Slowmode is active ({remaining})"
+			},
+			{
+				"msgid": "Slowmode is enabled"
+			},
+			{
+				"msgid": "Slowmode is set to {durationLabel} for this channel."
+			},
+			{
+				"msgid": "Slowmode is set to {durationLabel}, but you are immune."
+			},
+			{
+				"msgid": "Slowmode is set to {durationLabel}. Wait before sending another message."
+			},
+			{
 				"msgid": "Static Neko"
 			},
 			{

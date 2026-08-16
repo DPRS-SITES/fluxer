@@ -3,6 +3,7 @@
 use crate::common::{
     CommandSpec, command_succeeds, output_text, remove_file_if_exists, run_command,
 };
+use crate::desktop::MACOS_UNIVERSAL_ARCH;
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use clap::Args;
 use sha2::{Digest, Sha256};
@@ -14,12 +15,6 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Args, Clone)]
 pub struct BuildDesktopNativeAddonArgs {
-    #[arg(long)]
-    addon_root: Option<PathBuf>,
-}
-
-#[derive(Debug, Args, Clone)]
-pub struct TestWebrtcSenderRustArgs {
     #[arg(long)]
     addon_root: Option<PathBuf>,
 }
@@ -62,6 +57,16 @@ const LINUX_AUDIO_CAPTURE_PKG_CONFIG: &[PkgConfigRequirement] = &[PkgConfigRequi
 }];
 
 const DESKTOP_NATIVE_ADDONS: &[DesktopNativeAddon] = &[
+    DesktopNativeAddon {
+        package_dir: "hardware-encoder",
+        package_name: "@fluxer/hardware-encoder",
+        crate_name: "fluxer_hardware_encoder",
+        node_file_stem: "hardware-encoder",
+        required_platform: None,
+        features: &[],
+        pkg_config: &[],
+        special: DesktopNativeSpecialBuild::None,
+    },
     DesktopNativeAddon {
         package_dir: "linux-audio-capture",
         package_name: "@fluxer/linux-audio-capture",
@@ -213,16 +218,6 @@ const DESKTOP_NATIVE_ADDONS: &[DesktopNativeAddon] = &[
         special: DesktopNativeSpecialBuild::Webauthn,
     },
     DesktopNativeAddon {
-        package_dir: "webrtc-sender",
-        package_name: "@fluxer/webrtc-sender",
-        crate_name: "fluxer_webrtc_sender",
-        node_file_stem: "webrtc-sender",
-        required_platform: None,
-        features: &["camera-native"],
-        pkg_config: &[],
-        special: DesktopNativeSpecialBuild::None,
-    },
-    DesktopNativeAddon {
         package_dir: "win-clipboard",
         package_name: "@fluxer/win-clipboard",
         crate_name: "fluxer_win_clipboard",
@@ -293,19 +288,6 @@ pub fn run_build_desktop_native_addon(args: BuildDesktopNativeAddonArgs) -> Resu
     build_desktop_native_addon(&addon_root, addon)
 }
 
-pub fn run_test_webrtc_sender_rust(args: TestWebrtcSenderRustArgs) -> Result<()> {
-    let addon_root = args
-        .addon_root
-        .map(Ok)
-        .unwrap_or_else(|| env::current_dir().context("Failed to resolve current directory"))?;
-    run_command(
-        CommandSpec::new(resolve_cargo_bin())
-            .args(["test", "--features", "publisher,camera-native"])
-            .env("CARGO_INCREMENTAL", "0")
-            .current_dir(addon_root),
-    )
-}
-
 fn build_desktop_native_addon(addon_root: &Path, addon: &DesktopNativeAddon) -> Result<()> {
     let platform = current_platform();
     if let Some(required) = addon.required_platform {
@@ -358,9 +340,23 @@ fn ensure_pkg_config(requirement: &PkgConfigRequirement) -> Result<()> {
 fn build_rust_node_addon(addon_root: &Path, addon: &DesktopNativeAddon) -> Result<BuiltNodeAddon> {
     let platform = current_platform();
     let arch = electron_arch();
-    let tag = platform_tag(&platform, &arch)?;
-    let target = rust_target_for_platform(&platform, &arch)?;
-    let target_root = cargo_target_root_for_build(addon_root, &platform)?;
+    if platform == "darwin" && arch == MACOS_UNIVERSAL_ARCH {
+        let arm64 = build_rust_node_addon_for_arch(addon_root, addon, &platform, "arm64")?;
+        build_rust_node_addon_for_arch(addon_root, addon, &platform, "x64")?;
+        return Ok(arm64);
+    }
+    build_rust_node_addon_for_arch(addon_root, addon, &platform, &arch)
+}
+
+fn build_rust_node_addon_for_arch(
+    addon_root: &Path,
+    addon: &DesktopNativeAddon,
+    platform: &str,
+    arch: &str,
+) -> Result<BuiltNodeAddon> {
+    let tag = platform_tag(platform, arch)?;
+    let target = rust_target_for_platform(platform, arch)?;
+    let target_root = cargo_target_root_for_build(addon_root, platform)?;
     let mut args = vec![
         OsString::from("build"),
         OsString::from("--release"),
@@ -396,10 +392,7 @@ fn build_rust_node_addon(addon_root: &Path, addon: &DesktopNativeAddon) -> Resul
     let source = target_root
         .join(&target)
         .join("release")
-        .join(cargo_dynamic_library_file_name(
-            addon.crate_name,
-            &platform,
-        )?);
+        .join(cargo_dynamic_library_file_name(addon.crate_name, platform)?);
     let out_file = addon_root.join(format!("{}.{}.node", addon.node_file_stem, tag));
     ensure!(
         source.exists(),
@@ -418,8 +411,8 @@ fn build_rust_node_addon(addon_root: &Path, addon: &DesktopNativeAddon) -> Resul
         "expected {} to exist after copy",
         out_file.display()
     );
-    sign_macos_node_addon(&out_file, &platform)?;
-    assert_no_redistributable_runtime_imports(&out_file, &platform)?;
+    sign_macos_node_addon(&out_file, platform)?;
+    assert_no_redistributable_runtime_imports(&out_file, platform)?;
     Ok(BuiltNodeAddon {
         out_file,
         source,

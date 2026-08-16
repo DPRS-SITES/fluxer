@@ -34,7 +34,7 @@
 
 .scrollerSpacer {
 	display: block;
-	height: var(--scroller-spacer-height);
+	height: var(--messages-bottom-clearance, var(--scroller-spacer-height));
 	pointer-events: none;
 	width: 100%;
 	flex-shrink: 0;
@@ -63,8 +63,8 @@
 	flex-direction: column;
 	justify-content: flex-end;
 	min-height: 100%;
-	padding-left: 0.75rem;
-	padding-right: 0.75rem;
+	padding-left: var(--chat-mobile-horizontal-padding);
+	padding-right: var(--chat-mobile-horizontal-padding);
 	position: relative;
 }
 
@@ -147,7 +147,7 @@
 
 .messageBottomPill {
 	top: auto;
-	bottom: 0.625rem;
+	bottom: calc(0.625rem + var(--composer-status-safe-area, 0px));
 }
 
 .jumpToPresentBar {
