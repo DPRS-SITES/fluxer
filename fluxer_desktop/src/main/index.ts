@@ -126,6 +126,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const AVIA_PLUGINS: string[] = [
 	'menu.js',
+	'localplugins.js',
 ];
 
 function loadAviaInject(window: Electron.BrowserWindow): void {
