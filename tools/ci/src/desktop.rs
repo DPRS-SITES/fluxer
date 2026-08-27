@@ -33,6 +33,12 @@ const PUBLIC_DL_BASE: &str = "https://api.fluxer.app/dl";
 const PNPM_VERSION: &str = "10.29.3";
 const RUST_TOOLCHAIN: &str = "1.93.0";
 const DEFAULT_DESKTOP_VARIANT: &str = "default";
+const LINUX_PIPEWIRE_VERSION: &str = "0.3.65";
+const LINUX_PIPEWIRE_SOURCE_SHA256: &str =
+    "bb76f938136d0ce8c35bffa99e002dc2dbaeab5e14c6c34154e7f750013d1d6b";
+const LINUX_LIBFIDO2_VERSION: &str = "1.16.0";
+const LINUX_LIBFIDO2_SOURCE_SHA256: &str =
+    "8c2b6fb279b5b42e9ac92ade71832e485852647b53607c43baaafbbcecea04e4";
 pub(crate) const MACOS_UNIVERSAL_ARCH: &str = "universal";
 const WINDOWS_GAME_CAPTURE_DESKTOP_VARIANT: &str = "windows-game-capture";
 
@@ -143,14 +149,14 @@ const PLATFORMS: &[Platform] = &[
         platform: "linux",
         arch: "x64",
         desktop_variant: DEFAULT_DESKTOP_VARIANT,
-        os: "ubuntu-24.04",
+        os: "ubuntu-22.04",
         electron_arch: "x64",
     },
     Platform {
         platform: "linux",
         arch: "arm64",
         desktop_variant: DEFAULT_DESKTOP_VARIANT,
-        os: "ubuntu-24.04-arm",
+        os: "ubuntu-22.04-arm",
         electron_arch: "arm64",
     },
 ];
@@ -181,7 +187,7 @@ pub async fn run(args: BuildDesktopArgs) -> Result<()> {
         }
         DesktopStep::InstallSetuptoolsWindowsArm64 => install_setuptools_windows_arm64_step(),
         DesktopStep::InstallSetuptoolsMacos => install_setuptools_macos_step(),
-        DesktopStep::InstallLinuxDeps => install_linux_deps_step(),
+        DesktopStep::InstallLinuxDeps => install_linux_deps_step().await,
         DesktopStep::InstallMsvcArm64Tools => install_msvc_arm64_tools_step(),
         DesktopStep::InstallRustWindowsTargets => install_rust_windows_targets_step(),
         DesktopStep::InstallDependencies => {
@@ -773,7 +779,7 @@ fn install_setuptools_macos_step() -> Result<()> {
     run_command(CommandSpec::new(brew).args(["install", "python-setuptools"]))
 }
 
-fn install_linux_deps_step() -> Result<()> {
+async fn install_linux_deps_step() -> Result<()> {
     let apt_conf = runner_temp().join("99fluxer-ci-network");
     fs::write(
         &apt_conf,
@@ -808,6 +814,9 @@ DPkg::Lock::Timeout "120";
         "ruby-dev",
         "build-essential",
         "binutils",
+        "cmake",
+        "meson",
+        "ninja-build",
         "nasm",
         "rpm",
         "desktop-file-utils",
@@ -823,16 +832,359 @@ DPkg::Lock::Timeout "120";
         "libdbus-1-dev",
         "libudev-dev",
         "libhunspell-dev",
-        "libfido2-dev",
         "libcbor-dev",
         "libssl-dev",
+        "zlib1g-dev",
         "pkg-config",
         "libegl-dev",
         "libclang-dev",
         "clang",
         "libpulse-dev",
     ])?;
+    install_linux_pipewire_headers().await?;
+    install_linux_libfido2().await?;
     run_command(CommandSpec::new("sudo").args(["gem", "install", "--no-document", "fpm"]))
+}
+
+async fn install_linux_pipewire_headers() -> Result<()> {
+    let temp = TempDir::new().context("Failed to create PipeWire header build directory")?;
+    let archive_name = format!("pipewire-{LINUX_PIPEWIRE_VERSION}.tar.gz");
+    let archive_path = temp.path().join(&archive_name);
+    let source_dir = temp.path().join("source");
+    let build_dir = temp.path().join("build");
+    let staging_dir = temp.path().join("stage");
+    let source_url = format!(
+        "https://gitlab.freedesktop.org/pipewire/pipewire/-/archive/{LINUX_PIPEWIRE_VERSION}/{archive_name}"
+    );
+    let multiarch = linux_multiarch()?;
+    let install_library_dir = Path::new("/usr/local/lib").join(&multiarch);
+    let install_pkgconfig_dir = install_library_dir.join("pkgconfig");
+    let libdir_arg = format!("--libdir=lib/{multiarch}");
+    let system_pipewire_library = fs::canonicalize(linux_loader_path("libpipewire-0.3.so.0")?)
+        .context("Failed to resolve the system PipeWire library")?;
+    ensure!(
+        !system_pipewire_library.starts_with("/usr/local"),
+        "Expected the system PipeWire runtime, got {}",
+        system_pipewire_library.display()
+    );
+
+    download_file(&source_url, &archive_path).await?;
+    let archive_sha256 = sha256_file(&archive_path)?;
+    ensure!(
+        archive_sha256 == LINUX_PIPEWIRE_SOURCE_SHA256,
+        "PipeWire source checksum mismatch: expected {}, got {}",
+        LINUX_PIPEWIRE_SOURCE_SHA256,
+        archive_sha256
+    );
+
+    fs::create_dir_all(&source_dir)
+        .with_context(|| format!("Failed to create {}", source_dir.display()))?;
+    run_command(CommandSpec::new("tar").args([
+        "-xzf",
+        archive_path.to_string_lossy().as_ref(),
+        "-C",
+        source_dir.to_string_lossy().as_ref(),
+        "--strip-components=1",
+    ]))?;
+    run_command(CommandSpec::new("meson").args([
+        "setup",
+        build_dir.to_string_lossy().as_ref(),
+        source_dir.to_string_lossy().as_ref(),
+        "--buildtype=release",
+        "--default-library=shared",
+        "--prefix=/usr/local",
+        &libdir_arg,
+        "--auto-features=disabled",
+        "-Dexamples=disabled",
+        "-Dtests=disabled",
+        "-Dinstalled_tests=disabled",
+        "-Ddocs=disabled",
+        "-Dman=disabled",
+        "-Dspa-plugins=enabled",
+        "-Dpipewire-alsa=disabled",
+        "-Dpipewire-jack=disabled",
+        "-Dpipewire-v4l2=disabled",
+        "-Dsystemd=disabled",
+        "-Ddbus=disabled",
+        "-Dflatpak=disabled",
+        "-Dsession-managers=[]",
+        "-Dlegacy-rtkit=false",
+    ]))?;
+    run_command(CommandSpec::new("meson").args([
+        "compile",
+        "-C",
+        build_dir.to_string_lossy().as_ref(),
+    ]))?;
+    run_command(
+        CommandSpec::new("meson")
+            .args([
+                "install",
+                "-C",
+                build_dir.to_string_lossy().as_ref(),
+                "--no-rebuild",
+            ])
+            .env("DESTDIR", staging_dir.as_os_str()),
+    )?;
+
+    let staged_prefix = staging_dir.join("usr/local");
+    let staged_pipewire_headers = staged_prefix.join("include/pipewire-0.3");
+    let staged_spa_headers = staged_prefix.join("include/spa-0.2");
+    let staged_pkgconfig_dir = staged_prefix.join(format!("lib/{multiarch}/pkgconfig"));
+    let install_include_dir = Path::new("/usr/local/include");
+    let install_pipewire_headers = install_include_dir.join("pipewire-0.3");
+    let install_spa_headers = install_include_dir.join("spa-0.2");
+    ensure!(
+        !install_pipewire_headers.exists() && !install_spa_headers.exists(),
+        "PipeWire header overlay already exists under {}",
+        install_include_dir.display()
+    );
+    run_command(CommandSpec::new("sudo").args([
+        "install",
+        "-d",
+        install_include_dir.to_string_lossy().as_ref(),
+        install_pkgconfig_dir.to_string_lossy().as_ref(),
+    ]))?;
+    run_command(CommandSpec::new("sudo").args([
+        "cp",
+        "-a",
+        staged_pipewire_headers.to_string_lossy().as_ref(),
+        staged_spa_headers.to_string_lossy().as_ref(),
+        install_include_dir.to_string_lossy().as_ref(),
+    ]))?;
+    for pkgconfig_name in ["libpipewire-0.3.pc", "libspa-0.2.pc"] {
+        run_command(
+            CommandSpec::new("sudo").args([
+                "install",
+                "-m",
+                "0644",
+                staged_pkgconfig_dir
+                    .join(pkgconfig_name)
+                    .to_string_lossy()
+                    .as_ref(),
+                install_pkgconfig_dir
+                    .join(pkgconfig_name)
+                    .to_string_lossy()
+                    .as_ref(),
+            ]),
+        )?;
+    }
+
+    let installed_version =
+        output_text(CommandSpec::new("pkg-config").args(["--modversion", "libpipewire-0.3"]))?;
+    ensure!(
+        installed_version == LINUX_PIPEWIRE_VERSION,
+        "Expected PipeWire headers {}, got {}",
+        LINUX_PIPEWIRE_VERSION,
+        installed_version
+    );
+    for (package, expected_include_flag) in [
+        ("libpipewire-0.3", "-I/usr/local/include/pipewire-0.3"),
+        ("libspa-0.2", "-I/usr/local/include/spa-0.2"),
+    ] {
+        let pkgconfig_dir =
+            output_text(CommandSpec::new("pkg-config").args(["--variable=pcfiledir", package]))?;
+        ensure!(
+            Path::new(&pkgconfig_dir) == install_pkgconfig_dir,
+            "Expected {package} metadata in {}, got {}",
+            install_pkgconfig_dir.display(),
+            pkgconfig_dir
+        );
+        let include_dir =
+            output_text(CommandSpec::new("pkg-config").args(["--variable=includedir", package]))?;
+        ensure!(
+            Path::new(&include_dir) == install_include_dir,
+            "Expected {package} headers in {}, got {}",
+            install_include_dir.display(),
+            include_dir
+        );
+        let include_flags =
+            output_text(CommandSpec::new("pkg-config").args(["--cflags-only-I", package]))?;
+        ensure!(
+            include_flags
+                .split_whitespace()
+                .any(|flag| flag == expected_include_flag),
+            "Expected {package} include flag {expected_include_flag}, got {include_flags}"
+        );
+    }
+    ensure!(
+        install_pipewire_headers
+            .join("pipewire/pipewire.h")
+            .is_file()
+            && install_spa_headers.join("spa/buffer/meta.h").is_file()
+            && install_spa_headers.join("spa/param/video/raw.h").is_file(),
+        "PipeWire {} header overlay is incomplete",
+        LINUX_PIPEWIRE_VERSION
+    );
+    let mut local_pipewire_library = None;
+    for entry in fs::read_dir(&install_library_dir)
+        .with_context(|| format!("Failed to read {}", install_library_dir.display()))?
+    {
+        let entry = entry
+            .with_context(|| format!("Failed to inspect {}", install_library_dir.display()))?;
+        if entry
+            .file_name()
+            .to_string_lossy()
+            .starts_with("libpipewire-0.3.")
+        {
+            local_pipewire_library = Some(entry.path());
+            break;
+        }
+    }
+    if let Some(path) = local_pipewire_library {
+        bail!(
+            "PipeWire header overlay found unexpected library {}",
+            path.display()
+        );
+    }
+    let loaded_pipewire_library = fs::canonicalize(linux_loader_path("libpipewire-0.3.so.0")?)
+        .context("Failed to resolve the selected PipeWire library")?;
+    ensure!(
+        loaded_pipewire_library == system_pipewire_library,
+        "PipeWire header overlay changed the runtime from {} to {}",
+        system_pipewire_library.display(),
+        loaded_pipewire_library.display()
+    );
+
+    println!(
+        "Installed PipeWire {LINUX_PIPEWIRE_VERSION} headers for {}.",
+        system_pipewire_library.display()
+    );
+    Ok(())
+}
+
+async fn install_linux_libfido2() -> Result<()> {
+    let temp = TempDir::new().context("Failed to create libfido2 build directory")?;
+    let archive_name = format!("libfido2-{LINUX_LIBFIDO2_VERSION}.tar.gz");
+    let archive_path = temp.path().join(&archive_name);
+    let source_dir = temp.path().join("source");
+    let build_dir = temp.path().join("build");
+    let source_url = format!("https://developers.yubico.com/libfido2/Releases/{archive_name}");
+    let multiarch = linux_multiarch()?;
+    let install_library_dir = Path::new("/usr/local/lib").join(&multiarch);
+    let install_library_arg = format!("-DCMAKE_INSTALL_LIBDIR=lib/{multiarch}");
+
+    download_file(&source_url, &archive_path).await?;
+    let archive_sha256 = sha256_file(&archive_path)?;
+    ensure!(
+        archive_sha256 == LINUX_LIBFIDO2_SOURCE_SHA256,
+        "libfido2 source checksum mismatch: expected {}, got {}",
+        LINUX_LIBFIDO2_SOURCE_SHA256,
+        archive_sha256
+    );
+
+    fs::create_dir_all(&source_dir)
+        .with_context(|| format!("Failed to create {}", source_dir.display()))?;
+    run_command(CommandSpec::new("tar").args([
+        "-xzf",
+        archive_path.to_string_lossy().as_ref(),
+        "-C",
+        source_dir.to_string_lossy().as_ref(),
+        "--strip-components=1",
+    ]))?;
+    run_command(CommandSpec::new("cmake").args([
+        "-S",
+        source_dir.to_string_lossy().as_ref(),
+        "-B",
+        build_dir.to_string_lossy().as_ref(),
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DCMAKE_INSTALL_PREFIX=/usr/local",
+        &install_library_arg,
+        "-DBUILD_SHARED_LIBS=ON",
+        "-DBUILD_STATIC_LIBS=OFF",
+        "-DBUILD_MANPAGES=OFF",
+        "-DBUILD_EXAMPLES=OFF",
+        "-DBUILD_TOOLS=OFF",
+        "-DBUILD_TESTS=OFF",
+        "-DFUZZ=OFF",
+        "-DNFC_LINUX=OFF",
+        "-DUSE_PCSC=OFF",
+        "-DUSE_HIDAPI=OFF",
+        "-DUSE_WINHELLO=OFF",
+    ]))?;
+    run_command(CommandSpec::new("cmake").args([
+        "--build",
+        build_dir.to_string_lossy().as_ref(),
+        "--config",
+        "Release",
+        "--parallel",
+    ]))?;
+    run_command(CommandSpec::new("sudo").args([
+        "cmake",
+        "--install",
+        build_dir.to_string_lossy().as_ref(),
+        "--config",
+        "Release",
+    ]))?;
+    run_command(CommandSpec::new("sudo").arg("ldconfig"))?;
+
+    let installed_version =
+        output_text(CommandSpec::new("pkg-config").args(["--modversion", "libfido2"]))?;
+    ensure!(
+        installed_version.trim() == LINUX_LIBFIDO2_VERSION,
+        "Expected libfido2 {}, got {}",
+        LINUX_LIBFIDO2_VERSION,
+        installed_version.trim()
+    );
+    let include_dir =
+        output_text(CommandSpec::new("pkg-config").args(["--variable=includedir", "libfido2"]))?;
+    ensure!(
+        Path::new(include_dir.trim()).join("fido/es384.h").is_file(),
+        "libfido2 {} did not install fido/es384.h",
+        LINUX_LIBFIDO2_VERSION
+    );
+    let library_dir =
+        output_text(CommandSpec::new("pkg-config").args(["--variable=libdir", "libfido2"]))?;
+    ensure!(
+        Path::new(library_dir.trim()) == install_library_dir,
+        "Expected libfido2 library directory {}, got {}",
+        install_library_dir.display(),
+        library_dir.trim()
+    );
+    let installed_soname = install_library_dir.join("libfido2.so.1");
+    ensure!(
+        installed_soname.exists(),
+        "libfido2 {} did not install {}",
+        LINUX_LIBFIDO2_VERSION,
+        installed_soname.display()
+    );
+    let installed_library = fs::canonicalize(&installed_soname)
+        .with_context(|| format!("Failed to resolve {}", installed_soname.display()))?;
+    let loader_path = linux_loader_path("libfido2.so.1")?;
+    let loaded_library = fs::canonicalize(&loader_path)
+        .with_context(|| format!("Failed to resolve {}", loader_path.display()))?;
+    ensure!(
+        loaded_library == installed_library,
+        "Expected the loader to select {}, got {}",
+        installed_library.display(),
+        loaded_library.display()
+    );
+
+    println!("Installed libfido2 {LINUX_LIBFIDO2_VERSION} from verified source.");
+    Ok(())
+}
+
+fn linux_multiarch() -> Result<String> {
+    let multiarch = output_text(CommandSpec::new("gcc").arg("-print-multiarch"))?;
+    ensure!(
+        !multiarch.is_empty()
+            && multiarch
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_'),
+        "gcc returned invalid multiarch tuple: {multiarch:?}"
+    );
+    Ok(multiarch)
+}
+
+fn linux_loader_path(library_name: &str) -> Result<PathBuf> {
+    let loader_cache = output_text(CommandSpec::new("ldconfig").arg("-p"))?;
+    loader_cache
+        .lines()
+        .find_map(|line| {
+            let (library, path) = line.trim().split_once("=>")?;
+            (library.split_whitespace().next() == Some(library_name))
+                .then(|| PathBuf::from(path.trim()))
+        })
+        .with_context(|| format!("ldconfig did not resolve {library_name}"))
 }
 
 fn rewrite_ubuntu_ports_sources() -> Result<()> {
@@ -3588,8 +3940,8 @@ mod tests {
             selected,
             vec![
                 "{\"platform\":\"windows\",\"arch\":\"arm64\",\"desktop_variant\":\"default\",\"os\":\"windows-2025\",\"electron_arch\":\"arm64\"}",
-                "{\"platform\":\"linux\",\"arch\":\"x64\",\"desktop_variant\":\"default\",\"os\":\"ubuntu-24.04\",\"electron_arch\":\"x64\"}",
-                "{\"platform\":\"linux\",\"arch\":\"arm64\",\"desktop_variant\":\"default\",\"os\":\"ubuntu-24.04-arm\",\"electron_arch\":\"arm64\"}",
+                "{\"platform\":\"linux\",\"arch\":\"x64\",\"desktop_variant\":\"default\",\"os\":\"ubuntu-22.04\",\"electron_arch\":\"x64\"}",
+                "{\"platform\":\"linux\",\"arch\":\"arm64\",\"desktop_variant\":\"default\",\"os\":\"ubuntu-22.04-arm\",\"electron_arch\":\"arm64\"}",
             ]
         );
     }
@@ -3628,8 +3980,8 @@ mod tests {
             selected,
             vec![
                 "{\"platform\":\"windows\",\"arch\":\"arm64\",\"desktop_variant\":\"default\",\"os\":\"windows-2025\",\"electron_arch\":\"arm64\"}",
-                "{\"platform\":\"linux\",\"arch\":\"x64\",\"desktop_variant\":\"default\",\"os\":\"ubuntu-24.04\",\"electron_arch\":\"x64\"}",
-                "{\"platform\":\"linux\",\"arch\":\"arm64\",\"desktop_variant\":\"default\",\"os\":\"ubuntu-24.04-arm\",\"electron_arch\":\"arm64\"}",
+                "{\"platform\":\"linux\",\"arch\":\"x64\",\"desktop_variant\":\"default\",\"os\":\"ubuntu-22.04\",\"electron_arch\":\"x64\"}",
+                "{\"platform\":\"linux\",\"arch\":\"arm64\",\"desktop_variant\":\"default\",\"os\":\"ubuntu-22.04-arm\",\"electron_arch\":\"arm64\"}",
             ]
         );
     }
