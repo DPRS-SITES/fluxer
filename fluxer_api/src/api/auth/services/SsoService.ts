@@ -225,7 +225,7 @@ function resolveEmailVerified({
 	if (values.includes(false)) {
 		return false;
 	}
-	return values.length === 0 || values.includes(true);
+	return values.length > 0 && values.includes(true);
 }
 
 function isJsonWebKeySet(value: unknown): value is JSONWebKeySet {

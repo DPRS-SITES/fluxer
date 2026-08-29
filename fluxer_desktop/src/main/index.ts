@@ -69,7 +69,6 @@ import {
 import {runNativeModulePreflight} from '@electron/main/NativeModulePreflight';
 import {cleanupNativeScreenCapture, registerNativeScreenCaptureHandlers} from '@electron/main/NativeScreenCapture';
 import {appendOpenH264Switches} from '@electron/main/OpenH264Manager';
-import {startRpcServer, stopRpcServer} from '@electron/main/RpcServer';
 import {cleanupLinuxChromiumSpellcheckDictionaries} from '@electron/main/Spellcheck';
 import {registerUpdater} from '@electron/main/Updater';
 import {
@@ -80,7 +79,7 @@ import {
 	setQuitting,
 	showWindow,
 } from '@electron/main/Window';
-import {initializeWindowsVulkanGameCaptureLayer} from '@electron/main/WindowsVulkanGameCaptureLayer';
+import {removeFluxerVulkanLayerRegistrations} from '@electron/main/WindowsVulkanLayerCleanup';
 import {app, dialog, netLog} from 'electron';
 import log from 'electron-log';
 
@@ -404,9 +403,9 @@ if (launchConfigurationError) {
 					log.error('[Init] Failed to register native audio handlers:', error);
 				}
 				try {
-					runStartupPhase('vulkan-game-capture-layer', initializeWindowsVulkanGameCaptureLayer);
+					runStartupPhase('vulkan-layer-cleanup', removeFluxerVulkanLayerRegistrations);
 				} catch (error: unknown) {
-					log.error('[Init] Failed to initialize Vulkan game capture layer:', error);
+					log.error('[Init] Failed to remove stale Vulkan layer registrations:', error);
 				}
 				try {
 					runStartupPhase('native-screen-capture-handlers', registerNativeScreenCaptureHandlers);
@@ -463,9 +462,6 @@ if (launchConfigurationError) {
 						showWindow();
 					}
 				});
-				void startRpcServer().catch((error: unknown) => {
-					log.error('[RPC] Failed to start RPC server:', error);
-				});
 				log.info('App initialized successfully');
 			})
 			.catch((error: unknown) => {
@@ -511,7 +507,7 @@ if (launchConfigurationError) {
 			cleanupNativeHardwareEncoderHandlers();
 			cleanupVirtmic();
 			destroyDesktopTray();
-			const asyncCleanups: Array<Promise<unknown>> = [stopRpcServer()];
+			const asyncCleanups: Array<Promise<unknown>> = [];
 			if (netLog.currentlyLogging) {
 				asyncCleanups.push(
 					netLog.stopLogging().catch((error) => {
