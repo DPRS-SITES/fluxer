@@ -141,6 +141,7 @@ import {VoiceEngineV2AppSourceLifecycleBridge} from '@app/features/voice/engine/
 import {VoiceEngineV2AppStatsHostAdapter} from '@app/features/voice/engine/v2/VoiceEngineV2AppStatsHostAdapter';
 import VoiceEngineV2AppSubscriptionAdapter from '@app/features/voice/engine/v2/VoiceEngineV2AppSubscriptionAdapter';
 import voiceEngineV2AppVoiceStateAdapter from '@app/features/voice/engine/v2/VoiceEngineV2AppVoiceStateAdapter';
+import type {DisplayScreenShareCaptureContext} from '@app/features/voice/engine/voice_screen_share_manager/shared';
 import type {VoiceStateAckPayload} from '@app/features/voice/events/VoiceStateAck';
 import CallMediaPrefs from '@app/features/voice/state/CallMediaPrefs';
 import {type ChannelE2EEStatus, computeChannelE2EEStatus} from '@app/features/voice/state/ChannelE2EEStatus';
@@ -2028,7 +2029,7 @@ class MediaEngineFacade extends Store {
 
 	syncLocalVoiceStateWithServer(partial?: VoiceStateSyncPartial): void {
 		const devicePermission = VoiceDevicePermissionState.getState().permissionStatus;
-		const micGranted = MediaPermission.isMicrophoneGranted() || devicePermission === 'granted';
+		const micGranted = MediaPermission.isMicrophoneGranted() || devicePermission.audio === 'granted';
 		if (!micGranted || LocalVoiceState.getMutedByPermission()) {
 			LocalVoiceState.ensurePermissionMute();
 		}
@@ -2238,11 +2239,13 @@ class MediaEngineFacade extends Store {
 	async replaceActiveDisplayScreenShare(
 		options?: ScreenShareCaptureOptions,
 		publishOptions?: TrackPublishOptions,
+		captureContext?: DisplayScreenShareCaptureContext,
 	): Promise<boolean> {
 		return voiceEngineV2AppScreenShareExecutionAdapter.replaceActiveDisplayScreenShare(
 			this.room,
 			options,
 			publishOptions,
+			captureContext,
 		);
 	}
 

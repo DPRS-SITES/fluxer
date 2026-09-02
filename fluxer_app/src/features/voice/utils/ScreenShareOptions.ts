@@ -17,15 +17,7 @@ const DIMENSIONS: Record<
 	ultra: {width: 2560, height: 1440},
 	source: {width: 3840, height: 2160},
 };
-const BASE_BITRATE_BPS: Record<ScreenshareResolution, number> = {
-	low_240p: 350000,
-	low_480p: 1200000,
-	medium: 4000000,
-	high: 8000000,
-	ultra: 16000000,
-	source: 80000000,
-};
-export const SCREEN_SHARE_MAX_VIDEO_BITRATE_BPS = 100000000;
+export const SCREEN_SHARE_FORCED_VIDEO_BITRATE_BPS = 7000000;
 export const SCREEN_SHARE_GAMING_DEGRADATION_PREFERENCE: NonNullable<TrackPublishOptions['degradationPreference']> =
 	'maintain-framerate';
 export const SCREEN_SHARE_DEFAULT_DEGRADATION_PREFERENCE: NonNullable<TrackPublishOptions['degradationPreference']> =
@@ -52,23 +44,12 @@ export function getScreenShareDimensions(resolution: ScreenshareResolution): {
 	return DIMENSIONS[resolution];
 }
 
-function getScreenShareMaxBitrate(
-	resolution: ScreenshareResolution,
-	frameRate: number,
-	maxBitrateBps = SCREEN_SHARE_MAX_VIDEO_BITRATE_BPS,
-): number {
-	const frameRateMultiplier =
-		frameRate >= 120 ? 2.5 : frameRate >= 90 ? 2 : frameRate >= 60 ? 1.5 : frameRate >= 30 ? 1 : 0.7;
-	return Math.min(Math.round(BASE_BITRATE_BPS[resolution] * frameRateMultiplier), maxBitrateBps);
-}
-
 export function getScreenShareEncoding(
-	resolution: ScreenshareResolution,
 	frameRate: number,
-	maxBitrateBps = SCREEN_SHARE_MAX_VIDEO_BITRATE_BPS,
+	maxBitrateBps = SCREEN_SHARE_FORCED_VIDEO_BITRATE_BPS,
 ): VideoEncoding {
 	return {
-		maxBitrate: getScreenShareMaxBitrate(resolution, frameRate, maxBitrateBps),
+		maxBitrate: Math.min(SCREEN_SHARE_FORCED_VIDEO_BITRATE_BPS, maxBitrateBps),
 		maxFramerate: frameRate,
 		priority: 'high',
 	};
@@ -106,12 +87,12 @@ export interface ScreenShareBuildConfig {
 	includeAudio: boolean;
 	streamingMode?: StreamingMode;
 	contentHint?: ScreenShareCaptureOptions['contentHint'];
-	maxBitrateBps?: number;
 	sourceDimensions?: {
 		width: number;
 		height: number;
 	};
 	preferredDisplaySurface?: 'window' | 'monitor';
+	useBrowserAudioPicker?: boolean;
 }
 
 type ScreenShareVideoOptions = NonNullable<Exclude<ScreenShareCaptureOptions['video'], true>> & {
@@ -170,14 +151,14 @@ export function buildScreenShareOptions(
 			...(config.includeAudio ? {restrictOwnAudio: true} : {}),
 			selfBrowserSurface: 'include',
 			monitorTypeSurfaces: config.preferredDisplaySurface === 'window' ? 'exclude' : 'include',
-			systemAudio: 'exclude',
-			windowAudio: config.includeAudio ? 'window' : 'exclude',
+			systemAudio: config.includeAudio && config.useBrowserAudioPicker ? 'include' : 'exclude',
+			windowAudio: config.includeAudio ? (config.useBrowserAudioPicker ? 'system' : 'window') : 'exclude',
 			resolution: {width, height, frameRate: resolvedFrameRate},
 			video,
 		},
 		publishOptions: {
 			degradationPreference,
-			screenShareEncoding: getScreenShareEncoding(config.resolution, resolvedFrameRate, config.maxBitrateBps),
+			screenShareEncoding: getScreenShareEncoding(resolvedFrameRate),
 		},
 	};
 }

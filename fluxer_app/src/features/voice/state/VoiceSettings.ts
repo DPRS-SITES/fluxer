@@ -19,7 +19,6 @@ import {
 	type VoiceProcessingMode,
 } from '@app/features/voice/utils/VoiceProcessingProfile';
 import {clampVoiceVolumePercent} from '@app/features/voice/utils/VoiceVolumeUtils';
-import type {UserPrivate} from '@fluxer/schema/src/domains/user/UserResponseSchemas';
 import {makeAutoObservable} from 'mobx';
 
 export type VoiceBackgroundMediaKind = 'static' | 'animated' | 'video';
@@ -53,6 +52,8 @@ const VIDEO_FRAME_RATE_MAX = 120;
 const VIDEO_FRAME_RATE_DEFAULT = 30;
 const DEFAULT_BROWSER_NOISE_SUPPRESSION = true;
 const DEFAULT_DEEP_FILTER_NOISE_SUPPRESSION = false;
+const FREE_VIDEO_FRAME_RATE_MAX = 30;
+const PREMIUM_SCREENSHARE_RESOLUTIONS: ReadonlySet<ScreenshareResolution> = new Set(['high', 'ultra', 'source']);
 export const CAMERA_EFFECT_STRENGTH_MIN = 0;
 export const CAMERA_EFFECT_STRENGTH_MAX = 100;
 export const CAMERA_EFFECT_STRENGTH_DEFAULT = 50;
@@ -61,7 +62,6 @@ export const DEFAULT_SCREEN_SHARE_ENCODER_MODE: ScreenShareEncoderMode = 'auto';
 export const DEFAULT_SCREEN_SHARE_SOFTWARE_QUALITY: ScreenShareSoftwareQuality = 'balanced';
 export const DEFAULT_SCREEN_SHARE_SCALABILITY_MODE: ScreenShareScalabilityModePreference = 'auto';
 export const DEFAULT_SCREEN_SHARE_BACKUP_CODEC_MODE: ScreenShareBackupCodecMode = 'off';
-export const DEFAULT_SCREEN_SHARE_MAX_BITRATE_MBPS = 50;
 
 type VoiceSettingsUpdate = Partial<{
 	inputDeviceId: string;
@@ -109,7 +109,6 @@ type VoiceSettingsUpdate = Partial<{
 	screenShareSoftwareQuality: ScreenShareSoftwareQuality;
 	screenShareScalabilityMode: ScreenShareScalabilityModePreference;
 	screenShareBackupCodecMode: ScreenShareBackupCodecMode;
-	screenShareMaxBitrateMbps: number;
 	adaptiveScreenShareQuality: boolean;
 	vadThreshold: number;
 	vadAutoSensitivity: boolean;
@@ -366,7 +365,6 @@ class VoiceSettings {
 	screenShareSoftwareQualityPrefV2: ScreenShareSoftwareQuality = DEFAULT_SCREEN_SHARE_SOFTWARE_QUALITY;
 	screenShareScalabilityModePrefV2: ScreenShareScalabilityModePreference = DEFAULT_SCREEN_SHARE_SCALABILITY_MODE;
 	screenShareBackupCodecModePrefV2: ScreenShareBackupCodecMode = DEFAULT_SCREEN_SHARE_BACKUP_CODEC_MODE;
-	screenShareMaxBitrateMbpsPrefV2 = DEFAULT_SCREEN_SHARE_MAX_BITRATE_MBPS;
 	adaptiveScreenShareQualityPrefV2 = false;
 	vadThreshold = 50;
 	vadAutoSensitivity = true;
@@ -388,10 +386,11 @@ class VoiceSettings {
 	private listeners = new Set<() => void>();
 
 	constructor() {
-		makeAutoObservable<this, 'listeners' | 'notifyListeners'>(
+		makeAutoObservable<this, 'hasHigherVideoQuality' | 'listeners' | 'notifyListeners'>(
 			this,
 			{
 				listeners: false,
+				hasHigherVideoQuality: false,
 				getInputDeviceId: false,
 				getOutputDeviceId: false,
 				getVideoDeviceId: false,
@@ -442,8 +441,6 @@ class VoiceSettings {
 				getScreenShareScalabilityModeOverride: false,
 				getScreenShareBackupCodecMode: false,
 				getScreenShareBackupCodecModeOverride: false,
-				getScreenShareMaxBitrateMbps: false,
-				getScreenShareMaxBitrateBpsOverride: false,
 				getAdaptiveScreenShareQuality: false,
 				getVadThreshold: false,
 				getVadAutoSensitivity: false,
@@ -552,7 +549,6 @@ class VoiceSettings {
 			'screenShareSoftwareQualityPrefV2',
 			'screenShareScalabilityModePrefV2',
 			'screenShareBackupCodecModePrefV2',
-			'screenShareMaxBitrateMbpsPrefV2',
 			'adaptiveScreenShareQualityPrefV2',
 			'vadThreshold',
 			'vadAutoSensitivity',
@@ -572,7 +568,6 @@ class VoiceSettings {
 			'lastScreenShareSource',
 			'prioritizeSpeakingParticipants',
 		]);
-		this.updateSettings({});
 	}
 
 	get showVoiceConnectionId(): boolean {
@@ -647,61 +642,12 @@ class VoiceSettings {
 		this.screenShareBackupCodecModePrefV2 = value;
 	}
 
-	get screenShareMaxBitrateMbps(): number {
-		return this.screenShareMaxBitrateMbpsPrefV2;
-	}
-
-	set screenShareMaxBitrateMbps(value: number) {
-		this.screenShareMaxBitrateMbpsPrefV2 = value;
-	}
-
 	get adaptiveScreenShareQuality(): boolean {
 		return this.adaptiveScreenShareQualityPrefV2;
 	}
 
 	set adaptiveScreenShareQuality(value: boolean) {
 		this.adaptiveScreenShareQualityPrefV2 = value;
-	}
-
-	handleGatewayReady(user: UserPrivate): void {
-		if (this.isUserPremium(user.premium_type)) {
-			return;
-		}
-		if (!this.hasHigherVideoQuality()) {
-			this.sanitizePremiumSettings();
-		}
-	}
-
-	handleUserUpdate(user: Partial<UserPrivate>): void {
-		if (user.premium_type === undefined) {
-			return;
-		}
-		if (this.isUserPremium(user.premium_type)) {
-			return;
-		}
-		if (!this.hasHigherVideoQuality()) {
-			this.sanitizePremiumSettings();
-		}
-	}
-
-	private isUserPremium(premiumType: number | null | undefined): boolean {
-		return premiumType != null && premiumType > 0;
-	}
-
-	private sanitizePremiumSettings(): void {
-		if (
-			this.screenshareResolution === 'high' ||
-			this.screenshareResolution === 'ultra' ||
-			this.screenshareResolution === 'source'
-		) {
-			this.screenshareResolution = 'medium';
-		}
-		if (this.cameraResolution === 'high') {
-			this.cameraResolution = 'medium';
-		}
-		if (this.videoFrameRate > 30) {
-			this.videoFrameRate = 30;
-		}
 	}
 
 	private hasHigherVideoQuality(): boolean {
@@ -797,6 +743,9 @@ class VoiceSettings {
 	}
 
 	getCameraResolution(): CameraResolution {
+		if (this.cameraResolution === 'high' && !this.hasHigherVideoQuality()) {
+			return 'medium';
+		}
 		return this.cameraResolution;
 	}
 
@@ -805,10 +754,16 @@ class VoiceSettings {
 	}
 
 	getScreenshareResolution(): ScreenshareResolution {
+		if (PREMIUM_SCREENSHARE_RESOLUTIONS.has(this.screenshareResolution) && !this.hasHigherVideoQuality()) {
+			return 'medium';
+		}
 		return this.screenshareResolution;
 	}
 
 	getVideoFrameRate(): number {
+		if (this.videoFrameRate > FREE_VIDEO_FRAME_RATE_MAX && !this.hasHigherVideoQuality()) {
+			return FREE_VIDEO_FRAME_RATE_MAX;
+		}
 		return this.videoFrameRate;
 	}
 
@@ -963,16 +918,6 @@ class VoiceSettings {
 		return mode === 'off' ? undefined : mode;
 	}
 
-	getScreenShareMaxBitrateMbps(): number {
-		return this.screenShareMaxBitrateMbps;
-	}
-
-	getScreenShareMaxBitrateBpsOverride(): number | undefined {
-		return this.screenShareMaxBitrateMbps === DEFAULT_SCREEN_SHARE_MAX_BITRATE_MBPS
-			? undefined
-			: this.screenShareMaxBitrateMbps * 1000000;
-	}
-
 	getAdaptiveScreenShareQuality(): boolean {
 		return this.adaptiveScreenShareQuality;
 	}
@@ -1116,8 +1061,6 @@ class VoiceSettings {
 			this.screenShareScalabilityMode = validated.screenShareScalabilityMode;
 		if (validated.screenShareBackupCodecMode !== undefined)
 			this.screenShareBackupCodecMode = validated.screenShareBackupCodecMode;
-		if (validated.screenShareMaxBitrateMbps !== undefined)
-			this.screenShareMaxBitrateMbps = validated.screenShareMaxBitrateMbps;
 		if (validated.adaptiveScreenShareQuality !== undefined)
 			this.adaptiveScreenShareQuality = validated.adaptiveScreenShareQuality;
 		if (validated.vadThreshold !== undefined) this.vadThreshold = validated.vadThreshold;
@@ -1283,10 +1226,6 @@ class VoiceSettings {
 			screenShareSoftwareQuality,
 			screenShareScalabilityMode,
 			screenShareBackupCodecMode,
-			screenShareMaxBitrateMbps: Math.max(
-				1,
-				Math.min(50, data.screenShareMaxBitrateMbps ?? this.screenShareMaxBitrateMbps),
-			),
 			adaptiveScreenShareQuality: data.adaptiveScreenShareQuality ?? this.adaptiveScreenShareQuality,
 			vadThreshold: Math.max(0, Math.min(100, data.vadThreshold ?? this.vadThreshold)),
 			vadAutoSensitivity: data.vadAutoSensitivity ?? this.vadAutoSensitivity,
