@@ -88,6 +88,7 @@ export interface IKVProvider {
 		refillIntervalMs: number,
 	): Promise<number>;
 	scheduleBulkDeletion(queueKey: string, secondaryKey: string, score: number, value: string): Promise<void>;
+	claimBulkDeletion(queueKey: string, member: string, maxScore: number, leaseScore: number): Promise<boolean>;
 	removeBulkDeletion(queueKey: string, secondaryKey: string, member?: string): Promise<boolean>;
 	scan(pattern: string, count: number): Promise<Array<string>>;
 	dequeuePurgeBatch(
@@ -103,5 +104,6 @@ export interface IKVProvider {
 	}>;
 	pipeline(): IKVPipeline;
 	multi(): IKVPipeline;
+	isClustered(): boolean;
 	health(): Promise<boolean>;
 }

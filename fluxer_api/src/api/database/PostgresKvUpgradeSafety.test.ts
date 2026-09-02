@@ -306,9 +306,13 @@ suite('postgres kv upgrade safety', () => {
 				 WHERE tablename = '${OLD}' AND indexname <> '${OLD}_row_key_c_idx'
 				 EXCEPT SELECT replace(indexdef, '${NEW}', 'KV') FROM pg_indexes WHERE tablename = '${NEW}')
 				UNION ALL
-				(SELECT replace(indexdef, '${NEW}', 'KV') FROM pg_indexes WHERE tablename = '${NEW}'
+				(SELECT replace(indexdef, '${NEW}', 'KV') FROM pg_indexes
+				 WHERE tablename = '${NEW}' AND indexname <> '${NEW}_row_key_numeric_idx'
 				 EXCEPT SELECT replace(indexdef, '${OLD}', 'KV') FROM pg_indexes WHERE tablename = '${OLD}')
 			) d`);
+		const added = await raw.query<{indexname: string}>(`
+			SELECT indexname FROM pg_indexes WHERE tablename = '${NEW}'
+			EXCEPT SELECT replace(indexname, '${OLD}', '${NEW}') FROM pg_indexes WHERE tablename = '${OLD}'`);
 		const collations = await raw.query<{tablename: string; attname: string; collname: string}>(`
 			SELECT cls.relname AS tablename, att.attname, col.collname
 			FROM pg_attribute att
@@ -322,6 +326,7 @@ suite('postgres kv upgrade safety', () => {
 		);
 		expect(Number(diff.rows[0]!.n)).toBe(0);
 		expect(Number(schemaDiff.rows[0]!.n)).toBe(0);
+		expect(added.rows.map((r) => r.indexname)).toEqual([`${NEW}_row_key_numeric_idx`]);
 		expect(collations.rows.filter((r) => r.tablename === OLD).map((r) => r.collname)).toEqual(['default', 'default']);
 		expect(collations.rows.filter((r) => r.tablename === NEW).map((r) => r.collname)).toEqual(['C', 'C']);
 		expect(cIndexes.rows.map((r) => r.tablename)).toEqual([OLD]);
@@ -360,6 +365,37 @@ suite('postgres kv upgrade safety', () => {
 			{status: 'fulfilled', value: undefined},
 			{status: 'fulfilled', value: undefined},
 		]);
+	}, 120_000);
+
+	it('survives a peer that creates the table without the schema lock', async () => {
+		const RACE = `${KV}_race`;
+		await raw.query(`DROP TABLE IF EXISTS ${RACE}`);
+		let release = () => {};
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const peer = raw.transaction(async (db) => {
+			await db.query(`
+CREATE TABLE IF NOT EXISTS ${RACE} (
+	table_name text NOT NULL,
+	partition_key text COLLATE "C" NOT NULL,
+	row_key text COLLATE "C" NOT NULL,
+	row_data jsonb NOT NULL,
+	expires_at timestamptz,
+	updated_at timestamptz NOT NULL DEFAULT now(),
+	PRIMARY KEY (table_name, row_key)
+)`);
+			await gate;
+		});
+		const booting = ensurePostgresKvSchema(new TableClient(raw, RACE)).then(
+			() => 'ok',
+			(error: Error) => `failed: ${error.message}`,
+		);
+		await sleep(500);
+		release();
+		await peer;
+		expect(await booting).toBe('ok');
+		await raw.query(`DROP TABLE IF EXISTS ${RACE}`);
 	}, 120_000);
 
 	it('backfills the messages partition key once and never scans for it again', async () => {

@@ -56,6 +56,7 @@ any_hash_matches(AuthHash, Hashes) ->
 
 -spec terminate(term(), session_state()) -> ok.
 terminate(_Reason, State) ->
+    try_decrement_user_sessions(State),
     maybe_release_transferred_resources(State),
     try_cleanup_guild_monitors(State),
     try_cleanup_call_monitors(State),
@@ -66,7 +67,6 @@ terminate(_Reason, State) ->
 maybe_release_transferred_resources(#{fenced := true}) ->
     ok;
 maybe_release_transferred_resources(State) ->
-    try_decrement_user_sessions(State),
     try_voice_disconnect(State),
     try_cleanup_presence(State),
     ok.
@@ -280,13 +280,14 @@ handle_is_staff(State) ->
 handle_heartbeat_ack(Seq, #{ack_seq := AckSeq} = State) when Seq < AckSeq ->
     {reply, true, State};
 handle_heartbeat_ack(Seq, #{buffer := Buffer} = State) ->
-    NewBuffer = drop_acked_buffer(Seq, Buffer),
+    AckedSeq = min(Seq, maps:get(seq, State, Seq)),
+    NewBuffer = drop_acked_buffer(AckedSeq, Buffer),
     NewBytes =
         case is_list(NewBuffer) of
             true -> session_init:replay_buffer_bytes(NewBuffer);
             false -> limited_deque:bytes(NewBuffer)
         end,
-    NewState0 = State#{ack_seq => Seq, buffer => NewBuffer, buffer_bytes => NewBytes},
+    NewState0 = State#{ack_seq => AckedSeq, buffer => NewBuffer, buffer_bytes => NewBytes},
     NewState = session_connection_guild:repair_stalled_guild_connects(NewState0),
     {reply, true, NewState}.
 
@@ -552,6 +553,10 @@ serialize_transfer_identity(State) ->
         debounce_reactions => maps:get(debounce_reactions, State, false)
     }.
 
+-spec transfer_buffer(eqwalizer:dynamic(limited_deque:deque() | [map()])) -> [term()].
+transfer_buffer(Buffer) when is_list(Buffer) -> Buffer;
+transfer_buffer(Buffer) -> limited_deque:to_list(Buffer).
+
 -spec serialize_transfer_runtime(session_state()) -> map().
 serialize_transfer_runtime(State) ->
     #{
@@ -559,7 +564,7 @@ serialize_transfer_runtime(State) ->
         relationships => maps:get(relationships, State, #{}),
         seq => maps:get(seq, State, 0),
         ack_seq => maps:get(ack_seq, State, 0),
-        buffer => maps:get(buffer, State, []),
+        buffer => transfer_buffer(maps:get(buffer, State, [])),
         collected_guild_states => maps:get(collected_guild_states, State, []),
         collected_sessions => maps:get(collected_sessions, State, []),
         collected_presences => maps:get(collected_presences, State, []),

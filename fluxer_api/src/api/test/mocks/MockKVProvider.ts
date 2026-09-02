@@ -111,6 +111,7 @@ export class MockKVProvider implements IKVProvider {
 		key: string;
 		values: Array<string>;
 	}> = [];
+	clustered = true;
 	private subscription: MockKVSubscription;
 	private readonly stringStore = new Map<string, string>();
 	private readonly setStore = new Map<string, Set<string>>();
@@ -155,6 +156,7 @@ export class MockKVProvider implements IKVProvider {
 	readonly checkLeakyBucketLimitSpy = vi.fn();
 	readonly tryConsumeTokensSpy = vi.fn();
 	readonly scheduleBulkDeletionSpy = vi.fn();
+	readonly claimBulkDeletionSpy = vi.fn();
 	readonly removeBulkDeletionSpy = vi.fn();
 	readonly scanSpy = vi.fn();
 	readonly dequeuePurgeBatchSpy = vi.fn();
@@ -667,6 +669,17 @@ export class MockKVProvider implements IKVProvider {
 		this.expiries.delete(secondaryKey);
 	}
 
+	async claimBulkDeletion(queueKey: string, member: string, maxScore: number, leaseScore: number): Promise<boolean> {
+		this.claimBulkDeletionSpy(queueKey, member, maxScore, leaseScore);
+		this.evictIfExpired(queueKey);
+		const score = this.zsetStore.get(queueKey)?.get(member);
+		if (score === undefined || score > maxScore) {
+			return false;
+		}
+		await this.zadd(queueKey, leaseScore, member);
+		return true;
+	}
+
 	async removeBulkDeletion(queueKey: string, secondaryKey: string, member = ''): Promise<boolean> {
 		this.removeBulkDeletionSpy(queueKey, secondaryKey, member);
 		this.evictIfExpired(secondaryKey);
@@ -768,6 +781,10 @@ export class MockKVProvider implements IKVProvider {
 
 	multi(): IKVPipeline {
 		return this.createPipeline();
+	}
+
+	isClustered(): boolean {
+		return this.clustered;
 	}
 
 	async health(): Promise<boolean> {
@@ -1113,6 +1130,7 @@ export class MockKVProvider implements IKVProvider {
 		this.checkLeakyBucketLimitSpy.mockClear();
 		this.tryConsumeTokensSpy.mockClear();
 		this.scheduleBulkDeletionSpy.mockClear();
+		this.claimBulkDeletionSpy.mockClear();
 		this.removeBulkDeletionSpy.mockClear();
 		this.scanSpy.mockClear();
 		this.dequeuePurgeBatchSpy.mockClear();
