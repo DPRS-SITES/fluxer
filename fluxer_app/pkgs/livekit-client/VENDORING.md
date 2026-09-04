@@ -44,9 +44,14 @@ source edits in this package.
    OpenH264 software profile.
 
 8. **Media publishing defaults** (`src/room/defaults.ts`, `src/room/utils.ts`, `src/room/track/options.ts`)
-   Prefers AV1, then HEVC/H.265, H.264, VP9, and VP8 according to actual
-   sender capabilities; pairs advanced codecs with H.264 backup simulcast; and
+   Falls back to H.264, then VP9, VP8, AV1, and HEVC/H.265 according to actual
+   sender capabilities, pairs advanced codecs with H.264 backup simulcast, and
    uses maintain-resolution screen-share defaults with a 4K60-ready bitrate cap.
+   The order puts AV1 and HEVC last because both are opt-in in Fluxer, so a
+   fallback inside `publishTrack` must not land on a codec the user did not
+   enable. Fluxer picks the codec itself before publishing, so this list only
+   applies when the client overrides the request, such as the reconnect
+   republish that runs outside Fluxer's own flows.
 
 9. **High-fidelity Opus SDP munging** (`src/room/PCTransport.ts`)
    Forces Opus RED/FEC, stereo signaling, 10 ms packet time, no DTX, and a
@@ -95,6 +100,21 @@ source edits in this package.
     Processor install and teardown in all three classes roll the processed/raw
     sender track back, including `LocalVideoTrack`'s secondary simulcast senders,
     and aggregate every cleanup failure instead of discarding it.
+
+13. **Start bitrate for every video codec** (`src/room/PCTransport.ts`,
+    `src/room/participant/LocalParticipant.ts`, `src/room/participant/publishUtils.ts`)
+    `x-google-start-bitrate` was reachable only by AV1 and VP9, gated twice: the
+    publish path registered a track bitrate only for SVC codecs, and the offer
+    munging returned early for everything else. H264, H265 and VP8 therefore
+    opened at the Chromium default and had to ramp, which showed up as a 3000 kbps
+    screen share encoding at 346 kbps twenty seconds in. The bitrate is now
+    registered for every video codec from the highest encoding
+    (`maxEncodingBitrate()`, so a simulcast ladder contributes its top layer), and
+    the offer munging applies the start bitrate whenever a max bitrate is known.
+    The dependency descriptor extension stays SVC-only.
+    `appendStartBitrateToFmtp()` holds the fmtp edit so it can be tested, and
+    `setTrackCodecBitrate()` now replaces an entry for the same cid or transceiver
+    instead of appending, since `trackBitrates` is never cleared.
 
 ## Updating from upstream
 

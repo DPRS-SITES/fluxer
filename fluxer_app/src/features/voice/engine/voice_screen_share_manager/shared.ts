@@ -3,26 +3,33 @@
 import {getDesktopTroubleshootingSettings} from '@app/features/devtools/utils/DesktopTroubleshootingUtils';
 import {Logger} from '@app/features/platform/utils/AppLogger';
 import ScreenShareCodecNegotiation from '@app/features/voice/engine/ScreenShareCodecNegotiation';
+import {noteAppliedScreenShareFrameRate} from '@app/features/voice/engine/ScreenShareUnderperformance';
 import SoftwareEncoderWarning from '@app/features/voice/state/SoftwareEncoderWarning';
 import VoiceSettings from '@app/features/voice/state/VoiceSettings';
 import {
 	adjustScreenShareEncodingForCodec,
 	getCodecCapabilityReport,
+	resolveVideoPublishCodecPolicy,
+	type VideoPublishCodecPolicy,
 } from '@app/features/voice/utils/CodecCapabilityDetector';
 import {getGpuEncoderReportSync, loadGpuEncoderReport} from '@app/features/voice/utils/GpuEncoderCapabilities';
 import {loadNativeHardwareEncoderCapabilities} from '@app/features/voice/utils/NativeHardwareEncoderCapabilities';
 import {
+	capScreenShareEncodingToDimensions,
 	getScreenShareEncoding,
 	resolveStreamingModeSettings,
 	SCREEN_SHARE_DEGRADATION_PREFERENCE,
-	SCREEN_SHARE_FORCED_VIDEO_BITRATE_BPS,
+	SCREEN_SHARE_MAX_VIDEO_BITRATE_BPS,
 } from '@app/features/voice/utils/ScreenShareOptions';
 import {ScreenShareRollbackIncompleteError} from '@app/features/voice/utils/ScreenShareRollbackIncompleteError';
 import {classifyVideoEncoderAcceleration} from '@app/features/voice/utils/VideoAccelerationClassification';
+import {hasHigherVideoQuality} from '@app/features/voice/utils/VideoQualityEntitlement';
 import {
 	BackupCodecPolicy,
+	type LocalParticipant,
 	type LocalTrackPublication,
 	type ScreenShareCaptureOptions,
+	Track,
 	type TrackPublishOptions,
 	type VideoCodec,
 	type VideoEncoding,
@@ -30,6 +37,7 @@ import {
 
 export const logger = new Logger('VoiceEngineV2ScreenShareSupport');
 const GPU_ENCODER_REPORT_START_TIMEOUT_MS = 500;
+const SCREEN_SHARE_FULL_RESOLUTION_SCALE = 1;
 
 export interface DeviceScreenShareCaptureOptions {
 	videoDeviceId?: string;
@@ -176,26 +184,13 @@ export async function releaseScreenShareCaptureCleanup(snapshot: ScreenShareCapt
 	}
 }
 
-function getCodecSpecificScreenShareBitrateCeiling(codec: VideoCodec): number | undefined {
-	const acceleration = getCodecCapabilityReport()[codec].hardwareAccelerated;
-	if (codec === 'h264' && acceleration === 'hardware') return 20000000;
-	if ((codec === 'av1' || codec === 'vp9') && acceleration === 'software') return 40000000;
-	return undefined;
-}
-
-function clampScreenShareEncoding(encoding: VideoEncoding | undefined, codec: VideoCodec): VideoEncoding | undefined {
+function clampScreenShareEncoding(encoding: VideoEncoding | undefined): VideoEncoding | undefined {
 	if (!encoding) return undefined;
-	const maxBitrateBps = SCREEN_SHARE_FORCED_VIDEO_BITRATE_BPS;
-	const codecCeilingBps = getCodecSpecificScreenShareBitrateCeiling(codec);
-	const bitrateCeilingBps =
-		maxBitrateBps !== undefined && codecCeilingBps !== undefined
-			? Math.min(maxBitrateBps, codecCeilingBps)
-			: (maxBitrateBps ?? codecCeilingBps);
 	return {
 		...encoding,
 		maxBitrate:
-			typeof encoding.maxBitrate === 'number' && bitrateCeilingBps !== undefined
-				? Math.min(encoding.maxBitrate, bitrateCeilingBps)
+			typeof encoding.maxBitrate === 'number'
+				? Math.min(encoding.maxBitrate, SCREEN_SHARE_MAX_VIDEO_BITRATE_BPS)
 				: encoding.maxBitrate,
 		priority: encoding.priority ?? 'high',
 	};
@@ -209,14 +204,12 @@ export function getEffectiveScreenShareEncoding(publishOptions?: TrackPublishOpt
 			VoiceSettings.getStreamingMode(),
 			VoiceSettings.getScreenshareResolution(),
 			VoiceSettings.getVideoFrameRate(),
+			hasHigherVideoQuality(),
 		);
-		screenShareEncoding = getScreenShareEncoding(settings.frameRate);
+		screenShareEncoding = getScreenShareEncoding(settings.resolution, settings.frameRate);
 	}
 	if (!screenShareEncoding) return undefined;
-	return clampScreenShareEncoding(
-		adjustScreenShareEncodingForCodec(screenShareEncoding, preferredVideoCodec),
-		preferredVideoCodec,
-	);
+	return clampScreenShareEncoding(adjustScreenShareEncodingForCodec(screenShareEncoding, preferredVideoCodec));
 }
 
 function getScreenShareScalabilityModeForCodec(codec: VideoCodec): TrackPublishOptions['scalabilityMode'] | undefined {
@@ -251,6 +244,15 @@ function getConfiguredBackupCodecForPrimary(primaryCodec: VideoCodec):
 	if (VoiceSettings.getScreenShareBackupCodecModeOverride() !== 'h264_simulcast') return undefined;
 	if (primaryCodec === 'h264' || primaryCodec === 'vp8') return false;
 	return {codec: 'h264'};
+}
+
+function resolveBackupCodecWithinPolicy(
+	configured: TrackPublishOptions['backupCodec'] | undefined,
+	policy: VideoPublishCodecPolicy,
+): TrackPublishOptions['backupCodec'] {
+	if (configured === undefined || configured === true) return policy.backupCodec;
+	if (configured === false) return false;
+	return configured.codec !== policy.primary && policy.allowed.includes(configured.codec) ? configured : false;
 }
 
 function getEffectiveScreenShareScalabilityMode(
@@ -301,8 +303,12 @@ export async function getEffectivePublishOptions(
 		return publishOptions;
 	}
 	await waitForGpuEncoderReportForPublish(options);
-	const preferredVideoCodec = publishOptions?.videoCodec ?? getPreferredScreenShareCodec();
-	const backupCodec = publishOptions?.backupCodec ?? getConfiguredBackupCodecForPrimary(preferredVideoCodec);
+	const policy = resolveVideoPublishCodecPolicy(publishOptions?.videoCodec ?? getPreferredScreenShareCodec());
+	const preferredVideoCodec = policy.primary;
+	const backupCodec = resolveBackupCodecWithinPolicy(
+		publishOptions?.backupCodec ?? getConfiguredBackupCodecForPrimary(preferredVideoCodec),
+		policy,
+	);
 	const backupCodecPolicy =
 		publishOptions?.backupCodecPolicy ?? (backupCodec ? BackupCodecPolicy.SIMULCAST : undefined);
 	const scalabilityMode = getEffectiveScreenShareScalabilityMode(preferredVideoCodec, publishOptions, {
@@ -313,9 +319,9 @@ export async function getEffectivePublishOptions(
 		videoCodec: preferredVideoCodec,
 		screenShareEncoding: getEffectiveScreenShareEncoding({...publishOptions, videoCodec: preferredVideoCodec}),
 		degradationPreference: SCREEN_SHARE_DEGRADATION_PREFERENCE,
-		simulcast: isSvcScreenShareCodec(preferredVideoCodec) ? false : publishOptions?.simulcast,
+		simulcast: isSvcScreenShareCodec(preferredVideoCodec) ? false : (publishOptions?.simulcast ?? false),
 		scalabilityMode,
-		...(backupCodec !== undefined ? {backupCodec} : {}),
+		backupCodec,
 		...(backupCodecPolicy !== undefined ? {backupCodecPolicy} : {}),
 	};
 }
@@ -332,6 +338,42 @@ export function applyScreenShareContentHint(
 	}
 }
 
+function distributeScreenShareBitrate(
+	encodings: ReadonlyArray<RTCRtpEncodingParameters>,
+	maxBitrate: number,
+): Array<number> {
+	if (encodings.length === 1) return [maxBitrate];
+	const weights = encodings.map((encoding) =>
+		typeof encoding.maxBitrate === 'number' && encoding.maxBitrate > 0 ? encoding.maxBitrate : 0,
+	);
+	if (weights.some((weight) => weight <= 0)) {
+		return encodings.map(() => Math.floor(maxBitrate / encodings.length));
+	}
+	const total = weights.reduce((sum, weight) => sum + weight, 0);
+	return weights.map((weight) => Math.floor((weight / total) * maxBitrate));
+}
+
+export function getPublishedScreenShareMaxBitrateBps(
+	participant: LocalParticipant | null | undefined,
+): number | undefined {
+	const sender = participant?.getTrackPublication(Track.Source.ScreenShare)?.videoTrack?.sender;
+	if (!sender) return undefined;
+	let total = 0;
+	for (const encoding of sender.getParameters().encodings ?? []) {
+		if (typeof encoding.maxBitrate !== 'number') return undefined;
+		total += encoding.maxBitrate;
+	}
+	return total > 0 ? total : undefined;
+}
+
+function resolveScreenShareScaleResolutionDownBy(
+	encodings: ReadonlyArray<RTCRtpEncodingParameters>,
+): number | undefined {
+	const simulcastLadderOwnsScale = encodings.length > 1;
+	if (simulcastLadderOwnsScale) return undefined;
+	return SCREEN_SHARE_FULL_RESOLUTION_SCALE;
+}
+
 export async function enforceScreenShareSenderParameters(
 	sender: RTCRtpSender | undefined,
 	publishOptions?: TrackPublishOptions,
@@ -339,18 +381,31 @@ export async function enforceScreenShareSenderParameters(
 ): Promise<boolean> {
 	if (!sender) return false;
 	const preferredVideoCodec = codecOverride ?? publishOptions?.videoCodec ?? getPreferredScreenShareCodec();
-	const screenShareEncoding = getEffectiveScreenShareEncoding({...publishOptions, videoCodec: preferredVideoCodec});
+	const effectiveEncoding = getEffectiveScreenShareEncoding({...publishOptions, videoCodec: preferredVideoCodec});
+	const screenShareEncoding = effectiveEncoding
+		? capScreenShareEncodingToDimensions(effectiveEncoding, sender.track?.getSettings())
+		: undefined;
 	const scalabilityMode = getEffectiveScreenShareScalabilityMode(preferredVideoCodec, publishOptions, {
 		respectExplicit: !codecOverride || codecOverride === publishOptions?.videoCodec,
 	});
+	const senderTrackId = sender.track?.id;
+	if (senderTrackId && screenShareEncoding?.maxFramerate !== undefined) {
+		noteAppliedScreenShareFrameRate(senderTrackId, screenShareEncoding.maxFramerate);
+	}
 	try {
 		const params = sender.getParameters();
 		const encodings = params.encodings?.length ? params.encodings : [{}];
+		const bitrates =
+			screenShareEncoding?.maxBitrate !== undefined
+				? distributeScreenShareBitrate(encodings, screenShareEncoding.maxBitrate)
+				: undefined;
+		const scaleResolutionDownBy = resolveScreenShareScaleResolutionDownBy(encodings);
 		params.degradationPreference = SCREEN_SHARE_DEGRADATION_PREFERENCE;
-		params.encodings = encodings.map((encoding) => ({
+		params.encodings = encodings.map((encoding, index) => ({
 			...encoding,
-			...(screenShareEncoding?.maxBitrate !== undefined ? {maxBitrate: screenShareEncoding.maxBitrate} : {}),
+			...(bitrates ? {maxBitrate: bitrates[index]} : {}),
 			...(screenShareEncoding?.maxFramerate !== undefined ? {maxFramerate: screenShareEncoding.maxFramerate} : {}),
+			...(scaleResolutionDownBy !== undefined ? {scaleResolutionDownBy} : {}),
 			priority: screenShareEncoding?.priority ?? encoding.priority ?? 'high',
 			networkPriority: screenShareEncoding?.priority ?? encoding.networkPriority ?? 'high',
 			...(scalabilityMode ? {scalabilityMode} : {}),

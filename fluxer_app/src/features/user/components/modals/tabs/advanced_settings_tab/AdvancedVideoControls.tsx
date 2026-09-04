@@ -28,8 +28,11 @@ import {
 	selectAutomaticScreenShareCodec,
 } from '@app/features/voice/utils/CodecCapabilityDetector';
 import {getGpuEncoderReportSync, loadGpuEncoderReport} from '@app/features/voice/utils/GpuEncoderCapabilities';
+import {getNativeAudioAvailabilitySnapshot} from '@app/features/voice/utils/NativeAudioCaptureBridge';
 import {setOpenH264Enabled} from '@app/features/voice/utils/OpenH264Status';
 import {CODEC_DISPLAY_LABEL} from '@app/features/voice/utils/ScreenShareCodecPolicy';
+import {reapplyActiveScreenShareAudioSources} from '@app/features/voice/utils/ScreenShareStartFlow';
+import {maySupportManualScreenShareAudioSourceSelection} from '@app/features/voice/utils/StreamSettingsUpdatePolicy';
 import {msg} from '@lingui/core/macro';
 import {useLingui} from '@lingui/react/macro';
 import {GearIcon} from '@phosphor-icons/react';
@@ -161,14 +164,6 @@ const CONFIGURE_DESCRIPTOR = msg({
 	message: 'Configure',
 	comment: 'Button label that opens a dedicated advanced settings modal for configuring screen-share encoder controls.',
 });
-const DECODE_CODEC_CAP_DESCRIPTOR = msg({
-	message: 'Emulate decode codec (testing)',
-	comment: 'Label for an advanced select that caps the best video codec this client advertises it can decode.',
-});
-const DECODE_CODEC_CAP_AUTO_DESCRIPTOR = msg({
-	message: 'Automatic',
-	comment: 'Option label for the emulated decode codec select. Means advertise true decode support.',
-});
 
 const PREFERRED_SCREEN_SHARE_CODEC_DESCRIPTOR = msg({
 	message: 'Preferred screen share codec',
@@ -196,6 +191,11 @@ const HEVC_SCREEN_SHARE_OPT_IN_DESCRIPTOR = msg({
 	message: 'Allow H.265 (HEVC) for screen sharing',
 	comment:
 		'Switch label for the H.265/HEVC screen-share opt-in. H.265 and HEVC are codec names and should stay literal.',
+});
+const MANUAL_SCREEN_SHARE_AUDIO_SOURCES_DESCRIPTOR = msg({
+	message: 'Pick the apps to capture audio from',
+	comment:
+		'Switch label for the advanced opt-in that reveals a manual per-application audio source picker in the stream settings menu.',
 });
 const SCREEN_SHARE_CODEC_OPTION_ORDER = ['av1', 'h265', 'h264', 'vp9', 'vp8'] as const;
 
@@ -269,25 +269,27 @@ export const ScreenShareHevcOptInControl = observer(() => {
 	);
 });
 
-export const EmulatedDecodeCodecCapControl = observer(() => {
+export const ManualScreenShareAudioSourcesControl = observer(() => {
 	const {i18n} = useLingui();
-	const options: ReadonlyArray<ComboboxOption<CodecPreference>> = [
-		{value: 'auto', label: i18n._(DECODE_CODEC_CAP_AUTO_DESCRIPTOR)},
-		{value: 'av1', label: 'AV1'},
-		{value: 'h265', label: 'H.265'},
-		{value: 'vp9', label: 'VP9'},
-		{value: 'h264', label: 'H.264'},
-		{value: 'vp8', label: 'VP8'},
-	];
+	if (!isDesktop()) return null;
+	if (
+		!maySupportManualScreenShareAudioSourceSelection({
+			platform: getElectronAPI()?.platform,
+			nativeAudioAvailability: getNativeAudioAvailabilitySnapshot(),
+		})
+	) {
+		return null;
+	}
 	return (
-		<Combobox<CodecPreference, false>
-			value={VoiceSettings.emulatedDecodeVideoCodecCap}
-			options={options}
-			onChange={(value) => VoiceSettingsCommands.update({emulatedDecodeVideoCodecCap: value})}
-			density="compact"
-			isSearchable={false}
-			aria-label={i18n._(DECODE_CODEC_CAP_DESCRIPTOR)}
-			data-flx="user.advanced-settings-tab.select.emulated-decode-codec-cap"
+		<Switch
+			ariaLabel={i18n._(MANUAL_SCREEN_SHARE_AUDIO_SOURCES_DESCRIPTOR)}
+			value={VoiceSettings.getScreenShareManualAudioSourcesOptIn()}
+			onChange={(value) => {
+				VoiceSettingsCommands.update({screenShareManualAudioSourcesOptIn: value});
+				void reapplyActiveScreenShareAudioSources();
+			}}
+			compact
+			data-flx="user.advanced-settings-tab.switch.manual-screen-share-audio-sources"
 		/>
 	);
 });

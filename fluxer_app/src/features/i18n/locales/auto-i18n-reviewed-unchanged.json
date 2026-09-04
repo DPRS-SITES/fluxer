@@ -1306,6 +1306,9 @@
         "msgid": "Add a Klipy API key to enable GIF search at runtime."
       },
       {
+        "msgid": "Adds a manual audio source picker to the stream settings menu. Without it, a shared window already captures that app and a shared screen captures your desktop."
+      },
+      {
         "msgid": "Advertise a capped decode codec to force publisher migration"
       },
       {
@@ -1327,6 +1330,12 @@
         "msgid": "App audio isn't available right now on Windows."
       },
       {
+        "msgid": "Application audio"
+      },
+      {
+        "msgid": "Application audio for video device shares"
+      },
+      {
         "msgid": "Approval required"
       },
       {
@@ -1337,6 +1346,9 @@
       },
       {
         "msgid": "Audio muted"
+      },
+      {
+        "msgid": "Audio sources"
       },
       {
         "msgid": "Automatic ({codec})"
@@ -1355,6 +1367,9 @@
       },
       {
         "msgid": "Camera access is needed for device previews"
+      },
+      {
+        "msgid": "Capture card"
       },
       {
         "msgid": "Change stream"
@@ -1582,6 +1597,9 @@
         "msgid": "May cause compatibility issues for viewers. We’re working on improving this."
       },
       {
+        "msgid": "Microphone ({deviceLabel})"
+      },
+      {
         "msgid": "Mirror tiers"
       },
       {
@@ -1634,6 +1652,12 @@
       },
       {
         "msgid": "Per-window audio isn't available right now on macOS."
+      },
+      {
+        "msgid": "Pick application audio while sharing a video device on Linux"
+      },
+      {
+        "msgid": "Pick the apps to capture audio from"
       },
       {
         "msgid": "Pin Neko to the top-right of the chat input instead of following your cursor"
@@ -1834,6 +1858,9 @@
         "msgid": "Share stream audio"
       },
       {
+        "msgid": "Sharper text at 720p, 30 FPS"
+      },
+      {
         "msgid": "Shorten your about me and try again."
       },
       {
@@ -1879,6 +1906,9 @@
         "msgid": "Smoother video"
       },
       {
+        "msgid": "Something is limiting this stream, so viewers are getting fewer frames than you asked for."
+      },
+      {
         "msgid": "Static Neko"
       },
       {
@@ -1889,6 +1919,9 @@
       },
       {
         "msgid": "Stop streaming"
+      },
+      {
+        "msgid": "Stream is not keeping up"
       },
       {
         "msgid": "Stream quality"
@@ -1939,6 +1972,9 @@
         "msgid": "Turn off audio sharing for this source or try again in a moment."
       },
       {
+        "msgid": "Unable to send verification code"
+      },
+      {
         "msgid": "Unavailable"
       },
       {
@@ -1954,7 +1990,13 @@
         "msgid": "Use your operating system's spellchecker when available. Otherwise, use {productName}'s in-app dictionaries."
       },
       {
+        "msgid": "Virtual microphone"
+      },
+      {
         "msgid": "Volume sliders"
+      },
+      {
+        "msgid": "We'll send a verification code to your email before you can view your backup codes."
       },
       {
         "msgid": "Welcome"
@@ -2030,6 +2072,14 @@
       },
       {
         "msgid": "{remaining, plural, one {+# more} other {+# more}}"
+      },
+      {
+        "msgctxt": "screen-share",
+        "msgid": "Your screen share could not be published with a compatible video codec, so it was stopped. Try sharing again."
+      },
+      {
+        "msgctxt": "screen-share",
+        "msgid": "Your video encoder stopped encoding frames, so your screen share was stopped. Try sharing again."
       },
       {
         "msgctxt": "security-settings-section",
@@ -2859,6 +2909,9 @@
       },
       {
         "msgid": "Microphone"
+      },
+      {
+        "msgid": "Microphone ({deviceLabel})"
       },
       {
         "msgid": "Minutes"
@@ -6921,6 +6974,9 @@
       },
       {
         "msgid": "Malta"
+      },
+      {
+        "msgid": "Microphone ({deviceLabel})"
       },
       {
         "msgid": "NCMEC {ncmecReportId}"

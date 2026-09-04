@@ -399,8 +399,8 @@ msgstr "{count, plural, one {# участник} few {# участника} many
 msgid "{count, plural, one {# mutual community} other {# mutual communities}}"
 msgstr "{count, plural, one {# общее сообщество} few {# общих сообщества} many {# общих сообществ} other {# общих сообществ}}"
 
-#: src/features/messaging/utils/MessageReactionUtils.ts:51
-#: src/features/messaging/utils/ReactionUtils.ts:52
+#: src/features/messaging/utils/MessageReactionUtils.ts:54
+#: src/features/messaging/utils/ReactionUtils.ts:55
 msgid "{count, plural, one {# other} other {# others}}"
 msgstr "{count, plural, one {# другой} other {# других}}"
 
@@ -450,7 +450,7 @@ msgstr "{count, plural, one {Развернуть (# строка)} few {Раз�
 msgid "{count, plural, one {Expand (# row)} other {Expand (# rows)}}"
 msgstr "{count, plural, one {Развернуть (# строку)} other {Развернуть (# строки)}}"
 
-#: src/features/voice/components/VoiceParticipantTile.tsx:306
+#: src/features/voice/components/VoiceParticipantTile.tsx:311
 msgid "{count, plural, one {Expand # other device} other {Expand # other devices}}"
 msgstr "{count, plural, one {Развернуть ещё # устройство} other {Развернуть ещё # устройства}}"
 
@@ -471,7 +471,7 @@ msgstr "{count, plural, one {В звонке} few {# в звонке} many {# в
 msgid "{count, plural, one {Join video call (# participant)} other {Join video call (# participants)}}"
 msgstr "{count, plural, one {Присоединиться к видеозвонку (1 участник)} few {Присоединиться к видеозвонку ({count} участника)} many {Присоединиться к видеозвонку ({count} участников)} other {Присоединиться к видеозвонку ({count} участников)}}"
 
-#: src/features/voice/components/VoiceParticipantTile.tsx:623
+#: src/features/voice/components/VoiceParticipantTile.tsx:637
 msgid "{count, plural, one {Keep watching # stream and add this one} other {Keep watching # streams and add this one}}"
 msgstr "{count, plural, one {Продолжить смотреть # трансляцию и добавить эту} few {Продолжить смотреть # трансляции и добавить эту} many {Продолжить смотреть # трансляций и добавить эту} other {Продолжить смотреть # трансляций и добавить эту}}"
 
@@ -672,13 +672,6 @@ msgstr "Статус \"{effectiveStatusLabel}\""
 msgid "{eightHours} hours"
 msgstr "{eightHours} ч"
 
-#. Label in the reaction utils helper. Preserve {emojiName}, {reactors}; they are inserted by code.
-#. Label in the reaction utils helper. Preserve {emojiName}, {reactors}; they are inserted by code.
-#: src/features/messaging/utils/MessageReactionUtils.ts:16
-#: src/features/messaging/utils/ReactionUtils.ts:17
-msgid "{emojiName} reacted by {reactors}"
-msgstr "{reactors} отреагировали на {emojiName}"
-
 #. Short label in the shared app message reactions content. Preserve placeholders {emojiName}, {reactionCountText}; they are inserted by code.
 #: src/features/app/components/shared/MessageReactionsContent.tsx:30
 msgid "{emojiName}, {reactionCountText}"
@@ -810,7 +803,7 @@ msgid "{label} images cannot be animated. Use a static image."
 msgstr "Изображения {label} не могут быть анимированными. Используйте статичное изображение."
 
 #. Summary label in the Linux audio source picker when N apps are included. {length} is the integer app count.
-#: src/features/voice/components/AudioSourcePickerLinux.tsx:34
+#: src/features/voice/components/AudioSourcePickerLinux.tsx:35
 msgid "{length} apps"
 msgstr "{length} прил"
 
@@ -845,7 +838,7 @@ msgid "{length} users"
 msgstr "{length} пользователя(-ей)"
 
 #. Spectator count badge on a screen-share tile. {length} is the integer number of viewers. Consider pluralization on review.
-#: src/features/voice/components/voice_participant_tile/shared.ts:73
+#: src/features/voice/components/voice_participant_tile/shared.ts:75
 msgid "{length} watching"
 msgstr "{length} смотрят"
 
@@ -1119,7 +1112,7 @@ msgid "{productName} needs access to your microphone. Allow microphone access in
 msgstr "{productName} требуется доступ к микрофону. Разрешите доступ к микрофону в настройках конфиденциальности операционной системы и перезапустите приложение."
 
 #. Camera settings notice shown when camera permission has not been granted.
-#: src/features/user/components/modals/tabs/UserVideoTab.tsx:46
+#: src/features/user/components/modals/tabs/UserVideoTab.tsx:45
 msgid "{productName} needs camera access to list your devices."
 msgstr "{productName} нужен доступ к камере, чтобы показать ваши устройства."
 
@@ -1182,6 +1175,13 @@ msgstr "Визионер {productName} с {premiumSinceFormatted}"
 #: src/features/ui/components/icons/FluxerWordmark.tsx:12
 msgid "{productName} wordmark"
 msgstr "{productName} логотип"
+
+#. Reaction tooltip. Preserve {emojiName}, {reactors}; they are inserted by code. {reactorCount} is how many people reacted, for verb agreement. Order the parts so the emoji never reads as the one doing the reacting.
+#. Reaction tooltip. Preserve {emojiName}, {reactors}; they are inserted by code. {reactorCount} is how many people reacted, for verb agreement. Order the parts so the emoji never reads as the one doing the reacting.
+#: src/features/messaging/utils/MessageReactionUtils.ts:16
+#: src/features/messaging/utils/ReactionUtils.ts:17
+msgid "{reactorCount, plural, one {{emojiName} reacted by {reactors}} other {{emojiName} reacted by {reactors}}}"
+msgstr "{reactorCount, plural, one {Реакция {emojiName} от {reactors}} other {Реакция {emojiName} от {reactors}}}"
 
 #. Client info web build identifier line. Example: "Canary Web 2026.518.0". Preserve placeholders.
 #. Client info web build identifier shown after the desktop build when the web and desktop channels differ. Example: "Stable Web 2026.518.0". Preserve placeholders.
@@ -1665,12 +1665,6 @@ msgstr "100 использований"
 msgid "1080p"
 msgstr "1080p"
 
-#. Resolution label in adaptive screen-share quality toasts.
-#: src/features/voice/engine/AdaptiveScreenShareEngine.ts:51
-msgctxt "adaptive-screen-share"
-msgid "1080p"
-msgstr "1080p"
-
 #. Fixed duration label for a 12-hour interval. Used as a standalone label in duration text or option lists.
 #: src/features/i18n/utils/CommonMessageDescriptors.ts:23
 msgid "12 hours"
@@ -1691,14 +1685,8 @@ msgstr "12-hour"
 msgid "1440p"
 msgstr "1440p"
 
-#. Resolution label in adaptive screen-share quality toasts.
-#: src/features/voice/engine/AdaptiveScreenShareEngine.ts:56
-msgctxt "adaptive-screen-share"
-msgid "1440p"
-msgstr "1440p"
-
 #. Frame rate option label in the stream settings menu. FPS is a technical token.
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:103
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:104
 msgid "15 FPS"
 msgstr "15 кадр/с"
 
@@ -1734,12 +1722,6 @@ msgstr "От 2 до 32 символов, буквы, цифры, нижнее п
 #: src/features/user/components/modals/tabs/LanguageTab.tsx:55
 msgid "24-hour"
 msgstr "24-hour"
-
-#. Resolution label in adaptive screen-share quality toasts.
-#: src/features/voice/engine/AdaptiveScreenShareEngine.ts:36
-msgctxt "adaptive-screen-share"
-msgid "240p"
-msgstr "240p"
 
 #. Invite max-uses dropdown option for 25 uses.
 #: src/features/invite/components/modals/InviteModal.tsx:72
@@ -1779,7 +1761,7 @@ msgid "3 months"
 msgstr "3 месяца"
 
 #. Frame rate option label in the stream settings menu. FPS is a technical token.
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:107
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:108
 msgid "30 FPS"
 msgstr "30 кадр/с"
 
@@ -1799,12 +1781,6 @@ msgstr "404: страница не найдена"
 #: src/features/user/components/modals/tabs/component_gallery_tab/IndicatorsTab.tsx:313
 msgid "40px, 3 members"
 msgstr "40 пикс., 3 участника"
-
-#. Resolution label in adaptive screen-share quality toasts.
-#: src/features/voice/engine/AdaptiveScreenShareEngine.ts:41
-msgctxt "adaptive-screen-share"
-msgid "480p"
-msgstr "480p"
 
 #. Ban duration option in the destructive ban-member modal for a five-day temporary ban.
 #: src/features/moderation/components/modals/BanMemberModal.tsx:47
@@ -1844,7 +1820,7 @@ msgid "6-digit code"
 msgstr "6-значный код"
 
 #. Frame rate option label in the stream settings menu. FPS is a technical token.
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:111
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:112
 msgid "60 FPS"
 msgstr "60 кадров/с"
 
@@ -1857,12 +1833,6 @@ msgstr "60 секунд"
 #: src/features/i18n/utils/CommonMessageDescriptors.ts:31
 msgid "7 days"
 msgstr "7 дней"
-
-#. Resolution label in adaptive screen-share quality toasts.
-#: src/features/voice/engine/AdaptiveScreenShareEngine.ts:46
-msgctxt "adaptive-screen-share"
-msgid "720p"
-msgstr "720p"
 
 #. Required-action error when the API requires a captcha for phone verification.
 #: src/features/auth/components/modals/required_action/RequiredActionDescriptors.ts:426
@@ -2314,11 +2284,6 @@ msgstr "Порог активности"
 msgid "Actual size"
 msgstr "Фактический размер"
 
-#. Toggle label in the stream settings menu. When enabled, productName can lower screen-share resolution if the encoder is CPU or bandwidth limited.
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:143
-msgid "Adaptive quality"
-msgstr "Адаптивное качество"
-
 #. Action label for adding the current selection.
 #. Button label in the favorite meme editor that adds the typed tag to the tag list.
 #. Button label in the sticker editor that adds the typed tag to the tag list.
@@ -2735,8 +2700,13 @@ msgstr "Требуется дополнительная проверка"
 msgid "Address"
 msgstr "Адрес"
 
+#. Settings search entry description. One-line summary of what the settings search entry controls.
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:147
+msgid "Adds a manual audio source picker to the stream settings menu. Without it, a shared window already captures that app and a shared screen captures your desktop."
+msgstr "Добавляет ручной выбор источника звука в меню настроек трансляции. Без него общее окно уже захватывает это приложение, а общий экран захватывает ваш рабочий стол."
+
 #. Description for an H.264 backup stream select. Keep H.264, CPU, and GPU literal.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:124
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:127
 msgid "Adds H.264 for mixed clients. Uses more encode work."
 msgstr "Добавляет кодек H.264 для совместимости с разными клиентами. Требует больше вычислительных ресурсов."
 
@@ -2774,11 +2744,6 @@ msgstr "Отрегулируйте общий уровень масштабир�
 msgid "Adjust the overall zoom level of the app. Use {zoomIn} / {zoomOut} to adjust quickly."
 msgstr "Настройте общий уровень масштабирования приложения. Используйте {zoomIn} / {zoomOut} для быстрой настройки."
 
-#. Inline adaptive-quality status in the stream settings menu. Shows the current automatically lowered resolution and frame rate.
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:148
-msgid "Adjusted to {resolution} {frameRate} FPS"
-msgstr "Настроено на {resolution} {frameRate} кадр/с"
-
 #. Permission name: grants all permissions and bypasses restrictions.
 #: src/features/permissions/utils/PermissionLabelDescriptors.ts:157
 msgid "Administrator"
@@ -2800,14 +2765,9 @@ msgid "Advanced"
 msgstr "Расширенные"
 
 #. Subsection title in the video tab. Keep it concise.
-#: src/features/user/components/modals/tabs/UserVideoTab.tsx:86
+#: src/features/user/components/modals/tabs/UserVideoTab.tsx:84
 msgid "Advanced video settings"
 msgstr "Дополнительные настройки видео"
-
-#. Settings search entry description. One-line summary of what the settings search entry controls.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:121
-msgid "Advertise a capped decode codec to force publisher migration"
-msgstr "Рекламировать ограниченный кодек декодирования для принудительного переноса издателя"
 
 #: src/features/theme_studio/sections/ThemeStudioSettingsSection.tsx:300
 msgid "Aero Snap and Snap Layouts can stop working while transparency is enabled."
@@ -2998,7 +2958,7 @@ msgstr "Разрешить"
 msgid "Allow {everyoneMention} and {hereMention}"
 msgstr "Разрешить {everyoneMention} и {hereMention}"
 
-#: src/features/user/components/modals/tabs/UserVideoTab.tsx:216
+#: src/features/user/components/modals/tabs/UserVideoTab.tsx:205
 msgid "Allow {PRODUCT_NAME} to access your camera in {MACOS_SYSTEM_SETTINGS_NAME} → {MACOS_PRIVACY_AND_SECURITY_SETTINGS_NAME} → {MACOS_CAMERA_PERMISSION_NAME}."
 msgstr "Разрешите {PRODUCT_NAME} доступ к вашей камере в {MACOS_SYSTEM_SETTINGS_NAME} → {MACOS_PRIVACY_AND_SECURITY_SETTINGS_NAME} → {MACOS_CAMERA_PERMISSION_NAME}."
 
@@ -3030,8 +2990,8 @@ msgstr "Разрешить всем, кто может просматриват�
 
 #. Settings search entry label for the AV1 screen-share opt-in. AV1 is a codec name and should stay literal.
 #. Switch label for the AV1 screen-share opt-in. AV1 is a codec name and should stay literal.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:191
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:88
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:186
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:90
 msgid "Allow AV1 for screen sharing"
 msgstr "Разрешить AV1 для демонстрации экрана"
 
@@ -3045,7 +3005,7 @@ msgstr "Разрешить боту писать в личку"
 msgid "Allow bots to send you direct messages?"
 msgstr "Разрешить ботам отправлять вам личные сообщения?"
 
-#: src/features/user/components/modals/tabs/UserVideoTab.tsx:236
+#: src/features/user/components/modals/tabs/UserVideoTab.tsx:225
 msgid "Allow camera"
 msgstr "Разрешить доступ к камере"
 
@@ -3084,8 +3044,8 @@ msgstr "Разрешить для всех сообществ"
 
 #. Settings search entry label for the H.265/HEVC screen-share opt-in. H.265 and HEVC are codec names and should stay literal.
 #. Switch label for the H.265/HEVC screen-share opt-in. H.265 and HEVC are codec names and should stay literal.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:195
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:92
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:190
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:94
 msgid "Allow H.265 (HEVC) for screen sharing"
 msgstr "Разрешить H.265 (HEVC) для демонстрации экрана"
 
@@ -3704,7 +3664,7 @@ msgid "App state"
 msgstr "Состояние приложения"
 
 #. Fallback label for an app window card in the screen-share picker when the OS does not give us a window title.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:138
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:137
 msgid "App window"
 msgstr "Окно приложения"
 
@@ -3744,6 +3704,11 @@ msgstr "Добавляет ┬─┬ ノ( ゜-゜ノ) к вашему сообщ
 #: src/features/user/components/modals/tabs/AuthorizedAppsTab.tsx:70
 msgid "Application access revoked"
 msgstr "Доступ к приложению отозван"
+
+#. Settings search synonym. Used to match this term when the user types it in the settings search bar.
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:131
+msgid "Application audio"
+msgstr "Аудио приложения"
 
 #. Settings content title shown while a developer application detail page is loading.
 #. Settings content title shown while a developer application detail page is loading.
@@ -3797,7 +3762,7 @@ msgstr "Приложение обновлено"
 #: src/features/user/components/settings_utils/search_index/SharedDescriptors.ts:29
 #: src/features/user/components/settings_utils/section_registry/GeneralSettingsSections.ts:66
 #: src/features/user/components/settings_utils/SettingsConstants.tsx:65
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:180
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:179
 msgid "Applications"
 msgstr "Приложения"
 
@@ -4118,12 +4083,12 @@ msgid "Audio boost"
 msgstr "Усиление звука"
 
 #. Section header in the stream settings menu. Selects the audio capture device for the share.
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:127
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:128
 msgid "Audio device"
 msgstr "Аудиоустройство"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:16
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:18
 msgid "Audio device alerts"
 msgstr "Уведомления об аудиоустройстве"
 
@@ -4138,7 +4103,7 @@ msgid "Audio level"
 msgstr "Уровень звука"
 
 #. Footer summary status shown when capture-device audio is disabled.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:249
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:248
 msgid "Audio muted"
 msgstr "Аудио выключено"
 
@@ -4213,7 +4178,7 @@ msgid "Audio send:"
 msgstr "Отправка аудио:"
 
 #. Section header in the stream settings menu grouping audio-related toggles.
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:139
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:140
 msgid "Audio settings"
 msgstr "Настройки аудио"
 
@@ -4223,8 +4188,13 @@ msgctxt "voice-control-button"
 msgid "Audio settings"
 msgstr "Настройки аудио"
 
+#. Settings search synonym. Used to match this term when the user types it in the settings search bar.
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:135
+msgid "Audio sources"
+msgstr "Источники звука"
+
 #. Toggle / summary row label in the Linux audio source picker. {summaryLabel} is one of the audio-source summary labels.
-#: src/features/voice/components/AudioSourcePickerLinux.tsx:43
+#: src/features/voice/components/AudioSourcePickerLinux.tsx:54
 msgid "Audio sources: {summaryLabel}"
 msgstr "Источники звука: {summaryLabel}"
 
@@ -4425,15 +4395,13 @@ msgstr "Подсказка: {label}, {selectedOptionPosition} из {resultCount}
 #. Option label for a WebRTC content hint select.
 #. Option label for an SVC mode select.
 #. Option label for an encoder path select.
-#. Option label for the emulated decode codec select. Means advertise true decode support.
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #. Voice region option label in the voice settings menu meaning let Fluxer pick the best region automatically.
 #. Voice region picker option label meaning 'let Fluxer pick the best region automatically'.
 #: src/features/channel/components/modals/channel_tabs/channel_overview_tab/RtcRegionSelect.tsx:19
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:64
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:104
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:144
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:168
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:67
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:107
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:147
 #: src/features/user/components/settings_utils/section_registry/NotificationsSections.ts:263
 #: src/features/voice/components/VoiceRegionSelector.tsx:16
 #: src/features/voice/components/VoiceSettingsMenus.tsx:91
@@ -4447,13 +4415,13 @@ msgid "Automatic"
 msgstr "Автоматически"
 
 #. Option label for the screen-share codec select. codec is the automatically selected codec label.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:177
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:172
 msgid "Automatic ({codec})"
 msgstr "Автоматически ({codec})"
 
 #. Settings search entry label. Names the settings search entry in the settings UI.
 #. Voice setting label for automatically evening out microphone volume.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:48
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:50
 #: src/features/voice/utils/VoiceMessageDescriptors.ts:213
 msgid "Automatic gain control"
 msgstr "Автоматическая регулировка усиления"
@@ -4542,12 +4510,12 @@ msgid "Autoscrolling"
 msgstr "Автопрокрутка"
 
 #. Settings search synonym. Codec name; keep literal. Used to match this term in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:101
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:103
 msgid "AV1"
 msgstr "AV1"
 
 #. Option label for the screen-share codec select while the AV1 opt-in is off and the option is disabled. AV1 is a codec name and should stay literal.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:181
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:176
 msgid "AV1 (requires opt-in)"
 msgstr "AV1 (требуется подтверждение)"
 
@@ -4713,7 +4681,7 @@ msgstr "Преимущества Plutonium для бэкенда отключе�
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #: src/features/theme/components/modals/BackgroundImageGalleryModal.tsx:56
 #: src/features/user/components/settings_utils/search_index/SharedDescriptors.ts:5
-#: src/features/voice/components/modals/CameraPreviewModal.tsx:735
+#: src/features/voice/components/modals/CameraPreviewModal.tsx:725
 msgid "Background"
 msgstr "Фон"
 
@@ -4760,7 +4728,7 @@ msgstr "Backspace"
 #. Security modal title for one-time account recovery codes.
 #. Settings search entry label. Also used as a search synonym in the settings search bar.
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/auth/components/modals/BackupCodesModal.tsx:17
+#: src/features/auth/components/modals/BackupCodesModal.tsx:18
 #: src/features/user/components/modals/tabs/account_security_tab/SecurityTab.tsx:274
 #: src/features/user/components/settings_utils/search_index/AccountSecurityIndex.ts:74
 #: src/features/user/components/settings_utils/section_registry/AccountSecuritySections.ts:65
@@ -4768,7 +4736,7 @@ msgid "Backup codes"
 msgstr "Резервные коды"
 
 #. Toast shown after new account recovery backup codes were generated.
-#: src/features/auth/components/modals/BackupCodesRegenerateModal.tsx:17
+#: src/features/auth/components/modals/BackupCodesRegenerateModal.tsx:19
 msgid "Backup codes regenerated"
 msgstr "Резервные коды обновлены"
 
@@ -4778,7 +4746,7 @@ msgid "Badge"
 msgstr "Значок"
 
 #. Option label for a software encoder quality select.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:88
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:91
 msgid "Balanced"
 msgstr "Сбалансированное"
 
@@ -4838,12 +4806,6 @@ msgstr "Заблокировать пользователя"
 #: src/features/voice/components/voice_connection_status/shared.ts:68
 msgid "Bandwidth"
 msgstr "Пропускная способность"
-
-#. Reason label in adaptive screen-share quality toasts.
-#: src/features/voice/engine/AdaptiveScreenShareEngine.ts:66
-msgctxt "adaptive-screen-share"
-msgid "bandwidth limited"
-msgstr "ограничение пропускной способности"
 
 #. IAR modal: disabled-state label on the ban card after the user is banned from this community.
 #: src/features/moderation/components/report_modal/IARModalCopy.ts:159
@@ -5002,7 +4964,7 @@ msgid "Biometrics"
 msgstr "Биометрия"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:181
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:196
 msgid "Bitrate"
 msgstr "Битрейт"
 
@@ -5123,7 +5085,7 @@ msgid "Blur"
 msgstr "Размытие"
 
 #. Slider label in the camera preview modal controlling how strong the background blur effect is.
-#: src/features/voice/components/modals/CameraPreviewModal.tsx:79
+#: src/features/voice/components/modals/CameraPreviewModal.tsx:80
 msgid "Blur strength"
 msgstr "Интенсивность размытия"
 
@@ -5354,7 +5316,7 @@ msgid "Browser locale: {format}"
 msgstr "Язык браузера: {format}"
 
 #. Settings search entry description. One-line summary of what the settings search entry controls.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:64
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:66
 msgid "Browser mic gain for custom processing"
 msgstr "Усиление микрофона в браузере для пользовательской обработки"
 
@@ -5571,7 +5533,7 @@ msgstr "Звонки"
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #. Short label in the video tab. Keep it concise.
 #: src/features/i18n/utils/CommonMessageDescriptors.ts:719
-#: src/features/user/components/modals/tabs/UserVideoTab.tsx:70
+#: src/features/user/components/modals/tabs/UserVideoTab.tsx:68
 #: src/features/user/components/settings_utils/section_registry/VoiceVideoSections.ts:157
 #: src/features/voice/utils/SettingsDeviceOptions.ts:23
 #: src/features/voice/utils/VoiceMessageDescriptors.ts:10
@@ -5579,12 +5541,12 @@ msgid "Camera"
 msgstr "Камера"
 
 #. Title shown in the screen-share Devices tab before camera preview permission is granted.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:152
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:151
 msgid "Camera access is needed for device previews"
 msgstr "Камера нужна для предварительного просмотра устройств"
 
 #. Description shown after camera preview permission is denied or unavailable.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:160
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:159
 msgid "Camera access was not granted. Update camera permissions, then try again."
 msgstr "Доступ к камере не предоставлен. Обновите разрешения для камеры и попробуйте снова."
 
@@ -5600,12 +5562,12 @@ msgstr "Камера"
 msgid "Camera effects"
 msgstr "Эффекты камеры"
 
-#: src/features/voice/components/modals/CameraPreviewModal.tsx:813
+#: src/features/voice/components/modals/CameraPreviewModal.tsx:803
 msgid "Camera error"
 msgstr "Ошибка камеры"
 
 #. Overlay text on a participant tile when the local user hid the remote camera feed.
-#: src/features/voice/components/voice_participant_tile/shared.ts:47
+#: src/features/voice/components/voice_participant_tile/shared.ts:49
 msgid "Camera hidden"
 msgstr "Камера скрыта"
 
@@ -5615,7 +5577,7 @@ msgid "Camera limit reached — up to {voiceChannelCameraUserLimit} people can s
 msgstr "Достигнут лимит камер — в этом канале видео могут транслировать до {voiceChannelCameraUserLimit} пользователей."
 
 #. Accessible status label while a voice participant camera feed is starting before video is renderable.
-#: src/features/voice/components/voice_participant_tile/shared.ts:51
+#: src/features/voice/components/voice_participant_tile/shared.ts:53
 msgid "Camera loading"
 msgstr "Загрузка камеры"
 
@@ -5643,13 +5605,13 @@ msgstr "Требуется доступ к камере"
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #. Title of the camera preview modal.
 #: src/features/user/components/settings_utils/section_registry/VoiceVideoSections.ts:181
-#: src/features/voice/components/modals/CameraPreviewModal.tsx:62
+#: src/features/voice/components/modals/CameraPreviewModal.tsx:63
 msgid "Camera preview"
 msgstr "Предпросмотр камеры"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #. Short label in the video tab. Keep it concise.
-#: src/features/user/components/modals/tabs/UserVideoTab.tsx:74
+#: src/features/user/components/modals/tabs/UserVideoTab.tsx:72
 #: src/features/user/components/settings_utils/section_registry/VoiceVideoSections.ts:197
 msgid "Camera quality"
 msgstr "Качество камеры"
@@ -5700,8 +5662,9 @@ msgstr "Не удается загрузить файлы сюда"
 #. Keyboard shortcut action label shown in the shortcuts list and keybind editor. Keep short, sentence case.
 #: src/features/auth/components/modals/AccountDeleteModal.tsx:74
 #: src/features/auth/components/modals/AccountDisableModal.tsx:45
-#: src/features/auth/components/modals/BackupCodesRegenerateModal.tsx:78
-#: src/features/auth/components/modals/BackupCodesViewModal.tsx:61
+#: src/features/auth/components/modals/BackupCodesRegenerateModal.tsx:100
+#: src/features/auth/components/modals/BackupCodesViewModal.tsx:174
+#: src/features/auth/components/modals/BackupCodesViewModal.tsx:193
 #: src/features/auth/components/modals/ClaimAccountModal.tsx:216
 #: src/features/auth/components/modals/ClaimAccountModal.tsx:232
 #: src/features/auth/components/modals/DeviceRevokeModal.tsx:74
@@ -5745,7 +5708,7 @@ msgstr "Не удается загрузить файлы сюда"
 #: src/features/user/components/modals/PhoneAddModal.tsx:392
 #: src/features/user/components/modals/tabs/AuthorizedAppsTab.tsx:173
 #: src/features/voice/components/EntranceSoundTrimmerModal.tsx:31
-#: src/features/voice/components/modals/CameraPreviewModal.tsx:849
+#: src/features/voice/components/modals/CameraPreviewModal.tsx:839
 #: src/features/voice/components/VoiceMessageComposerModal.tsx:80
 msgid "Cancel"
 msgstr "Отмена"
@@ -5841,19 +5804,24 @@ msgid "Captcha verification failed. Try again."
 msgstr "Проверка капчи не удалась. Попробуйте ещё раз."
 
 #. Section header in the Linux audio source picker. Lists capture-target options (entire system / specific apps).
-#: src/features/voice/components/AudioSourcePickerLinux.tsx:48
+#: src/features/voice/components/AudioSourcePickerLinux.tsx:59
 msgid "Capture"
 msgstr "Запись"
 
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:421
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:842
 msgid "Capture app audio"
 msgstr "Записывать звук приложения"
 
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:422
+#. Settings search synonym. Used to match this term when the user types it in the settings search bar.
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:139
+msgid "Capture card"
+msgstr "Захват видеокарты"
+
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:843
 msgid "Capture desktop audio"
 msgstr "Записывать звук с рабочего стола"
 
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:420
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:841
 msgid "Capture device audio"
 msgstr "Записывать звук с устройства"
 
@@ -5993,7 +5961,7 @@ msgstr "По центру"
 msgid "Change avatar"
 msgstr "Сменить фото профиля"
 
-#: src/features/voice/components/modals/CameraPreviewModal.tsx:748
+#: src/features/voice/components/modals/CameraPreviewModal.tsx:738
 msgid "Change background"
 msgstr "Изменить фон"
 
@@ -6119,7 +6087,7 @@ msgid "Change stream"
 msgstr "Сменить трансляцию"
 
 #. Modal title for the screen-share picker when switching an ongoing stream to a new source.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:213
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:212
 msgid "Change stream source"
 msgstr "Изменить источник трансляции"
 
@@ -6758,7 +6726,7 @@ msgid "Choose payment method"
 msgstr "Выберите способ оплаты"
 
 #. Modal title for the screen-share picker when starting a new screen share.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:217
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:216
 msgid "Choose something to share"
 msgstr "Выберите, что показать"
 
@@ -6866,7 +6834,7 @@ msgid "Choose your profile accent color"
 msgstr "Выберите акцентный цвет профиля"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:129
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:119
 msgid "Cisco"
 msgstr "Cisco"
 
@@ -7160,7 +7128,7 @@ msgid "Cleared the topic."
 msgstr "Очистил тему."
 
 #. Footer summary description for the text-focused screen-share quality preset.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:241
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:240
 msgid "Clearer text"
 msgstr "Чёткий текст"
 
@@ -7474,14 +7442,9 @@ msgid "Code:"
 msgstr "Код:"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:76
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:78
 msgid "Codec"
 msgstr "Кодек"
-
-#. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:117
-msgid "Codec negotiation testing"
-msgstr "Тестирование согласования кодеков"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
@@ -7524,7 +7487,7 @@ msgstr "Свернуть тему канала"
 #. Tooltip / aria label on a voice participant tile button that collapses expanded device tiles for one user.
 #. Voice menu action that collapses expanded device tiles back into a single tile.
 #: src/features/ui/action_menu/items/voice_participant_menu_data/shared.ts:122
-#: src/features/voice/components/VoiceParticipantTile.tsx:168
+#: src/features/voice/components/VoiceParticipantTile.tsx:173
 msgid "Collapse devices"
 msgstr "Свернуть устройства"
 
@@ -7999,7 +7962,7 @@ msgstr "Фокус на поле ввода"
 #. Button label that opens a dedicated advanced settings modal for configuring screen-share encoder controls.
 #. Button label that opens a dedicated advanced settings modal.
 #: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedChatControls.tsx:161
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:160
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:163
 msgid "Configure"
 msgstr "Настроить"
 
@@ -8137,7 +8100,7 @@ msgstr "Подтверждение или двойной щелчок для в�
 msgid "Conflicts with {conflictLabel}"
 msgstr "Конфликтует с {conflictLabel}"
 
-#: src/features/user/components/modals/tabs/UserVideoTab.tsx:221
+#: src/features/user/components/modals/tabs/UserVideoTab.tsx:210
 msgid "Connect a camera and try again."
 msgstr "Подключите камеру и попробуйте снова."
 
@@ -8146,7 +8109,7 @@ msgstr "Подключите камеру и попробуйте снова."
 msgid "Connect a camera or virtual capture device, then try again."
 msgstr "Подключите камеру или виртуальное устройство захвата, затем повторите попытку."
 
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:130
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:129
 msgid "Connect a display, then try again."
 msgstr "Подключите дисплей и попробуйте снова."
 
@@ -8270,12 +8233,12 @@ msgid "Connection volume"
 msgstr "Громкость подключения"
 
 #. Settings search entry label. Names an advanced voice setting in the settings UI.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:28
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:30
 msgid "Connection volume controls"
 msgstr "Громкость соединения"
 
 #. Developer / debug overlay text on a participant tile. {connectionId} is the voice connection identifier.
-#: src/features/voice/components/voice_participant_tile/shared.ts:90
+#: src/features/voice/components/voice_participant_tile/shared.ts:110
 msgid "Connection: {connectionId}"
 msgstr "Подключение: {connectionId}"
 
@@ -8341,7 +8304,7 @@ msgid "Content filtering"
 msgstr "Фильтрация контента"
 
 #. Label for an advanced screen-share select. Refers to the WebRTC MediaStreamTrack contentHint value.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:136
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:139
 msgid "Content hint"
 msgstr "Подсказка по контенту"
 
@@ -8379,8 +8342,8 @@ msgstr "Контекстные меню открываются левым кли
 #. Generic primary button label that advances a multi-step flow.
 #. OAuth authorization primary button. Advances to the next step after choosing an account.
 #. Primary button in the required-action modal. Continues the current verification path.
-#: src/features/auth/components/modals/BackupCodesRegenerateModal.tsx:85
-#: src/features/auth/components/modals/BackupCodesViewModal.tsx:68
+#: src/features/auth/components/modals/BackupCodesRegenerateModal.tsx:107
+#: src/features/auth/components/modals/BackupCodesViewModal.tsx:181
 #: src/features/auth/components/modals/DeviceRevokeModal.tsx:77
 #: src/features/auth/components/modals/PasskeyPinModal.tsx:111
 #: src/features/auth/components/modals/required_action/RequiredActionDescriptors.ts:162
@@ -8516,7 +8479,7 @@ msgstr "Ссылка скопирована"
 #. Short label in the settings dialog copy link section.
 #. Textarea right-click context menu item that copies the selected text.
 #: src/features/app/components/dialogs/shared/CopyLinkSection.tsx:11
-#: src/features/auth/components/modals/BackupCodesModal.tsx:94
+#: src/features/auth/components/modals/BackupCodesModal.tsx:96
 #: src/features/channel/components/textarea/TextareaContextMenu.tsx:50
 #: src/features/moderation/components/report_modal/IARModalCopy.ts:423
 #: src/features/theme_studio/sections/QuickCssSection.tsx:214
@@ -9416,12 +9379,6 @@ msgstr "Обложка"
 msgid "Cozy"
 msgstr "Уютные"
 
-#. Reason label in adaptive screen-share quality toasts.
-#: src/features/voice/engine/AdaptiveScreenShareEngine.ts:71
-msgctxt "adaptive-screen-share"
-msgid "CPU limited"
-msgstr "ограничение ЦП"
-
 #. Generic primary action label that creates the item described by the current dialog or form.
 #: src/features/i18n/utils/CommonMessageDescriptors.ts:148
 msgid "Create"
@@ -9821,10 +9778,10 @@ msgstr "Сейчас: {mutedText}"
 #: src/features/user/components/modals/tabs/notifications_tab/NotificationsTabSounds.tsx:180
 #: src/features/user/components/modals/tabs/UserVoiceTab.tsx:77
 #: src/features/user/components/settings_utils/section_registry/AppearanceSections.ts:94
-#: src/features/voice/components/AudioSourcePickerLinux.tsx:30
+#: src/features/voice/components/AudioSourcePickerLinux.tsx:31
 #: src/features/voice/components/bottomsheets/VoiceSettingsBottomSheets.tsx:44
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:233
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:91
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:232
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:92
 msgid "Custom"
 msgstr "Другое"
 
@@ -10011,7 +9968,7 @@ msgid "Custom video backgrounds"
 msgstr "Пользовательские видеофоны"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:60
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:62
 msgid "Custom voice processing"
 msgstr "Настраиваемая обработка звука"
 
@@ -10365,14 +10322,14 @@ msgstr "Декоративный разделитель"
 #: src/features/ui/action_menu/items/SearchMenuData.tsx:43
 #: src/features/ui/action_menu/items/SearchProviderMenuItems.tsx:14
 #: src/features/user/components/modals/tabs/component_gallery_tab/MarkdownTab.tsx:117
-#: src/features/voice/components/modals/CameraPreviewModal.tsx:66
+#: src/features/voice/components/modals/CameraPreviewModal.tsx:67
 #: src/features/voice/components/VoiceSettingsMenus.tsx:86
 #: src/features/voice/utils/SettingsDeviceOptions.ts:11
 msgid "Default"
 msgstr "По умолчанию"
 
 #. Fallback label for the system default camera in the screen-share devices tab.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:148
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:147
 msgid "Default camera"
 msgstr "Камера по умолчанию"
 
@@ -10889,7 +10846,7 @@ msgid "Desktop away"
 msgstr "Нет на месте (компьютер)"
 
 #. Aria label on a participant tile icon that indicates the participant is on desktop.
-#: src/features/voice/components/voice_participant_tile/shared.ts:86
+#: src/features/voice/components/voice_participant_tile/shared.ts:106
 msgid "Desktop device"
 msgstr "Компьютер"
 
@@ -10977,7 +10934,7 @@ msgid "Detached banner"
 msgstr "Откреплённый баннер"
 
 #. Option label for a WebRTC content hint select.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:152
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:155
 msgid "Detail"
 msgstr "Детализация"
 
@@ -11052,7 +11009,7 @@ msgid "Device"
 msgstr "Устройство"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:12
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:14
 msgid "Device alerts"
 msgstr "Уведомления устройства"
 
@@ -11065,12 +11022,12 @@ msgstr "Информация об устройстве"
 msgid "Device revoked"
 msgstr "Устройство отозвано"
 
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:1045
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:1033
 msgid "Device selection"
 msgstr "Выбор устройства"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:36
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:38
 msgid "Device volume"
 msgstr "Громкость устройства"
 
@@ -11089,12 +11046,12 @@ msgstr "Устройство:"
 #: src/features/user/components/settings_utils/search_index/DevicesIndex.ts:11
 #: src/features/user/components/settings_utils/section_registry/AppearanceSections.ts:82
 #: src/features/user/components/settings_utils/SettingsConstants.tsx:57
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:188
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:187
 msgid "Devices"
 msgstr "Устройства"
 
 #. Description for the Custom streaming preset. Lightly playful prose; keep tone casual.
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:95
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:96
 msgid "Dial in your own numbers"
 msgstr "Наберите свои номера"
 
@@ -11197,7 +11154,7 @@ msgstr "Прямая загрузка активна"
 #. Short footer action in the screen-share picker that disables screen-share preview frame uploads.
 #: src/features/user/components/modals/tabs/account_security_tab/SecurityTab.tsx:238
 #: src/features/user/components/settings_utils/search_index/AccountSecurityIndex.ts:138
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:269
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:268
 msgid "Disable"
 msgstr "Отключить"
 
@@ -11270,7 +11227,7 @@ msgid "Disable mobile push notifications"
 msgstr "Отключить мобильные push-уведомления"
 
 #. Short label for an advanced screen-share preview preference.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:48
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:51
 msgid "Disable picture-in-picture popout for screen shares"
 msgstr "Отключить режим \"картинка в картинке\" для демонстрации экрана"
 
@@ -11396,7 +11353,7 @@ msgid "Disabled value"
 msgstr "Отключенное значение"
 
 #. Explains what happens after disabling screen-share preview uploads. Refers to already-uploaded preview thumbnails.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:317
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:316
 msgid "Disabling previews stops future preview uploads. Existing preview images may remain visible until the stream ends or the preview refreshes."
 msgstr "Отключение предварительных просмотров прекратит загрузку новых предварительных изображений. Существующие изображения предварительного просмотра могут оставаться видимыми до окончания трансляции или обновления предварительного просмотра."
 
@@ -11540,7 +11497,7 @@ msgstr "Отклонить упоминание"
 #: src/features/user/components/modals/tabs/chat_settings_tab/ChatSettingsTabInline.tsx:12
 #: src/features/user/components/modals/tabs/ChatSettingsTab.tsx:12
 #: src/features/user/components/settings_utils/section_registry/AppearanceSections.ts:154
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:143
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:142
 msgid "Display"
 msgstr "Отображение"
 
@@ -11830,7 +11787,7 @@ msgstr "Дважды нажмите на пользователя, чтобы п
 #. Button that downloads account backup codes as a text file.
 #. Generic action label that downloads an attachment / file.
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/auth/components/modals/BackupCodesModal.tsx:83
+#: src/features/auth/components/modals/BackupCodesModal.tsx:85
 #: src/features/i18n/utils/CommonMessageDescriptors.ts:377
 #: src/features/theme_studio/sections/QuickCssSection.tsx:205
 #: src/features/user/components/settings_utils/section_registry/PrivacySafetySections.ts:216
@@ -12637,13 +12594,6 @@ msgstr "Эмотиконы"
 msgid "Empty favorites"
 msgstr "Избранное пусто"
 
-#. Label for an advanced select that caps the best video codec this client advertises it can decode.
-#. Settings search entry label. Names the settings search entry in the settings UI.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:164
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:113
-msgid "Emulate decode codec (testing)"
-msgstr "Эмулировать кодек декодирования (тестирование)"
-
 #. Button label in the Linux Wayland input-access nagbar.
 #. Button label in the keybind settings system-wide shortcuts section.
 #. Button or menu action label in the invites disable invites button. Keep it concise.
@@ -12716,7 +12666,7 @@ msgid "Enable browser notifications"
 msgstr "Включить уведомления в браузере"
 
 #. Description shown before the user explicitly requests camera preview permission.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:156
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:155
 msgid "Enable camera access to preview cameras and capture devices before choosing one to stream."
 msgstr "Включите доступ к камере, чтобы просмотреть камеры и устройства захвата перед выбором одного для трансляции."
 
@@ -12827,7 +12777,7 @@ msgid "Enable or disable built-in translators. Enabled translators appear in the
 msgstr "Включите или отключите встроенные переводчики. Включенные переводчики появятся в контекстном меню сообщения при выделении текста."
 
 #. Button that explicitly requests camera permission for device previews.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:164
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:163
 msgid "Enable previews"
 msgstr "Включить предварительный просмотр"
 
@@ -12944,18 +12894,18 @@ msgstr "Включен контент для взрослых."
 
 #. Label for an advanced screen-share select. Refers to hardware or software video encoding.
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:56
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:165
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:59
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:180
 msgid "Encoder path"
 msgstr "Путь кодировщика"
 
 #. Description for the encoder path select.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:60
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:63
 msgid "Encoder preference for new screen shares."
 msgstr "Настройки кодирования для новых трансляций экрана."
 
 #. Settings search entry description. One-line summary of what the settings search entry controls.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:185
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:200
 msgid "Encoder, SVC, backup stream, and bitrate presets"
 msgstr "Кодек, SVC, резервный поток и предустановки битрейта"
 
@@ -13201,6 +13151,7 @@ msgstr "Введите код, отправленный на {emailAddress}."
 msgid "Enter the code sent to your current email."
 msgstr "Введите код, отправленный на текущий адрес эл. почты."
 
+#: src/features/auth/components/modals/BackupCodesViewModal.tsx:152
 #: src/features/user/components/modals/PasswordChangeModal.tsx:155
 msgid "Enter the code sent to your email address."
 msgstr "Введите код, отправленный на вашу электронную почту."
@@ -13287,16 +13238,16 @@ msgid "Entertainment"
 msgstr "Развлечения"
 
 #. Tab label in the screen-share picker. Lists shareable monitors / displays.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:184
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:183
 msgid "Entire screen"
 msgstr "Весь экран"
 
 #. Summary label in the Linux audio source picker when capturing the whole system audio mix.
-#: src/features/voice/components/AudioSourcePickerLinux.tsx:39
+#: src/features/voice/components/AudioSourcePickerLinux.tsx:40
 msgid "Entire system"
 msgstr "Вся система"
 
-#: src/features/voice/components/AudioSourcePickerLinux.tsx:206
+#: src/features/voice/components/AudioSourcePickerLinux.tsx:235
 msgid "Entire system audio"
 msgstr "Весь звук системы"
 
@@ -13356,7 +13307,7 @@ msgid "Error"
 msgstr "Ошибка"
 
 #. Subtitle on a remote screen-share tile after loading the watched stream failed. {code} is a numeric diagnostic code.
-#: src/features/voice/components/voice_participant_tile/shared.ts:42
+#: src/features/voice/components/voice_participant_tile/shared.ts:44
 msgid "error code {code}"
 msgstr "код ошибки {code}"
 
@@ -13473,7 +13424,7 @@ msgid "exclude a user"
 msgstr "исключить пользователя"
 
 #. Section header in the Linux audio source picker for apps excluded from the system mix.
-#: src/features/voice/components/AudioSourcePickerLinux.tsx:57
+#: src/features/voice/components/AudioSourcePickerLinux.tsx:68
 msgid "Exclude from system"
 msgstr "Исключить из системы"
 
@@ -13844,7 +13795,7 @@ msgid "Failed to delete channel"
 msgstr "Не удалось удалить канал"
 
 #. Toast / inline error in the camera preview modal when enabling the camera fails.
-#: src/features/voice/components/modals/CameraPreviewModal.tsx:58
+#: src/features/voice/components/modals/CameraPreviewModal.tsx:59
 msgid "Failed to enable camera."
 msgstr "Не удалось включить камеру."
 
@@ -13900,7 +13851,7 @@ msgid "Failed to load invites. Try again."
 msgstr "Не удалось загрузить приглашения. Повторите попытку."
 
 #. Error text shown in the screen-share picker when the list of shareable windows/displays fails to load.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:117
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:116
 msgid "Failed to load shareable sources."
 msgstr "Не удалось загрузить источники для демонстрации."
 
@@ -14028,7 +13979,7 @@ msgid "Failed to start"
 msgstr "Не удалось запустить"
 
 #. Error text in the camera preview modal when the camera stream cannot be opened. Prompts user to check OS / browser permissions.
-#: src/features/voice/components/modals/CameraPreviewModal.tsx:53
+#: src/features/voice/components/modals/CameraPreviewModal.tsx:54
 msgid "Failed to start camera preview. Check your camera permissions."
 msgstr "Не удалось запустить предварительный просмотр с камеры. Проверьте разрешения камеры."
 
@@ -14373,7 +14324,7 @@ msgstr "Фильтрация"
 msgid "Filtering by {language}"
 msgstr "Фильтр по {language}"
 
-#: src/features/voice/components/modals/CameraPreviewModal.tsx:792
+#: src/features/voice/components/modals/CameraPreviewModal.tsx:782
 msgid "Finalizing camera..."
 msgstr "Завершение настройки камеры..."
 
@@ -14453,12 +14404,12 @@ msgid "Flexible text channel names"
 msgstr "Гибкие названия текстовых каналов"
 
 #. Description for the high-tier Gaming streaming preset (Plutonium). Resolution and frame rate are technical tokens.
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:68
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:69
 msgid "Fluid motion at 1440p 60 FPS"
 msgstr "Плавное движение в 1440p 60 FPS"
 
 #. Description for the free-tier Gaming streaming preset. Resolution and frame rate are technical tokens.
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:73
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:74
 msgid "Fluid motion at 720p 30 FPS"
 msgstr "Плавное движение, 720p 30 кадров/с"
 
@@ -14545,7 +14496,7 @@ msgstr "Настройки папки"
 msgid "Follow us on {blueskyProviderName}"
 msgstr "Подпишитесь на нас в {blueskyProviderName}"
 
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:840
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:895
 msgid "Follow voice input"
 msgstr "Следовать за голосом"
 
@@ -14815,14 +14766,14 @@ msgstr "Рамка"
 
 #. Section header in the stream settings menu for frame rate options.
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/modals/tabs/UserVideoTab.tsx:321
+#: src/features/user/components/modals/tabs/UserVideoTab.tsx:310
 #: src/features/user/components/settings_utils/section_registry/VoiceVideoSections.ts:225
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:123
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:124
 msgid "Frame rate"
 msgstr "Частота кадров"
 
 #. Video settings note shown when higher frame rates require premium.
-#: src/features/user/components/modals/tabs/UserVideoTab.tsx:54
+#: src/features/user/components/modals/tabs/UserVideoTab.tsx:53
 msgid "Frame rates above 30 FPS require {premiumProductName}"
 msgstr "Для частоты кадров выше 30 FPS требуется {premiumProductName}"
 
@@ -15050,7 +15001,7 @@ msgid "Fully quit and restart {productName} so macOS applies this permission."
 msgstr "Полностью закройте и перезапустите {productName}, чтобы macOS применила это разрешение."
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:52
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:54
 msgid "Gain control"
 msgstr "Управление"
 
@@ -15063,8 +15014,8 @@ msgstr "Игровой контроллер"
 #. Footer summary label for the gaming screen-share quality preset.
 #. Streaming preset label in the stream settings menu. Higher frame rate, optimized for video games.
 #: src/features/guild/components/modals/guild_tabs/GuildDiscoveryTab.tsx:76
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:225
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:64
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:224
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:65
 msgid "Gaming"
 msgstr "Игры"
 
@@ -15564,7 +15515,7 @@ msgstr "Выдано {0}."
 msgid "Grants all permissions and bypasses channel restrictions. Highly sensitive."
 msgstr "Предоставляет все разрешения и обходит ограничения канала. Очень конфиденциально."
 
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:1032
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:1020
 msgid "Granular selection"
 msgstr "Детальный выбор"
 
@@ -15743,22 +15694,22 @@ msgid "Grouping"
 msgstr "Группировка"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:125
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:115
 msgid "H.264"
 msgstr "H.264"
 
 #. Label for an advanced screen-share select. H.264 is a codec name and should stay literal.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:120
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:123
 msgid "H.264 backup stream"
 msgstr "Резервный поток H.264"
 
 #. Option label for an H.264 backup stream select. H.264 is a codec name and should stay literal.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:132
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:135
 msgid "H.264 simulcast backup"
 msgstr "Резервная копия H.264 simulcast"
 
 #. Option label for the screen-share codec select while the HEVC opt-in is off and the option is disabled. H.265 is a codec name and should stay literal.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:186
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:181
 msgid "H.265 (requires opt-in)"
 msgstr "H.265 (требуется согласие)"
 
@@ -15814,7 +15765,7 @@ msgid "Hardware acceleration can cause rendering glitches with transparent windo
 msgstr "Аппаратное ускорение может вызывать сбои рендеринга с прозрачными окнами. Попробуйте --disable-gpu, если видите мерцание или размытие."
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:173
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:188
 msgid "Hardware encoder"
 msgstr "Аппаратный кодировщик"
 
@@ -15949,12 +15900,12 @@ msgid "Help translate {PRODUCT_NAME} into your language on <0>{I18N_WEBLATE_DOMA
 msgstr "Помогите перевести {PRODUCT_NAME} на ваш язык на <0>{I18N_WEBLATE_DOMAIN}</0>."
 
 #. Description for a WebRTC content hint select. Keep Motion, Detail, and text as plain option concepts.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:140
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:143
 msgid "Helps the browser choose motion, detail, or text handling."
 msgstr "Помогает браузеру выбирать, как обрабатывать движение, детали или текст."
 
 #. Settings search synonym. Codec name; keep literal. Used to match this term in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:105
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:107
 msgid "HEVC"
 msgstr "HEVC"
 
@@ -16109,7 +16060,7 @@ msgid "Hide muted channels by default?"
 msgstr "Скрывать заглушенные каналы по умолчанию?"
 
 #. Short label for an advanced stream privacy preference.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:52
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:55
 msgid "Hide my stream preview thumbnail"
 msgstr "Скрыть миниатюру предпросмотра моей трансляции"
 
@@ -16128,7 +16079,7 @@ msgstr "Скрыть пароль"
 msgid "Hide picture-in-picture popout?"
 msgstr "Скрыть окно \"картинка в картинке\"?"
 
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:881
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:804
 msgid "Hide preview thumbnail"
 msgstr "Скрыть миниатюру предпросмотра"
 
@@ -16190,7 +16141,7 @@ msgid "High dynamic range display mode"
 msgstr "Режим отображения с расширенным динамическим диапазоном"
 
 #. Description for a software encoder quality select. Keep AV1 and CPU literal.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:80
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:83
 msgid "Higher quality can cost more CPU and latency."
 msgstr "Более высокое качество может потребовать больше ресурсов процессора и увеличить задержку."
 
@@ -16573,11 +16524,11 @@ msgstr "Игнорировать"
 msgid "Ignore friend request"
 msgstr "Игнорировать запрос в друзья"
 
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:1022
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:1010
 msgid "Ignore hardware devices"
 msgstr "Игнорировать аппаратные устройства"
 
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:998
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:986
 msgid "Ignore input media"
 msgstr "Игнорировать медиавложения"
 
@@ -16603,7 +16554,7 @@ msgstr "Игнорировать жалобу на спам"
 msgid "Ignore the friend request from {displayName}?"
 msgstr "Игнорировать запрос в друзья от {displayName}?"
 
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:1009
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:997
 msgid "Ignore virtual"
 msgstr "Игнорировать виртуальные"
 
@@ -16956,7 +16907,7 @@ msgid "Include all except selected"
 msgstr "Включить все, кроме выбранных"
 
 #. Section header in the Linux audio source picker for the per-app inclusion list.
-#: src/features/voice/components/AudioSourcePickerLinux.tsx:53
+#: src/features/voice/components/AudioSourcePickerLinux.tsx:64
 msgid "Include apps"
 msgstr "Включить приложения"
 
@@ -17074,7 +17025,7 @@ msgstr "Унаследовано"
 msgid "Inherited from {inheritedFromLabel}"
 msgstr "Унаследовано от {inheritedFromLabel}"
 
-#: src/features/voice/components/modals/CameraPreviewModal.tsx:794
+#: src/features/voice/components/modals/CameraPreviewModal.tsx:784
 msgid "Initializing camera..."
 msgstr "Инициализация камеры..."
 
@@ -17294,8 +17245,10 @@ msgstr "Недопустимое изображение"
 msgid "Invalid JSON. Paste the full response from the URL above."
 msgstr "Неверный JSON. Вставьте полный ответ из URL-адреса выше."
 
+#. Error message in the authentication backup codes view modal. Keep the tone plain and specific.
 #. Error message in the email change modal.
 #. Error message in the password change modal. Keep the tone plain and specific.
+#: src/features/auth/components/modals/BackupCodesViewModal.tsx:27
 #: src/features/user/components/modals/EmailChangeModal.tsx:27
 #: src/features/user/components/modals/PasswordChangeModal.tsx:26
 msgid "Invalid or expired code"
@@ -18142,12 +18095,12 @@ msgid "Launch at login"
 msgstr "Запускать при входе в систему"
 
 #. Description for an SVC mode select. Keep SVC and AV1 literal.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:100
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:103
 msgid "Layering for AV1 and VP9 when available."
 msgstr "Послойная обработка для AV1 и VP9, если доступно."
 
 #. Accessible label for the screen-share picker footer info button.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:273
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:272
 msgid "Learn about screen share previews"
 msgstr "Узнайте больше о предварительном просмотре экрана"
 
@@ -18783,24 +18736,6 @@ msgstr "Громкость"
 msgid "Low"
 msgstr "Низкий"
 
-#. Toast shown after adaptive screen-share quality lowers bitrate. {reason} is the limitation reason.
-#: src/features/voice/engine/AdaptiveScreenShareEngine.ts:81
-msgctxt "adaptive-screen-share"
-msgid "Lowered screen share bitrate - {reason}"
-msgstr "Снижен битрейт общего доступа к экрану — {reason}"
-
-#. Toast shown after adaptive screen-share quality lowers frame rate. {frameRate} is a number and {reason} is the limitation reason.
-#: src/features/voice/engine/AdaptiveScreenShareEngine.ts:86
-msgctxt "adaptive-screen-share"
-msgid "Lowered screen share to {frameRate} FPS - {reason}"
-msgstr "Снижена частота кадров общего доступа к экрану до {frameRate} FPS — {reason}"
-
-#. Toast shown after adaptive screen-share quality lowers resolution. {resolution} is a resolution label and {reason} is the limitation reason.
-#: src/features/voice/engine/AdaptiveScreenShareEngine.ts:92
-msgctxt "adaptive-screen-share"
-msgid "Lowered screen share to {resolution} - {reason}"
-msgstr "Снижено разрешение общего доступа к экрану до {resolution} — {reason}"
-
 #. Country name. EU member state in the illegal-content report country dropdown.
 #: src/features/moderation/components/report/OptionDescriptors.ts:179
 msgid "Luxembourg"
@@ -19315,7 +19250,7 @@ msgid "Maximum protection for family-friendly spaces"
 msgstr "Максимальная защита для семейных чатов"
 
 #. Settings search entry description for the AV1 and H.265 screen-share opt-in toggles.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:97
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:99
 msgid "May cause compatibility issues for viewers. We’re working on improving this."
 msgstr "Может вызвать проблемы совместимости у зрителей. Мы работаем над улучшением."
 
@@ -19989,11 +19924,18 @@ msgstr "Тест микрофона"
 #. Fallback microphone label in the voice settings menu when the OS does not report a device name.
 #. Fallback microphone option label when the operating system does not report a device name.
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
+#. Summary label in the Linux audio source picker on a video device share, where the default is the microphone rather than the system mix.
 #: src/features/user/components/settings_utils/section_registry/VoiceVideoSections.ts:21
+#: src/features/voice/components/AudioSourcePickerLinux.tsx:44
 #: src/features/voice/components/VoiceSettingsMenus.tsx:78
 #: src/features/voice/utils/SettingsDeviceOptions.ts:15
 msgid "Microphone"
 msgstr "Микрофон"
+
+#. Capture option in the Linux audio source picker on a video device share. {deviceLabel} is the selected audio input device name.
+#: src/features/voice/components/AudioSourcePickerLinux.tsx:49
+msgid "Microphone ({deviceLabel})"
+msgstr "Микрофон ({deviceLabel})"
 
 #. Error shown when the user denies microphone access for voice message recording.
 #: src/features/voice/components/VoiceMessageComposerModal.tsx:44
@@ -20001,7 +19943,7 @@ msgid "Microphone access was denied. Enable it in your system settings and try a
 msgstr "Доступ к микрофону запрещен. Включите его в системных настройках и повторите попытку."
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:56
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:58
 msgid "Microphone gain"
 msgstr "Уровень усиления микрофона"
 
@@ -20014,10 +19956,6 @@ msgstr "Требуется доступ к микрофону"
 #: src/features/user/components/settings_utils/section_registry/VoiceVideoSections.ts:141
 msgid "Microphone test"
 msgstr "Тест микрофона"
-
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:967
-msgid "Microphone workaround"
-msgstr "Обход микрофона"
 
 #. Pre-join indicator shown beneath the Join button on a voice channel where every connected participant supports E2EE.
 #: src/features/voice/utils/VoiceMessageDescriptors.ts:317
@@ -20079,8 +20017,8 @@ msgstr "Несовершеннолетние в опасности, неприе
 #. Camera settings menu checkbox for flipping the local camera preview horizontally.
 #. Switch label in the camera preview modal for flipping the local camera preview horizontally.
 #. Switch label in the video tab for flipping the local camera preview horizontally.
-#: src/features/user/components/modals/tabs/UserVideoTab.tsx:78
-#: src/features/voice/components/modals/CameraPreviewModal.tsx:70
+#: src/features/user/components/modals/tabs/UserVideoTab.tsx:76
+#: src/features/voice/components/modals/CameraPreviewModal.tsx:71
 #: src/features/voice/components/VoiceSettingsMenus.tsx:112
 msgid "Mirror camera"
 msgstr "Зеркальное отображение камеры"
@@ -20117,7 +20055,7 @@ msgid "Misspelled words"
 msgstr "Опечатки"
 
 #. Aria label on a participant tile icon that indicates the participant is on mobile.
-#: src/features/voice/components/voice_participant_tile/shared.ts:82
+#: src/features/voice/components/voice_participant_tile/shared.ts:102
 msgid "Mobile device"
 msgstr "Мобильное устройство"
 
@@ -20336,7 +20274,7 @@ msgstr "Самые релевантные"
 #. Short label in the inline. Keep it concise.
 #: src/features/user/components/modals/tabs/accessibility_tab/AccessibilityTabInline.tsx:31
 #: src/features/user/components/modals/tabs/AccessibilityTab.tsx:98
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:148
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:151
 #: src/features/user/components/settings_utils/search_index/AccessibilityIndex.ts:297
 #: src/features/user/components/settings_utils/section_registry/AccessibilitySections.ts:271
 msgid "Motion"
@@ -20607,7 +20545,7 @@ msgid "Mute sounds"
 msgstr "Отключить звуки"
 
 #. Tooltip / button label on a voice participant tile that mutes the remote screen-share or camera audio.
-#: src/features/voice/components/voice_participant_tile/shared.ts:22
+#: src/features/voice/components/voice_participant_tile/shared.ts:24
 msgid "Mute stream audio"
 msgstr "Отключить звук трансляции"
 
@@ -20634,7 +20572,7 @@ msgstr "без звука"
 #: src/features/ui/avatars/AvatarWithPresence.tsx:20
 #: src/features/user/components/settings_utils/search_index/ChatSettingsIndex.ts:463
 #: src/features/user/components/settings_utils/section_registry/SharedDescriptors.ts:73
-#: src/features/voice/components/voice_participant_tile/shared.ts:78
+#: src/features/voice/components/voice_participant_tile/shared.ts:98
 #: src/lib/overlay/OverlayContextMenu.tsx:24
 msgid "Muted"
 msgstr "Выкл. микрофон"
@@ -21066,7 +21004,7 @@ msgid "New messages"
 msgstr "Новые сообщения"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:20
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:22
 msgid "New microphone"
 msgstr "Новый микрофон"
 
@@ -21212,7 +21150,7 @@ msgstr "Не найдено расширенных настроек"
 msgid "No AFK channel"
 msgstr "Нет AFK-канала"
 
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:121
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:120
 msgid "No application windows found"
 msgstr "Окна приложений не найдены"
 
@@ -21226,7 +21164,7 @@ msgid "No assets yet"
 msgstr "Пока нет ресурсов"
 
 #. Summary label in the Linux audio source picker when no audio sources are selected.
-#: src/features/voice/components/AudioSourcePickerLinux.tsx:26
+#: src/features/voice/components/AudioSourcePickerLinux.tsx:27
 msgid "No audio"
 msgstr "Нет звука"
 
@@ -21271,7 +21209,7 @@ msgstr "Нет закладок"
 msgid "No bot banner"
 msgstr "Без баннера бота"
 
-#: src/features/user/components/modals/tabs/UserVideoTab.tsx:212
+#: src/features/user/components/modals/tabs/UserVideoTab.tsx:201
 msgid "No camera found"
 msgstr "Камера не найдена"
 
@@ -21361,7 +21299,7 @@ msgstr "Без описания."
 msgid "No desktop update is available."
 msgstr "Обновление для компьютера недоступно."
 
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:127
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:126
 msgid "No displays found"
 msgstr "Дисплеи не найдены"
 
@@ -21801,7 +21739,7 @@ msgstr "Неанимированные эмодзи ({emojiCount})"
 #: src/features/user/components/modals/tabs/components/EntranceSoundSection.tsx:143
 #: src/features/user/components/modals/tabs/privacy_safety_tab/data_request_modal/DataRequestModal.tsx:219
 #: src/features/user/components/modals/tabs/UserVoiceTab.tsx:93
-#: src/features/voice/components/AudioSourcePickerLinux.tsx:213
+#: src/features/voice/components/AudioSourcePickerLinux.tsx:242
 msgid "None"
 msgstr "Нет"
 
@@ -22025,7 +21963,7 @@ msgstr "Объекты"
 #: src/features/channel/components/modals/channel_tabs/channel_overview_tab/SlowmodeControl.tsx:24
 #: src/features/guild/components/modals/guild_tabs/GuildModerationTab.tsx:97
 #: src/features/guild/components/modals/guild_tabs/GuildModerationTab.tsx:139
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:128
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:131
 msgid "Off"
 msgstr "Выкл"
 
@@ -22152,7 +22090,7 @@ msgstr "Применяется только на широких экранах."
 msgid "Only credit cards are accepted. Debit and prepaid cards cannot be used for the mature content check."
 msgstr "Принимаются только кредитные карты. Дебетовые и предоплаченные карты нельзя использовать для проверки доступа к контенту для взрослых."
 
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:987
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:975
 msgid "Only default speakers"
 msgstr "Только динамики по умолчанию"
 
@@ -22200,7 +22138,7 @@ msgstr "Запускайте код здесь, только если вы то�
 msgid "Only show message previews for DMs with unread messages"
 msgstr "Показывать предпросмотр сообщений только для личных чатов с непрочитанными сообщениями"
 
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:977
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:965
 msgid "Only speakers"
 msgstr "Только динамики"
 
@@ -22305,11 +22243,11 @@ msgid "Open @{displayName}"
 msgstr "Открыть @{displayName}"
 
 #. Button label in the video tab that jumps to the advanced settings media section.
-#: src/features/user/components/modals/tabs/UserVideoTab.tsx:90
+#: src/features/user/components/modals/tabs/UserVideoTab.tsx:88
 msgid "Open advanced media settings"
 msgstr "Открыть расширенные настройки мультимедиа"
 
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:124
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:123
 msgid "Open an application window, then try again."
 msgstr "Откройте окно приложения и попробуйте снова."
 
@@ -22372,7 +22310,7 @@ msgid "Open browser"
 msgstr "Открыть браузер"
 
 #. Primary button in the screen-share picker on web. Hands off to the browser's native getDisplayMedia picker.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:204
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:203
 msgid "Open browser picker"
 msgstr "Открыть выбор браузера"
 
@@ -22640,7 +22578,7 @@ msgid "Open system DM"
 msgstr "Открыть системный чат"
 
 #. Primary button in the screen-share picker on Linux/Wayland. Hands off to the OS xdg-desktop-portal picker.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:209
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:208
 msgid "Open system picker"
 msgstr "Открыть системный выбор"
 
@@ -22735,17 +22673,17 @@ msgid "Open your settings"
 msgstr "Открыть настройки"
 
 #. Settings search entry description. One-line summary of what the settings search entry controls.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:133
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:123
 msgid "OpenH264 software codec on Linux"
 msgstr "OpenH264 — программный кодек для Linux"
 
 #. Settings search entry label. Names the settings search entry in the settings UI.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:109
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:111
 msgid "OpenH264 video codec"
 msgstr "Открыть видеокодек H264"
 
 #. Switch label for the OpenH264 codec toggle. "OpenH264" is a product name and "Cisco Systems, Inc." is a company name; do not translate either.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:39
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:42
 msgid "OpenH264 Video Codec provided by Cisco Systems, Inc."
 msgstr "Видеокодек OpenH264 предоставлен Cisco Systems, Inc."
 
@@ -22767,7 +22705,7 @@ msgstr "Операционная система"
 msgid "Opt into experimental per-community and per-channel unread badge controls"
 msgstr "Включить экспериментальные настройки для отображения значков непрочитанных сообщений в отдельных сообществах и каналах"
 
-#: src/features/voice/components/modals/CameraPreviewModal.tsx:790
+#: src/features/voice/components/modals/CameraPreviewModal.tsx:780
 msgid "Optimizing camera..."
 msgstr "Оптимизация камеры..."
 
@@ -23019,7 +22957,7 @@ msgid "Participant limit"
 msgstr "Лимит участников"
 
 #. Aria label for the participant context-menu trigger button. {participantDisplayName} is the participant's display name.
-#: src/features/voice/components/voice_participant_tile/shared.ts:94
+#: src/features/voice/components/voice_participant_tile/shared.ts:114
 msgid "Participant options for {participantDisplayName}"
 msgstr "Параметры участника: {participantDisplayName}"
 
@@ -23189,7 +23127,7 @@ msgid "Pause invites? New users won't be able to join through invite links until
 msgstr "Приостановить приглашения? Новые пользователи не смогут присоединиться по ссылкам-приглашениям, пока вы их снова не включите. На существующих участниках это не отразится."
 
 #. Short label for an advanced screen-share preview preference.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:44
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:47
 msgid "Pause my screen share preview in the background"
 msgstr "Приостанавливать предпросмотр демонстрации экрана в фоновом режиме"
 
@@ -23300,7 +23238,7 @@ msgid "Per-community profiles"
 msgstr "Профили для каждого сообщества"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:32
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:34
 msgid "Per-device volume"
 msgstr "Громкость для устройства"
 
@@ -23505,6 +23443,13 @@ msgstr "Выберите один или несколько словарей. С
 msgid "Pick the appearance this administrator account should start with."
 msgstr "Выберите внешний вид для этой учетной записи администратора."
 
+#. Settings search entry label. Names an advanced screen-share audio setting in the settings UI.
+#. Switch label for the advanced opt-in that reveals a manual per-application audio source picker in the stream settings menu.
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:195
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:127
+msgid "Pick the apps to capture audio from"
+msgstr "Выбирайте приложения для захвата звука"
+
 #. Required-action modal body for choosing a verification method.
 #: src/features/auth/components/modals/required_action/RequiredActionDescriptors.ts:236
 msgid "Pick the method you can complete now."
@@ -23536,7 +23481,7 @@ msgid "Picture"
 msgstr "Фото"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:145
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:160
 msgid "Picture in picture"
 msgstr "Картинка в картинке"
 
@@ -23656,7 +23601,7 @@ msgid "Pins popout"
 msgstr "Всплывающее окно с закрепленными сообщениями"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:149
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:164
 msgid "PiP"
 msgstr "Картинка в картинке"
 
@@ -23858,7 +23803,7 @@ msgid "Prefer @mention"
 msgstr "Предпочитать упоминания"
 
 #. Option label for an encoder path select. Refers to hardware video encoders.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:68
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:71
 msgid "Prefer hardware"
 msgstr "Предпочитать аппаратное"
 
@@ -23870,7 +23815,7 @@ msgid "Prefer no @mention"
 msgstr "Не упоминать меня"
 
 #. Option label for an encoder path select. Refers to software video encoders.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:72
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:75
 msgid "Prefer software"
 msgstr "Предпочитать программный"
 
@@ -23890,7 +23835,7 @@ msgid "Preferences..."
 msgstr "Настройки..."
 
 #. Accessible label for the advanced screen-share codec preference select.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:173
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:168
 msgid "Preferred screen share codec"
 msgstr "Предпочтительный кодек для демонстрации экрана"
 
@@ -24037,22 +23982,22 @@ msgid "Preview hidden"
 msgstr "Предпросмотр скрыт"
 
 #. Privacy explanation for screen-share previews in a one-to-one DM call. productName is the app name. Refers to preview thumbnail images generated from a screen share.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:311
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:310
 msgid "Preview images are stored by {productName} temporarily for delivery and are not end-to-end encrypted. Disable previews if you do not want screen-share frames uploaded for thumbnails."
 msgstr "Эскизы предварительного просмотра временно хранятся в {productName} для передачи и не зашифрованы сквозным шифрованием. Отключите эскизы, если вы не хотите, чтобы кадры экрана загружались для создания миниатюр."
 
 #. Privacy explanation for screen-share previews in a group DM call. productName is the app name. Refers to preview thumbnail images generated from a screen share.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:305
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:304
 msgid "Preview images are stored by {productName} temporarily for delivery and are not end-to-end encrypted. People in this group DM do not need to be actively watching your stream to see the thumbnail."
 msgstr "Эскизы предварительного просмотра хранятся в {productName} временно для передачи и не зашифрованы сквозным шифрованием. Участникам этого группового чата необязательно активно смотреть вашу трансляцию, чтобы видеть эскиз."
 
 #. Privacy explanation for screen-share previews in a guild voice channel. productName is the app name. Refers to preview thumbnail images generated from a screen share.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:299
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:298
 msgid "Preview images are stored by {productName} temporarily for delivery and are not end-to-end encrypted. People still need permission to connect, but they do not need to be actively watching your stream."
 msgstr "Эскизы предварительного просмотра хранятся в {productName} временно для передачи и не зашифрованы сквозным шифрованием. Пользователям все равно нужно разрешение на подключение, но им не обязательно активно смотреть вашу трансляцию."
 
 #. Overlay on the local screen-share preview when playback is paused to reduce CPU / battery use. Local share is still being sent to others.
-#: src/features/voice/components/voice_participant_tile/shared.ts:59
+#: src/features/voice/components/voice_participant_tile/shared.ts:61
 msgid "Preview paused to save resources"
 msgstr "Предпросмотр приостановлен для экономии ресурсов"
 
@@ -24064,7 +24009,7 @@ msgid "Preview sound"
 msgstr "Предпросмотр звука"
 
 #. Settings search entry description. One-line summary of what the settings search entry controls.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:157
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:172
 msgid "Preview, popout, and stream thumbnail behavior"
 msgstr "Предварительный просмотр, открытие в отдельном окне и поведение миниатюр потока"
 
@@ -24394,7 +24339,7 @@ msgid "Prompt"
 msgstr "Подсказка"
 
 #. Settings search entry description. One-line summary of what the settings search entry controls.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:24
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:26
 msgid "Prompt for new audio devices"
 msgstr "Запрос на новые аудиоустройства"
 
@@ -24637,15 +24582,9 @@ msgid "Push-to-talk won't unmute your microphone while you're deafened. Undeafen
 msgstr "Нажатие и удержание клавиши для активации микрофона не снимет эффект отключения звука. Отключите функцию, чтобы начать говорить."
 
 #. Option label for a software encoder quality select. Means slower/higher-quality.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:92
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:95
 msgid "Quality"
 msgstr "Качество"
-
-#. Fallback reason label in adaptive screen-share quality toasts.
-#: src/features/voice/engine/AdaptiveScreenShareEngine.ts:76
-msgctxt "adaptive-screen-share"
-msgid "quality limited"
-msgstr "качество ограничено"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #. Short label in the theme studio. Keep it concise.
@@ -24741,12 +24680,6 @@ msgstr "Переключатели"
 msgid "Raid coordination"
 msgstr "Координация рейдов"
 
-#. Toast shown after adaptive screen-share quality raises resolution. {resolution} is a resolution label.
-#: src/features/voice/engine/AdaptiveScreenShareEngine.ts:98
-msgctxt "adaptive-screen-share"
-msgid "Raised screen share to {resolution}"
-msgstr "Увеличено разрешение экрана до {resolution}"
-
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #: src/features/user/components/settings_utils/section_registry/AccessibilitySections.ts:171
 msgid "Rate"
@@ -24762,7 +24695,7 @@ msgid "Raw embed JSON"
 msgstr "JSON для отладки внедренного контента"
 
 #. Description for the high-tier Screen share streaming preset (Plutonium). Source resolution and frame rate are technical tokens.
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:81
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:82
 msgid "Razor-sharp text at native source, 15 FPS"
 msgstr "Четкий текст в исходном разрешении, 15 кадров/с"
 
@@ -24852,7 +24785,7 @@ msgid "Ready to upgrade?"
 msgstr "Готовы обновиться?"
 
 #. Option label for a software encoder quality select. Means fastest/lower-latency.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:84
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:87
 msgid "Realtime"
 msgstr "В реальном времени"
 
@@ -25091,7 +25024,7 @@ msgstr "Ссылка скопирована."
 msgid "Referral parameters"
 msgstr "Параметры приглашения"
 
-#: src/features/voice/components/AudioSourcePickerLinux.tsx:256
+#: src/features/voice/components/AudioSourcePickerLinux.tsx:285
 msgid "Refresh audio sources"
 msgstr "Обновить источники звука"
 
@@ -25126,7 +25059,7 @@ msgstr "Вернуть деньги за последнюю покупку?"
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #. Short label in the application detail. Keep it concise.
 #. Short label in the secrets section. Keep it concise.
-#: src/features/auth/components/modals/BackupCodesModal.tsx:111
+#: src/features/auth/components/modals/BackupCodesModal.tsx:114
 #: src/features/user/components/modals/tabs/applications_tab/application_detail/SecretsSection.tsx:23
 #: src/features/user/components/modals/tabs/applications_tab/ApplicationDetail.tsx:78
 #: src/features/user/components/settings_utils/search_index/ApplicationsIndex.ts:128
@@ -25134,7 +25067,7 @@ msgid "Regenerate"
 msgstr "Сгенерировать заново"
 
 #. Security confirmation title for replacing account recovery backup codes.
-#: src/features/auth/components/modals/BackupCodesRegenerateModal.tsx:21
+#: src/features/auth/components/modals/BackupCodesRegenerateModal.tsx:23
 msgid "Regenerate backup codes"
 msgstr "Сгенерировать резервные коды заново"
 
@@ -26002,6 +25935,7 @@ msgstr "Требует всего, что есть в среднем уровн�
 msgid "Reschedule message"
 msgstr "Перенести сообщение"
 
+#: src/features/auth/components/modals/BackupCodesViewModal.tsx:200
 #: src/features/auth/components/modals/ClaimAccountModal.tsx:240
 #: src/features/user/components/modals/EmailChangeModal.tsx:296
 #: src/features/user/components/modals/EmailChangeModal.tsx:333
@@ -26025,6 +25959,7 @@ msgstr "Отправить повторно ({resendCooldownSeconds} с)"
 msgid "Resend ({resendSecondsRemaining}s)"
 msgstr "Отправить повторно ({resendSecondsRemaining} с)"
 
+#: src/features/auth/components/modals/BackupCodesViewModal.tsx:200
 #: src/features/user/components/modals/PasswordChangeModal.tsx:244
 msgid "Resend ({secondsRemaining}s)"
 msgstr "Отправить повторно ({secondsRemaining} с)"
@@ -26370,7 +26305,7 @@ msgstr "Изменение размера, разворачивание и пр�
 #. Section header in the stream settings menu for resolution options.
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #: src/features/user/components/settings_utils/section_registry/VoiceVideoSections.ts:201
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:119
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:120
 msgid "Resolution"
 msgstr "Разрешение"
 
@@ -27067,7 +27002,7 @@ msgstr "Требуется разрешение на запись экрана"
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #. Streaming preset label in the stream settings menu. Optimized for sharp text in screen shares.
 #: src/features/user/components/settings_utils/section_registry/VoiceVideoSections.ts:217
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:77
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:78
 msgid "Screen share"
 msgstr "Демонстрация экрана"
 
@@ -27082,22 +27017,22 @@ msgid "Screen share audio boost"
 msgstr "Усиление звука при демонстрации экрана"
 
 #. Error modal title shown when the selected native screen-share audio route cannot start safely.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:172
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:171
 msgid "Screen share audio couldn't start"
 msgstr "Не удалось начать трансляцию звука экрана"
 
 #. Settings search entry label. Names the settings search entry in the settings UI.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:68
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:70
 msgid "Screen share codec"
 msgstr "Кодек демонстрации экрана"
 
 #. Settings search entry label. Names the settings search entry in the settings UI.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:161
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:176
 msgid "Screen share encoder controls"
 msgstr "Настройки кодека для демонстрации экрана"
 
 #. Title of a modal shown when an active screen share stops unexpectedly.
-#: src/features/voice/engine/v2/VoiceEngineV2AppScreenShareExecutionAdapter.tsx:98
+#: src/features/voice/engine/v2/VoiceEngineV2AppScreenShareExecutionAdapter.tsx:102
 msgctxt "screen-share"
 msgid "Screen share ended"
 msgstr "Общий доступ к экрану завершен"
@@ -27113,27 +27048,27 @@ msgid "Screen share is using software encoding ({codec}). Quality may be reduced
 msgstr "Демонстрация экрана использует программное кодирование ({codec}). Качество может быть снижено, а загрузка ЦП увеличена. Ваш графический процессор может не поддерживать аппаратное кодирование для этого кодека."
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:141
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:156
 msgid "Screen share preview"
 msgstr "Предпросмотр демонстрации экрана"
 
 #. Settings search entry label. Names the settings search entry in the settings UI.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:137
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:152
 msgid "Screen share preview behavior"
 msgstr "Поведение предварительного просмотра экрана при совместном использовании"
 
 #. Title of an informational modal explaining screen-share preview frame uploads.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:277
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:276
 msgid "Screen share previews"
 msgstr "Предварительные просмотры экрана при совместном использовании"
 
 #. Compact footer status in the screen-share picker when preview frame uploads are disabled.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:265
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:264
 msgid "Screen share previews are disabled."
 msgstr "Предварительные просмотры экрана при совместном использовании отключены."
 
 #. Compact footer status in the screen-share picker when preview frame uploads are enabled.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:261
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:260
 msgid "Screen share previews are enabled."
 msgstr "Предварительные просмотры экрана при совместном использовании включены."
 
@@ -27144,7 +27079,7 @@ msgstr "Конфиденциальность демонстрации экран
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #. Short label in the video tab. Keep it concise.
-#: src/features/user/components/modals/tabs/UserVideoTab.tsx:82
+#: src/features/user/components/modals/tabs/UserVideoTab.tsx:80
 #: src/features/user/components/settings_utils/section_registry/VoiceVideoSections.ts:209
 msgid "Screen share quality"
 msgstr "Качество демонстрации экрана"
@@ -27179,7 +27114,7 @@ msgid "Screen sharing"
 msgstr "Демонстрация экрана"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:72
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:74
 msgid "Screen sharing codec"
 msgstr "Кодек для демонстрации экрана"
 
@@ -27214,7 +27149,7 @@ msgid "Screen sharing quality"
 msgstr "Качество демонстрации экрана"
 
 #. Footer summary label for the text-focused screen-share quality preset.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:229
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:228
 msgid "Screenshare"
 msgstr "Демонстрация экрана"
 
@@ -27686,7 +27621,7 @@ msgstr "Просмотр"
 
 #. Hover action on a device card that selects the device without starting the stream.
 #: src/features/app/components/dialogs/components/PricingCard.tsx:65
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:196
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:195
 msgid "Select"
 msgstr "Выбрать"
 
@@ -28536,7 +28471,7 @@ msgid "Share gift"
 msgstr "Поделиться подарком"
 
 #. Hover action on an application or display card that starts sharing that source.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:192
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:191
 msgid "Share screen"
 msgstr "Поделиться экраном"
 
@@ -28546,7 +28481,7 @@ msgid "Share screens and windows."
 msgstr "Демонстрируйте экраны и окна."
 
 #. Toggle label for sharing audio with an active stream.
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:157
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:148
 msgid "Share stream audio"
 msgstr "Поделиться аудио трансляции"
 
@@ -28582,7 +28517,7 @@ msgstr "Поделиться с модераторами сообщества."
 msgid "Share your screen"
 msgstr "Поделиться экраном"
 
-#: src/features/user/components/modals/tabs/UserVideoTab.tsx:305
+#: src/features/user/components/modals/tabs/UserVideoTab.tsx:294
 msgid "Share your screen in high definition (1080p), quad HD (1440p), or native source resolution, at up to 60 FPS."
 msgstr "Демонстрируйте свой экран в высоком разрешении (1080p), Quad HD (1440p) или исходном разрешении с частотой до 60 кадров в секунду."
 
@@ -28616,9 +28551,9 @@ msgid "Sharing personal information"
 msgstr "Распространение личной информации"
 
 #. Description for the free-tier Screen share streaming preset. Resolution and frame rate are technical tokens.
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:86
-msgid "Sharper text at 720p, 15 FPS"
-msgstr "Чётче текст при 720p, 15 FPS"
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:87
+msgid "Sharper text at 720p, 30 FPS"
+msgstr "Четкий текст в 720p, 30 FPS"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #: src/features/user/components/settings_utils/search_index/MyProfileIndex.ts:189
@@ -28759,7 +28694,7 @@ msgid "Show call avatars"
 msgstr "Показывать аватары в звонке"
 
 #. Action label that reveals a previously hidden remote camera feed.
-#: src/features/voice/components/voice_participant_tile/shared.ts:55
+#: src/features/voice/components/voice_participant_tile/shared.ts:57
 msgid "Show camera"
 msgstr "Показать камеру"
 
@@ -29007,7 +28942,7 @@ msgstr "Показывать Неко"
 #. Settings search entry label. Names the settings search entry in the settings UI.
 #. Short label for an advanced voice device preference.
 #: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVoiceControls.tsx:11
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:8
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:10
 msgid "Show new device alerts"
 msgstr "Показывать оповещения о новых устройствах"
 
@@ -29044,7 +28979,7 @@ msgid "Show password"
 msgstr "Показать пароль"
 
 #. Settings search entry description. One-line summary of what the settings search entry controls.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:44
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:46
 msgid "Show per-device participant volume sliders in voice menus"
 msgstr "Показывать ползунки громкости участников для каждого устройства в голосовых меню"
 
@@ -29359,7 +29294,7 @@ msgid "Single community mode"
 msgstr "Режим одного сообщества"
 
 #. Option label for an SVC mode select.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:108
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:111
 msgid "Single layer"
 msgstr "Один слой"
 
@@ -29639,7 +29574,7 @@ msgid "Smooth scrolling"
 msgstr "Плавная прокрутка"
 
 #. Footer summary description for the gaming screen-share quality preset.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:237
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:236
 msgid "Smoother video"
 msgstr "Более плавное видео"
 
@@ -29668,12 +29603,12 @@ msgid "Social"
 msgstr "Соцсети"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:169
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:184
 msgid "Software encoder"
 msgstr "Аппаратный кодек"
 
 #. Label for an advanced screen-share select. Refers to software video encoder quality bias.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:76
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:79
 msgid "Software encoder quality"
 msgstr "Качество программного кодировщика"
 
@@ -29706,6 +29641,11 @@ msgstr "кто-то"
 #: src/features/guild/components/modals/guild_tabs/GuildAuditLogTabUtils.tsx:33
 msgid "something"
 msgstr "что-то"
+
+#. Fallback tooltip on the passive badge on your own screen-share tile when the encoder reports no specific limitation.
+#: src/features/voice/components/voice_participant_tile/shared.ts:93
+msgid "Something is limiting this stream, so viewers are getting fewer frames than you asked for."
+msgstr "Что-то ограничивает этот поток, поэтому зрители получают меньше кадров, чем вы запросили."
 
 #. Generic error modal title for an unexpected failure.
 #. Generic error toast title.
@@ -29910,17 +29850,11 @@ msgstr "Звуки"
 #. Footer summary resolution label for native source resolution.
 #. Resolution option in the stream settings menu meaning the original source resolution (no downscale).
 #. Short label in the video tab for the native source resolution option. Keep it concise.
-#: src/features/user/components/modals/tabs/UserVideoTab.tsx:66
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:245
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:99
+#: src/features/user/components/modals/tabs/UserVideoTab.tsx:64
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:244
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:100
 msgid "Source"
 msgstr "Исходное"
-
-#. Resolution label in adaptive screen-share quality toasts.
-#: src/features/voice/engine/AdaptiveScreenShareEngine.ts:61
-msgctxt "adaptive-screen-share"
-msgid "source quality"
-msgstr "качество источника"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #: src/features/user/components/settings_utils/section_registry/VoiceVideoSections.ts:245
@@ -30000,7 +29934,7 @@ msgid "Spanish (Spain)"
 msgstr "Испанский (Испания)"
 
 #. Option label for an SVC mode select.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:116
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:119
 msgid "Spatial and temporal layers"
 msgstr "Пространственные и временные слои"
 
@@ -30276,7 +30210,7 @@ msgstr "Начать голосовой звонок?"
 msgid "Start call"
 msgstr "Начать звонок"
 
-#: src/features/user/components/modals/tabs/UserVideoTab.tsx:266
+#: src/features/user/components/modals/tabs/UserVideoTab.tsx:255
 msgid "Start camera test and configure effects"
 msgstr "Запустить тест камеры и настроить эффекты"
 
@@ -30624,41 +30558,46 @@ msgstr "Предотвращает попадание звука из динам
 #. Primary footer action that starts streaming the selected capture device.
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #: src/features/user/components/settings_utils/section_registry/NotificationsSections.ts:235
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:200
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:199
 msgid "Stream"
 msgstr "Трансляция"
 
 #. Accessible status label for the black buffering frame shown while a screen share codec is renegotiated.
-#: src/features/voice/components/voice_participant_tile/shared.ts:34
+#: src/features/voice/components/voice_participant_tile/shared.ts:36
 msgid "Stream buffering"
 msgstr "Буферизация трансляции"
 
 #. Status overlay on a voice participant tile when the remote screen share has ended.
-#: src/features/voice/components/voice_participant_tile/shared.ts:26
+#: src/features/voice/components/voice_participant_tile/shared.ts:28
 msgid "Stream ended"
 msgstr "Трансляция завершена"
 
 #. Overlay text on a participant tile when the local user hid the remote screen share.
-#: src/features/voice/components/voice_participant_tile/shared.ts:30
+#: src/features/voice/components/voice_participant_tile/shared.ts:32
 msgid "Stream hidden"
 msgstr "Трансляция скрыта"
+
+#. Accessible label for a passive badge on your own screen-share tile, shown when the encoder stays below the frame rate you asked for.
+#: src/features/voice/components/voice_participant_tile/shared.ts:80
+msgid "Stream is not keeping up"
+msgstr "Поток не успевает"
 
 #. Aria label for the small thumbnail preview on the screen-share hover card.
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #. Short label in the user settings voice activity card. Keep it concise.
 #: src/features/user/components/profile/VoiceActivityCard.tsx:90
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:153
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:168
 #: src/features/voice/components/StreamWatchHoverCard.tsx:21
 msgid "Stream preview"
 msgstr "Предпросмотр трансляции"
 
 #. Compact submenu label for changing the resolution and frame rate of an active stream.
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:153
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:144
 msgid "Stream quality"
 msgstr "Качество потока"
 
 #. Toolbar / menu button label in the screen-share picker. Opens the stream quality settings popover.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:221
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:220
 msgid "Stream settings"
 msgstr "Настройки трансляции"
 
@@ -30679,7 +30618,7 @@ msgid "Streaming"
 msgstr "Трансляция"
 
 #. Section header in the stream settings menu. Picks between Gaming / Screen share / Custom presets.
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:115
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:116
 msgid "Streaming mode"
 msgstr "Режим трансляции"
 
@@ -30866,12 +30805,12 @@ msgid "Suspend"
 msgstr "Приостановить"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:177
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:192
 msgid "SVC"
 msgstr "SVC"
 
 #. Label for an advanced screen-share select. SVC is a WebRTC acronym and should stay uppercase.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:96
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:99
 msgid "SVC mode"
 msgstr "Режим SVC"
 
@@ -31132,8 +31071,8 @@ msgstr "Системные объявления от сотрудников {pro
 
 #. Audio device option label meaning the OS default audio input device.
 #. Footer summary fallback for the default capture-device audio input.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:253
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:131
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:252
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:132
 msgid "System default"
 msgstr "По умолчанию (системные)"
 
@@ -31313,7 +31252,7 @@ msgid "Template URL"
 msgstr "URL шаблона"
 
 #. Option label for an SVC mode select.
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:112
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:115
 msgid "Temporal layers"
 msgstr "Временные слои"
 
@@ -31374,7 +31313,7 @@ msgstr "Тестирование разворотов URL-адресов и от
 #. Channel type chip label for a text channel.
 #. Option label for a WebRTC content hint select.
 #: src/features/channel/utils/ChannelUtils.tsx:51
-#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:156
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedVideoControls.tsx:159
 msgid "Text"
 msgstr "Текст"
 
@@ -31584,7 +31523,7 @@ msgid "The bot has been added."
 msgstr "Бот добавлен."
 
 #. Status shown when a device preview has not released the camera before the bounded handoff deadline.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:168
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:167
 msgid "The camera preview is still stopping. Try streaming again in a moment."
 msgstr "Предварительный просмотр камеры всё ещё останавливается. Попробуйте начать трансляцию через мгновение."
 
@@ -31682,7 +31621,7 @@ msgid "The provided redirect_uri must use HTTP or HTTPS."
 msgstr "Указанный redirect_uri должен использовать HTTP или HTTPS."
 
 #. Body of a modal shown when a browser screen share track ends outside the app, for example from the browser sharing controls.
-#: src/features/voice/engine/v2/VoiceEngineV2AppScreenShareExecutionAdapter.tsx:103
+#: src/features/voice/engine/v2/VoiceEngineV2AppScreenShareExecutionAdapter.tsx:107
 msgctxt "screen-share"
 msgid "The screen share source stopped sending video, so your screen share was stopped."
 msgstr "Источник трансляции экрана прекратил передачу видео, поэтому трансляция экрана была остановлена."
@@ -32203,7 +32142,7 @@ msgid "This install is managed by your system. Update {productName} from your so
 msgstr "Эта установка управляется вашей системой. Обновите {productName} через центр программного обеспечения или менеджер пакетов."
 
 #. Neutral video settings note shown when higher screen share quality is disabled by instance limits.
-#: src/features/user/components/modals/tabs/UserVideoTab.tsx:58
+#: src/features/user/components/modals/tabs/UserVideoTab.tsx:57
 msgid "This instance currently allows screen share up to 720p at 30 FPS."
 msgstr "В этом экземпляре демонстрация экрана ограничена качеством 720p при 30 FPS."
 
@@ -32420,7 +32359,7 @@ msgid "This phone number has already been used. Try another number or contact su
 msgstr "Этот номер телефона уже используется. Попробуйте другой номер или обратитесь в службу поддержки."
 
 #. Empty state in the screen-share picker shown to web users. Explains that this advanced picker requires the desktop app.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:133
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:132
 msgid "This picker is only available in the desktop app."
 msgstr "Этот выбор доступен только в приложении для компьютера."
 
@@ -32600,7 +32539,7 @@ msgid "This will hide all favorites-related UI elements including buttons and me
 msgstr "Это скроет все элементы интерфейса, связанные с избранным, включая кнопки и пункты меню. Ваши существующие избранные будут сохранены и их можно будет снова включить в любое время из <0>{favoritesSettingsPath}</0>."
 
 #. Security warning shown before replacing account recovery backup codes.
-#: src/features/auth/components/modals/BackupCodesRegenerateModal.tsx:66
+#: src/features/auth/components/modals/BackupCodesRegenerateModal.tsx:88
 msgid "This will invalidate your existing backup codes and generate new ones."
 msgstr "Это сделает недействительными ваши текущие резервные коды и сгенерирует новые."
 
@@ -33365,7 +33304,7 @@ msgid "Turn off anything you're not comfortable with. Some features may stop wor
 msgstr "Отключите то, что вам не нравится. Некоторые функции могут перестать работать."
 
 #. Error modal body shown after a native screen-share audio route fails to start.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:176
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:175
 msgid "Turn off audio sharing for this source or try again in a moment."
 msgstr "Отключите общий доступ к аудио для этого источника или попробуйте снова через мгновение."
 
@@ -33600,12 +33539,19 @@ msgstr "Не удалось загрузить баннер профиля, зн
 msgid "Unable to prepare any emojis for upload. The following errors occurred:"
 msgstr "Не удалось подготовить эмодзи для загрузки. Произошли следующие ошибки:"
 
+#. Error message in the authentication backup codes view modal. Keep the tone plain and specific.
 #. Error message in the email change modal.
 #. Error message in the password change modal. Keep the tone plain and specific.
+#: src/features/auth/components/modals/BackupCodesViewModal.tsx:31
 #: src/features/user/components/modals/EmailChangeModal.tsx:31
 #: src/features/user/components/modals/PasswordChangeModal.tsx:30
 msgid "Unable to resend code right now"
 msgstr "Не удалось отправить код повторно"
+
+#. Error message in the authentication backup codes view modal. Keep the tone plain and specific.
+#: src/features/auth/components/modals/BackupCodesViewModal.tsx:23
+msgid "Unable to send verification code"
+msgstr "Не удалось отправить код подтверждения"
 
 #. Error toast shown when sending the recorded voice message fails.
 #. Toast shown when the voice message send pipeline fails.
@@ -33965,7 +33911,7 @@ msgstr "неизвестный пользователь"
 #: src/features/devtools/utils/CommandUtils.ts:27
 #: src/features/guild/components/modals/guild_tabs/GuildAuditLogTab.tsx:114
 #: src/features/voice/components/VoiceParticipantAvatarList.tsx:44
-#: src/features/voice/components/VoiceParticipantTile.tsx:164
+#: src/features/voice/components/VoiceParticipantTile.tsx:169
 #: src/features/webhook/components/WebhookListItem.tsx:30
 msgid "Unknown user"
 msgstr "Неизвестный пользователь"
@@ -34018,7 +33964,7 @@ msgid "Unlock custom emojis in DMs with {premiumProductName}"
 msgstr "Разблокируйте пользовательские эмодзи в личных сообщениях с {premiumProductName}"
 
 #. Premium upsell title in video settings.
-#: src/features/user/components/modals/tabs/UserVideoTab.tsx:50
+#: src/features/user/components/modals/tabs/UserVideoTab.tsx:49
 msgid "Unlock HD screen share with {premiumProductName}"
 msgstr "Разблокируйте демонстрацию экрана в HD с {premiumProductName}"
 
@@ -34123,7 +34069,7 @@ msgid "Unmute microphone"
 msgstr "Включить микрофон"
 
 #. Tooltip / button label on a voice participant tile that unmutes the remote screen-share or camera audio.
-#: src/features/voice/components/voice_participant_tile/shared.ts:18
+#: src/features/voice/components/voice_participant_tile/shared.ts:20
 msgid "Unmute stream audio"
 msgstr "Включить звук трансляции"
 
@@ -34151,8 +34097,8 @@ msgstr "Безымянная группа"
 
 #. Fallback label for an audio input device whose name is not reported by the OS.
 #. Footer summary fallback for an audio input without a reported name.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:257
-#: src/features/voice/components/StreamSettingsMenuContent.tsx:135
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:256
+#: src/features/voice/components/StreamSettingsMenuContent.tsx:136
 msgid "Unnamed input"
 msgstr "Безымянный вход"
 
@@ -34618,7 +34564,7 @@ msgid "Upload new emoji and stickers, and manage your own creations."
 msgstr "Загружайте новые эмодзи и стикеры, а также управляйте своими творениями."
 
 #. Description for the screen-share preview toggle in the informational modal.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:323
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:322
 msgid "Upload preview frames for screen shares."
 msgstr "Загружать предварительные кадры для демонстрации экрана."
 
@@ -35025,7 +34971,7 @@ msgstr "Используйте клавиши «Вверх» и «Вниз» д�
 msgid "Use these buttons to quickly set all permissions."
 msgstr "Используйте эти кнопки, чтобы быстро настроить все разрешения."
 
-#: src/features/auth/components/modals/BackupCodesModal.tsx:35
+#: src/features/auth/components/modals/BackupCodesModal.tsx:37
 msgid "Use these codes to access your account if you lose your authenticator app."
 msgstr "Используйте эти коды для входа в аккаунт, если потеряете доступ к приложению-аутентификатору."
 
@@ -35446,6 +35392,8 @@ msgstr "Код подтверждения отправлен. Проверьте
 msgid "Verification email sent. Check your inbox."
 msgstr "Письмо для подтверждения отправлено. Проверьте входящие."
 
+#. Error title shown when the backup codes email verification expired and must be started again.
+#: src/features/auth/components/modals/BackupCodesViewModal.tsx:35
 #: src/features/premium/components/pages/PremiumCallbackPage.tsx:224
 msgid "Verification expired"
 msgstr "Срок действия проверки истёк"
@@ -35454,10 +35402,6 @@ msgstr "Срок действия проверки истёк"
 #: src/features/premium/components/pages/PremiumCallbackPage.tsx:241
 msgid "Verification failed"
 msgstr "Не удалось подтвердить"
-
-#: src/features/auth/components/modals/BackupCodesViewModal.tsx:55
-msgid "Verification may be required before viewing your backup codes."
-msgstr "Перед просмотром резервных кодов может потребоваться подтверждение."
 
 #. Label in the community badge.
 #: src/features/guild/components/GuildBadge.tsx:12
@@ -35693,12 +35637,12 @@ msgid "Video call unavailable"
 msgstr "Видеозвонок недоступен"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:80
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:82
 msgid "Video codec"
 msgstr "Видеокодек"
 
 #. Settings search entry description. One-line summary of what the settings search entry controls.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:84
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:86
 msgid "Video codec for screen sharing"
 msgstr "Видеокодек для демонстрации экрана"
 
@@ -35849,7 +35793,7 @@ msgid "View and regenerate client secrets and bot tokens"
 msgstr "Просмотр и повторная генерация секретов клиента и токенов бота"
 
 #. Short label in the authentication backup codes view modal. Keep the tone plain and specific.
-#: src/features/auth/components/modals/BackupCodesViewModal.tsx:16
+#: src/features/auth/components/modals/BackupCodesViewModal.tsx:19
 msgid "View backup codes"
 msgstr "Посмотреть коды восстановления"
 
@@ -36033,6 +35977,11 @@ msgstr "Насилие или шокирующий контент"
 #: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:146
 msgid "VIP voice"
 msgstr "VIP-голосовой чат"
+
+#. Settings search synonym. Used to match this term when the user types it in the settings search bar.
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:143
+msgid "Virtual microphone"
+msgstr "Виртуальный микрофон"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #: src/features/user/components/settings_utils/section_registry/AccessibilitySections.ts:39
@@ -36356,7 +36305,7 @@ msgid "Volume control"
 msgstr "Громкость"
 
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
-#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:40
+#: src/features/user/components/settings_utils/search_index/VoiceVideoIndex.ts:42
 msgid "Volume sliders"
 msgstr "Регуляторы громкости"
 
@@ -36415,7 +36364,7 @@ msgid "Was this you?"
 msgstr "Это были вы?"
 
 #. Compact button label on a participant tile. Joins / opens the remote screen share.
-#: src/features/voice/components/voice_participant_tile/shared.ts:69
+#: src/features/voice/components/voice_participant_tile/shared.ts:71
 msgid "Watch"
 msgstr "Смотреть"
 
@@ -36430,7 +36379,7 @@ msgid "Watching"
 msgstr "Смотрит"
 
 #. Title on a remote screen-share tile when loading the watched stream failed.
-#: src/features/voice/components/voice_participant_tile/shared.ts:38
+#: src/features/voice/components/voice_participant_tile/shared.ts:40
 msgid "Watching failed :("
 msgstr "Просмотр не удался :("
 
@@ -36541,7 +36490,7 @@ msgstr "Нам нужно убедиться, что вы не бот. Прой�
 msgid "We need two verification steps before you continue. We will show one step at a time."
 msgstr "Прежде чем продолжить, необходимо выполнить два шага проверки. Мы покажем их по очереди."
 
-#: src/features/auth/components/modals/BackupCodesModal.tsx:38
+#: src/features/auth/components/modals/BackupCodesModal.tsx:40
 msgid "We recommend saving these codes now so that you don't get locked out of your account."
 msgstr "Рекомендуем сохранить эти коды сейчас, чтобы не потерять доступ к аккаунту."
 
@@ -36607,6 +36556,10 @@ msgstr "Мы отправим короткий код, чтобы подтвер
 #: src/features/user/components/modals/PasswordChangeModal.tsx:149
 msgid "We'll send a verification code to your email before you can change your password."
 msgstr "Мы отправим код подтверждения на вашу почту, прежде чем вы сможете изменить пароль."
+
+#: src/features/auth/components/modals/BackupCodesViewModal.tsx:146
+msgid "We'll send a verification code to your email before you can view your backup codes."
+msgstr "Мы отправим код подтверждения на вашу электронную почту, прежде чем вы сможете просмотреть резервные коды."
 
 #: src/features/user/components/modals/PhoneAddModal.tsx:285
 msgid "We'll send an SMS code when available. Your number is not linked to your account. We keep only an encrypted marker, with no user ID, to allow at most {PHONE_VERIFICATION_LIMIT} verifications in about {PHONE_VERIFICATION_WINDOW_DAYS} days."
@@ -36913,17 +36866,17 @@ msgid "When posted as links to chat"
 msgstr "При публикации ссылок в чат"
 
 #. Explanation of screen-share preview uploads in a group DM call. productName is the app name; JPEG is an image format name.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:287
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:286
 msgid "When previews are enabled, {productName} uploads occasional JPEG frames from your screen share so other people in this group DM can see a thumbnail before they watch."
 msgstr "Когда предварительные просмотры включены, {productName} периодически загружает отдельные кадры в формате JPEG с вашего экрана, чтобы другие участники этого группового чата могли видеть миниатюру перед просмотром."
 
 #. Explanation of screen-share preview uploads in a guild voice channel. productName is the app name; JPEG is an image format name.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:281
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:280
 msgid "When previews are enabled, {productName} uploads occasional JPEG frames from your screen share so people with permission to connect to this voice channel can see a thumbnail before they watch."
 msgstr "Когда предварительные просмотры включены, {productName} периодически загружает отдельные кадры в формате JPEG с вашего экрана во время демонстрации, чтобы пользователи, у которых есть разрешение на подключение к этому голосовому каналу, могли видеть миниатюру перед началом просмотра."
 
 #. Explanation of screen-share preview uploads in a one-to-one DM call. productName is the app name; JPEG is an image format name.
-#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:293
+#: src/features/voice/components/modals/ScreenSharePickerModal.tsx:292
 msgid "When previews are enabled, {productName} uploads occasional JPEG frames from your screen share so the other person in this DM can see a thumbnail before they watch."
 msgstr "Когда предварительные просмотры включены, {productName} периодически загружает отдельные кадры в формате JPEG с вашего экрана во время демонстрации, чтобы другой участник этого личного чата мог видеть миниатюру перед просмотром."
 
@@ -37459,7 +37412,7 @@ msgstr "Вы не можете говорить в этом канале"
 #. Tooltip / error shown in the camera preview modal when the user lacks Video permission in the current channel. Tone stays plain.
 #. Tooltip in the voice control bar when the user lacks the Video permission in this channel. Tone stays plain.
 #. Tooltip shown when the user lacks the Video permission in the voice channel. Tone stays plain.
-#: src/features/voice/components/modals/CameraPreviewModal.tsx:74
+#: src/features/voice/components/modals/CameraPreviewModal.tsx:75
 #: src/features/voice/components/voice_connection_status/LocalParticipantControls.tsx:50
 #: src/features/voice/components/VoiceControlBar.tsx:127
 msgid "You can't turn on your camera in this channel"
@@ -38126,6 +38079,11 @@ msgstr "Ваше сообщество отображается в разделе
 msgid "Your community needs at least {minMemberCount} members before it can be listed in Discovery."
 msgstr "В вашем сообществе должно быть не менее {minMemberCount} участников, прежде чем оно сможет появиться в разделе \"Интересное\"."
 
+#. Tooltip on the passive badge on your own screen-share tile when the encoder is limited by CPU.
+#: src/features/voice/components/voice_participant_tile/shared.ts:85
+msgid "Your CPU cannot keep up, so viewers are getting fewer frames than you asked for."
+msgstr "Ваш процессор не справляется, поэтому зрители получают меньше кадров, чем вы запросили."
+
 #. Body copy on the mature content check callback page after a successful check submission.
 #: src/features/auth/components/pages/MatureContentCheckCallbackPage.tsx:14
 msgid "Your credit card has been checked. If the card is valid, mature content will unlock shortly. You can close this tab and return to the app."
@@ -38267,6 +38225,11 @@ msgstr "Не удалось обновить сообщение"
 msgid "Your most recent purchase is no longer within the refund window. Contact support for billing issues."
 msgstr "С момента вашей последней покупки прошло слишком много времени, чтобы оформить возврат. Обратитесь в службу поддержки по вопросам оплаты."
 
+#. Tooltip on the passive badge on your own screen-share tile when the encoder is limited by bandwidth.
+#: src/features/voice/components/voice_participant_tile/shared.ts:89
+msgid "Your network cannot keep up, so viewers are getting fewer frames than you asked for."
+msgstr "Ваша сеть не справляется, поэтому зрители получают меньше кадров, чем вы запросили."
+
 #. Placeholder text inside the new email field. Sentence-fragment hint, intentionally lowercase.
 #: src/features/auth/components/modals/required_action/RequiredActionDescriptors.ts:88
 msgid "your new email"
@@ -38330,8 +38293,14 @@ msgstr "ваш регион"
 msgid "Your registration needs an extra anti-spam check before you can continue."
 msgstr "Чтобы продолжить, нужно пройти дополнительную антиспам-проверку."
 
+#. Body of a modal shown when the video codec the browser negotiated for an active screen share is outside the codecs the app allows and no allowed codec could be published, which forces the share to stop.
+#: src/features/voice/engine/v2/VoiceEngineV2AppScreenShareExecutionAdapter.tsx:113
+msgctxt "screen-share"
+msgid "Your screen share could not be published with a compatible video codec, so it was stopped. Try sharing again."
+msgstr "Не удалось опубликовать демонстрацию экрана с использованием совместимого видеокодека, поэтому она была остановлена. Попробуйте поделиться снова."
+
 #. Subtitle under the preview-paused overlay reassuring the user that the screen share is still live for others.
-#: src/features/voice/components/voice_participant_tile/shared.ts:64
+#: src/features/voice/components/voice_participant_tile/shared.ts:66
 msgid "Your stream is still live"
 msgstr "Ваша трансляция продолжается"
 
@@ -38407,6 +38376,12 @@ msgstr "Ваш короткий URL удалён."
 #: src/features/guild/components/modals/guild_tabs/GuildVanityURLTab.tsx:49
 msgid "Your vanity URL has been set to {inviteEndpoint}/{vanitySlug}"
 msgstr "Ваш персонализированный URL-адрес установлен на {inviteEndpoint}/{vanitySlug}"
+
+#. Body of a modal shown when the local video encoder produces no frames for an active screen share, which forces the share to stop.
+#: src/features/voice/engine/v2/VoiceEngineV2AppScreenShareExecutionAdapter.tsx:120
+msgctxt "screen-share"
+msgid "Your video encoder stopped encoding frames, so your screen share was stopped. Try sharing again."
+msgstr "Ваш видеокодер перестал кодировать кадры, поэтому демонстрация экрана была остановлена. Попробуйте начать демонстрацию снова."
 
 #. Label for the YouTube enrichment service toggle in the setup wizard.
 #: src/features/app/components/setup/SetupWizardSteps.tsx:285
