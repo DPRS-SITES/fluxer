@@ -1637,6 +1637,11 @@ msgstr "12ヶ月 (1年)"
 msgid "12-hour"
 msgstr "12時間"
 
+#. Audit log community feature label for a raised voice channel bitrate ceiling. kbps means kilobits per second.
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:154
+msgid "128 kbps voice quality"
+msgstr "128 kbps のボイス品質"
+
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #: src/features/user/components/settings_utils/section_registry/VoiceVideoSections.ts:241
 msgid "1440p"
@@ -1685,6 +1690,11 @@ msgstr "24時間"
 msgid "25 uses"
 msgstr "25回使用"
 
+#. Audit log community feature label for a raised voice channel bitrate ceiling. kbps means kilobits per second.
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:159
+msgid "256 kbps voice quality"
+msgstr "256 kbps の音声品質"
+
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #: src/features/user/components/settings_utils/section_registry/AccountSecuritySections.ts:37
 msgid "2FA"
@@ -1730,6 +1740,11 @@ msgstr "30分"
 #: src/features/user/components/modals/tabs/component_gallery_tab/IndicatorsTab.tsx:300
 msgid "32px, 2 members"
 msgstr "32px、メンバー2人"
+
+#. Audit log community feature label for a raised voice channel bitrate ceiling. kbps means kilobits per second.
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:164
+msgid "384 kbps voice quality"
+msgstr "384 kbps の音声品質"
 
 #: src/features/app/components/pages/NotFoundPage.tsx:19
 msgid "404: page not found"
@@ -2719,7 +2734,7 @@ msgstr "管理者が招待を一時停止しました。現在参加すること
 #. Collapsed-by-default group at the end of the community overview tab holding less common settings.
 #. Disclosure button label in the voice connection status popout. Reveals technical bandwidth and network stats.
 #. User settings tab for power-user and experimental application preferences.
-#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:337
+#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:344
 #: src/features/guild/components/modals/guild_tabs/guild_overview_tab/index.tsx:28
 #: src/features/user/components/settings_utils/SettingsConstants.tsx:140
 #: src/features/voice/components/voice_connection_status/VoiceDetailsPopout.tsx:60
@@ -3033,14 +3048,6 @@ msgstr "このロールへのメンションを許可"
 #: src/features/user/components/modals/tabs/UserVoiceTab.tsx:547
 msgid "Allow microphone"
 msgstr "マイクを許可"
-
-#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:56
-msgid "Allow others to clone your emojis"
-msgstr "他のユーザーによる絵文字のクローン作成を許可する"
-
-#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:58
-msgid "Allow others to clone your stickers"
-msgstr "他のユーザーによるスタンプのクローン作成を許可する"
 
 #. Settings search entry description. One-line summary of what the settings search entry controls.
 #: src/features/user/components/settings_utils/search_index/AccessibilityIndex.ts:217
@@ -5890,7 +5897,7 @@ msgstr "カテゴリIDをコピーしました"
 
 #. Channel overview settings tab label, control, or validation message (name, topic, slowmode, voice region, mature content gate).
 #. Form field label for the name of a favorites category.
-#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:55
+#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:57
 #: src/features/expressions/components/modals/CreateFavoriteCategoryModal.tsx:20
 msgid "Category name"
 msgstr "カテゴリ名"
@@ -6289,7 +6296,7 @@ msgstr "チャンネル管理"
 
 #. Channel overview settings tab label, control, or validation message (name, topic, slowmode, voice region, mature content gate).
 #. Short label in the channel duplicate modal. Keep it concise.
-#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:60
+#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:62
 #: src/features/channel/components/modals/ChannelDuplicateModal.tsx:32
 msgid "Channel name"
 msgstr "チャンネル名"
@@ -6349,7 +6356,7 @@ msgid "Channel synced with parent category"
 msgstr "親カテゴリと同期済み"
 
 #. Channel overview settings tab label, control, or validation message (name, topic, slowmode, voice region, mature content gate).
-#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:46
+#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:48
 msgid "Channel topic is too long."
 msgstr "チャンネルのトピックが長すぎます。"
 
@@ -6372,8 +6379,8 @@ msgstr "チャンネルの種類: {0}."
 
 #. Audit log entry label. Past-tense action describing that a channel was edited.
 #: src/features/app/config/AuditLogConstants.ts:16
-#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:206
-#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:225
+#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:209
+#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:228
 msgid "Channel updated"
 msgstr "チャンネルを更新しました"
 
@@ -6491,8 +6498,8 @@ msgstr "チェックボックス"
 
 #. Loading label shown while permissions are being verified.
 #. Loading label shown while permissions are being verified.
-#: src/features/ui/action_menu/items/CloneEmojiMenuItem.tsx:29
-#: src/features/ui/action_menu/items/CloneStickerMenuItem.tsx:28
+#: src/features/ui/action_menu/items/CloneEmojiMenuItem.tsx:30
+#: src/features/ui/action_menu/items/CloneStickerMenuItem.tsx:29
 msgid "Checking access..."
 msgstr "アクセス権を確認中…"
 
@@ -7246,23 +7253,33 @@ msgstr "クライアントURL"
 msgid "Clock"
 msgstr "時計"
 
+#. Settings search synonym. Used to match this term when the user types it in the settings search bar.
+#: src/features/user/components/settings_utils/search_index/AdvancedSettingsIndex.ts:35
+msgid "Clone emoji"
+msgstr "絵文字を複製"
+
 #. Submenu label listing communities the emoji can be cloned to.
-#: src/features/ui/action_menu/items/CloneEmojiMenuItem.tsx:33
+#: src/features/ui/action_menu/items/CloneEmojiMenuItem.tsx:34
 msgid "Clone emoji to..."
 msgstr "絵文字を複製..."
 
+#. Settings search synonym. Used to match this term when the user types it in the settings search bar.
+#: src/features/user/components/settings_utils/search_index/AdvancedSettingsIndex.ts:39
+msgid "Clone sticker"
+msgstr "ステッカーを複製"
+
 #. Submenu label listing communities the sticker can be cloned to.
-#: src/features/ui/action_menu/items/CloneStickerMenuItem.tsx:32
+#: src/features/ui/action_menu/items/CloneStickerMenuItem.tsx:33
 msgid "Clone sticker to…"
 msgstr "スタンプを複製…"
 
 #. Toast confirming an emoji was cloned to a target community.
-#: src/features/ui/action_menu/items/CloneEmojiMenuItem.tsx:25
+#: src/features/ui/action_menu/items/CloneEmojiMenuItem.tsx:26
 msgid "Cloned :{sourceName}: to {targetName}"
 msgstr ":{sourceName}: を {targetName} に複製しました"
 
 #. Toast confirming a sticker was cloned to a target community.
-#: src/features/ui/action_menu/items/CloneStickerMenuItem.tsx:24
+#: src/features/ui/action_menu/items/CloneStickerMenuItem.tsx:25
 msgid "Cloned sticker {stickerName} to {targetName}"
 msgstr "ステッカー「{stickerName}」を{targetName}に複製しました"
 
@@ -8561,6 +8578,11 @@ msgstr "コミュニティIDをコピー"
 msgid "Copy device ID"
 msgstr "デバイスIDをコピー"
 
+#. Settings search synonym. Used to match this term when the user types it in the settings search bar.
+#: src/features/user/components/settings_utils/search_index/AdvancedSettingsIndex.ts:43
+msgid "Copy emoji"
+msgstr "絵文字をコピー"
+
 #. Developer-mode action that copies the emoji ID to the clipboard.
 #: src/features/ui/action_menu/items/EmojiContextMenuItems.tsx:32
 msgid "Copy emoji ID"
@@ -8726,6 +8748,11 @@ msgstr "スタックトレースをコピー"
 #: src/features/voice/components/StatsForNerdsCopyDescriptors.ts:5
 msgid "Copy stats JSON"
 msgstr "統計情報をJSONでコピー"
+
+#. Settings search synonym. Used to match this term when the user types it in the settings search bar.
+#: src/features/user/components/settings_utils/search_index/AdvancedSettingsIndex.ts:47
+msgid "Copy sticker"
+msgstr "ステッカーをコピー"
 
 #. Developer-mode action that copies the sticker ID to the clipboard.
 #: src/features/ui/action_menu/items/StickerContextMenuItems.tsx:32
@@ -10943,7 +10970,7 @@ msgstr "リンク先URL:"
 #. Audit log community feature label for detached banner layout support.
 #. Short label in the branding section. Keep it concise. Keep the tone plain and specific.
 #: src/features/guild/components/modals/guild_tabs/guild_overview_tab/sections/BrandingSection.tsx:35
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:98
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:106
 msgid "Detached banner"
 msgstr "バナーを削除しました"
 
@@ -12532,6 +12559,11 @@ msgstr "絵文字"
 msgid "emoji {emojiName}"
 msgstr "絵文字 {emojiName}"
 
+#. Settings search entry label for opting into the emoji and sticker cloning shortcuts.
+#: src/features/user/components/settings_utils/search_index/AdvancedSettingsIndex.ts:31
+msgid "Emoji and sticker cloning shortcuts"
+msgstr "絵文字とスタンプのクローンショートカット"
+
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #: src/features/user/components/settings_utils/search_index/ChatSettingsIndex.ts:351
 msgid "Emoji autocomplete"
@@ -12546,6 +12578,11 @@ msgstr "絵文字ボタン"
 #: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:90
 msgid "Emoji cloning disabled"
 msgstr "絵文字のクローン作成が無効になりました"
+
+#. Audit log community feature label indicating emoji cloning is enabled.
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:98
+msgid "Emoji cloning enabled"
+msgstr "絵文字のクローン作成を有効にしました"
 
 #. Audit log entry label. A custom emoji was added to the community.
 #: src/features/app/config/AuditLogConstants.ts:108
@@ -12592,7 +12629,7 @@ msgid "Emoji slots are full"
 msgstr "絵文字スロットがいっぱいです"
 
 #. Status label shown when the target community has no available emoji slots.
-#: src/features/ui/action_menu/items/CloneEmojiMenuItem.tsx:37
+#: src/features/ui/action_menu/items/CloneEmojiMenuItem.tsx:38
 msgid "Emoji slots full"
 msgstr "絵文字スロットが上限に達しました"
 
@@ -12726,6 +12763,11 @@ msgstr "開発者モードを有効にする"
 #: src/features/app/components/setup/SetupWizardSteps.tsx:981
 msgid "Enable email delivery"
 msgstr "メール配信を有効にする"
+
+#. Short label for the experimental advanced setting.
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedExperimentalControls.tsx:27
+msgid "Enable emoji and sticker cloning shortcuts"
+msgstr "絵文字とスタンプのクローンショートカットを有効にする"
 
 #: src/features/user/components/modals/tabs/component_gallery_tab/index.tsx:157
 msgid "Enable extra option"
@@ -13694,7 +13736,7 @@ msgid "Expression picker categories"
 msgstr "表現ピッカーのカテゴリ"
 
 #. Audit log community feature label for expression purge tooling.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:134
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:142
 msgid "Expression purge"
 msgstr "表現の削除"
 
@@ -14421,7 +14463,7 @@ msgid "Flags"
 msgstr "旗"
 
 #. Audit log community feature label for customized text channel naming rules.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:110
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:118
 msgid "Flexible text channel names"
 msgstr "テキストチャンネル名を自由に設定"
 
@@ -16026,7 +16068,7 @@ msgstr "チャットを非表示"
 #. Audit log community feature label for hiding the owner crown badge.
 #. Label in the owner crown section.
 #: src/features/guild/components/modals/guild_tabs/guild_overview_tab/sections/OwnerCrownSection.tsx:12
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:114
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:122
 msgid "Hide community owner crown"
 msgstr "コミュニティオーナーの王冠を非表示"
 
@@ -17147,7 +17189,7 @@ msgid "Installing desktop update…"
 msgstr "デスクトップ版をアップデート中…"
 
 #. Audit log operation flag label for invite creation.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:170
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:193
 msgid "Instant invites"
 msgstr "招待リンク"
 
@@ -17430,7 +17472,7 @@ msgid "Invite sent to {guildName}"
 msgstr "{guildName}に招待を送信しました"
 
 #. Audit log community feature label for invite splash image support.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:102
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:110
 msgid "Invite splash"
 msgstr "招待スプラッシュ"
 
@@ -17520,7 +17562,7 @@ msgstr "管理者により、このコミュニティへの招待は一時停止
 #. Audit log community feature label meaning invite creation is disabled.
 #. Status label on a community invite embed when invites are paused or anti-raid mode is active.
 #: src/features/channel/components/InviteEmbed.tsx:75
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:106
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:114
 msgid "Invites disabled"
 msgstr "招待が無効です"
 
@@ -17687,7 +17729,7 @@ msgid "Join method"
 msgstr "参加方法"
 
 #. Audit log system-channel flag label for member join notification posts.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:182
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:205
 msgid "Join notifications"
 msgstr "参加通知"
 
@@ -18220,7 +18262,7 @@ msgid "Left tooltip"
 msgstr "左ツールチップ"
 
 #. Audit log community feature label for the legacy increased custom emoji capacity feature.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:118
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:126
 msgid "Legacy emoji slots"
 msgstr "従来の絵文字スロット"
 
@@ -18230,7 +18272,7 @@ msgid "Legacy rate"
 msgstr "旧料金"
 
 #. Audit log community feature label for the legacy increased custom sticker capacity feature.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:122
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:130
 msgid "Legacy sticker slots"
 msgstr "従来のスタンプスロット"
 
@@ -18253,6 +18295,14 @@ msgstr "どのチャンネルが開いていても、すべての受信メッセ
 #: src/features/guild/components/modals/GuildPrivacySettingsModal.tsx:17
 msgid "Let members of this community DM you"
 msgstr "このコミュニティのメンバーからのDMを許可する"
+
+#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:55
+msgid "Let others clone your emojis"
+msgstr "他のユーザーがあなたの絵文字をコピーできるようにする"
+
+#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:55
+msgid "Let others clone your stickers"
+msgstr "他の人にあなたのステッカーをコピーさせる"
 
 #. Description for the Bluesky connections service toggle in the setup wizard.
 #: src/features/app/components/setup/SetupWizardSteps.tsx:297
@@ -19378,7 +19428,7 @@ msgid "Member list unavailable"
 msgstr "メンバーリストを利用できません"
 
 #. Audit log operation flag label.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:178
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:201
 msgid "Member list updates"
 msgstr "メンバーリストの更新"
 
@@ -20676,7 +20726,7 @@ msgid "My awesome sticker"
 msgstr "マイスタンプ"
 
 #. Channel overview settings tab label, control, or validation message (name, topic, slowmode, voice region, mature content gate).
-#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:65
+#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:67
 msgid "My category"
 msgstr "自分のカテゴリ"
 
@@ -22139,7 +22189,7 @@ msgstr "友達だけがあなたに電話できます（推奨）"
 msgid "Only letters, numbers, and underscores"
 msgstr "半角英数字とアンダースコアのみ"
 
-#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:84
+#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:82
 msgid "Only members with the \"{manageCommunityPermissionLabel}\" permission can change this."
 msgstr "\"{manageCommunityPermissionLabel}\"の権限を持つメンバーのみ、これを変更できます。"
 
@@ -22258,7 +22308,7 @@ msgid "Open {settingsMenuName} settings"
 msgstr "{settingsMenuName}設定を開く"
 
 #. Button or menu action label in the channel and chat gif picker grid item. Keep it concise. Preserve {title}; it is inserted by code.
-#: src/features/channel/components/pickers/gif/GifPickerGridItem.tsx:36
+#: src/features/channel/components/pickers/gif/GifPickerGridItem.tsx:37
 msgid "Open {title}"
 msgstr "{title}を開く"
 
@@ -24520,7 +24570,7 @@ msgid "Push notification inactive timeout"
 msgstr "プッシュ通知の無効化タイムアウト"
 
 #. Audit log operation flag label.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:162
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:185
 msgid "Push notifications"
 msgstr "プッシュ通知"
 
@@ -27728,7 +27778,7 @@ msgid "Select friends"
 msgstr "友達を選択"
 
 #. Button label in the gif picker grid item when picking a GIF for an avatar, banner, or video background. Keep it concise. Preserve {title}; it is inserted by code.
-#: src/features/channel/components/pickers/gif/GifPickerGridItem.tsx:50
+#: src/features/channel/components/pickers/gif/GifPickerGridItem.tsx:51
 msgid "Select GIF {title}"
 msgstr "GIF を選択 {title}"
 
@@ -27942,7 +27992,7 @@ msgid "Send friend request"
 msgstr "友達リクエストを送信"
 
 #. Button or menu action label in the channel and chat gif picker grid item. Keep it concise. Preserve {title}; it is inserted by code.
-#: src/features/channel/components/pickers/gif/GifPickerGridItem.tsx:45
+#: src/features/channel/components/pickers/gif/GifPickerGridItem.tsx:46
 msgid "Send GIF {title}"
 msgstr "GIFを送信 {title}"
 
@@ -27964,7 +28014,7 @@ msgstr "メッセージを送信"
 
 #. Audit log operation flag label for message sending.
 #. Permission name: allows sending chat messages.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:174
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:197
 #: src/features/permissions/utils/PermissionLabelDescriptors.ts:400
 msgid "Send messages"
 msgstr "メッセージを送信"
@@ -28686,7 +28736,7 @@ msgid "Shorten the message and try again."
 msgstr "メッセージを短くして、もう一度お試しください。"
 
 #. Body of the error modal shown when the channel topic exceeds the maximum length.
-#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:51
+#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:53
 msgid "Shorten the topic and try again."
 msgstr "トピックを短くして、もう一度お試しください。"
 
@@ -28719,6 +28769,11 @@ msgstr "コンテンツ警告を表示"
 #: src/features/channel/components/modals/channel_tabs/channel_overview_tab/MatureContentSection.tsx:40
 msgid "Show a content warning in this channel"
 msgstr "このチャンネルにコンテンツ警告を表示"
+
+#. Settings search entry description. One-line summary of what the setting controls.
+#: src/features/user/components/settings_utils/search_index/AdvancedSettingsIndex.ts:51
+msgid "Show a one-click shortcut for copying custom emojis and stickers from communities that allow it"
+msgstr "カスタム絵文字やステッカーを許可されているコミュニティからワンクリックでコピーするショートカットを表示"
 
 #. Settings search entry description. One-line summary of what the settings search entry controls.
 #: src/features/user/components/settings_utils/search_index/NotificationsIndex.ts:38
@@ -30440,6 +30495,11 @@ msgstr "ステッカーのオートコンプリート"
 msgid "Sticker cloning disabled"
 msgstr "スタンプの複製を無効にしました"
 
+#. Audit log community feature label indicating sticker cloning is enabled.
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:102
+msgid "Sticker cloning enabled"
+msgstr "スタンプのクローンが有効になりました"
+
 #. Title of the error modal shown when a sticker remains too large after automatic resizing and compression.
 #: src/features/expressions/components/modals/AddGuildStickerModal.tsx:43
 msgid "Sticker couldn't be compressed enough"
@@ -30475,7 +30535,7 @@ msgid "Sticker slots are full"
 msgstr "スタンプ枠がいっぱいです"
 
 #. Status label shown when the target community has no available sticker slots.
-#: src/features/ui/action_menu/items/CloneStickerMenuItem.tsx:36
+#: src/features/ui/action_menu/items/CloneStickerMenuItem.tsx:37
 msgid "Sticker slots full"
 msgstr "スタンプ枠が上限に達しました"
 
@@ -32339,6 +32399,14 @@ msgstr "お探しのチャンネルではありません。"
 msgid "This is not the community you're looking for."
 msgstr "お探しのコミュニティではありません。"
 
+#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:58
+msgid "This is off until you turn it on. While it is on, members of other communities can use the in-app one-click \"Clone\" shortcut on your custom emojis. Turning it off does not prevent anyone from saving the image and uploading it themselves."
+msgstr "これをオンにするまで無効になります。オンにすると、他のコミュニティのメンバーがアプリ内のワンクリック「クローン」ショートカットを使用してカスタム絵文字を使用できるようになります。オフにしても、画像を保存して自分でアップロードすることを妨げるものではありません。"
+
+#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:64
+msgid "This is off until you turn it on. While it is on, members of other communities can use the in-app one-click \"Clone\" shortcut on your custom stickers. Turning it off does not prevent anyone from saving the image and uploading it themselves."
+msgstr "これをオンにするまで無効になります。オンにすると、他のコミュニティのメンバーがアプリ内のワンクリック「クローン」ショートカットを使用してカスタムステッカーをコピーできるようになります。オフにしても、誰かが画像を保存して自分でアップロードすることを妨げるものではありません。"
+
 #. Description text in the too many reactions modal. Keep the tone plain and specific.
 #: src/features/messaging/components/alerts/TooManyReactionsModal.tsx:12
 msgid "This is one heavy message. Some reactions need to be removed before you can add more."
@@ -33579,7 +33647,7 @@ msgid "Typing avatars"
 msgstr "入力中のアバター"
 
 #. Audit log operation flag label.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:166
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:189
 msgid "Typing events"
 msgstr "入力イベント"
 
@@ -33709,12 +33777,12 @@ msgid "Unavailable"
 msgstr "利用不可"
 
 #. Audit log community feature label meaning the community is unavailable to all users.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:150
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:173
 msgid "Unavailable for everyone"
 msgstr "全員が利用できません"
 
 #. Audit log community feature label meaning only staff can access the community.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:154
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:177
 msgid "Unavailable for everyone but staff"
 msgstr "スタッフ以外は利用できません"
 
@@ -34046,12 +34114,12 @@ msgid "unknown-role"
 msgstr "unknown-role"
 
 #. Audit log community feature label for unlimited custom emoji capacity.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:126
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:134
 msgid "Unlimited emoji"
 msgstr "絵文字無制限"
 
 #. Audit log community feature label for unlimited custom sticker capacity.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:130
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:138
 msgid "Unlimited stickers"
 msgstr "スタンプ無制限"
 
@@ -34547,7 +34615,7 @@ msgid "Updater state"
 msgstr "アップデーターの状態"
 
 #. Short label in the channel and chat gif picker grid item. Keep it concise.
-#: src/features/channel/components/pickers/gif/GifPickerGridItem.tsx:41
+#: src/features/channel/components/pickers/gif/GifPickerGridItem.tsx:42
 msgid "Updating favorites…"
 msgstr "お気に入りを更新中…"
 
@@ -34758,7 +34826,7 @@ msgstr "絵文字をアップロード中"
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #. Short label for the URL input in the embed debugger.
 #. Short label in the channel create modal. Keep it concise.
-#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:70
+#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:72
 #: src/features/channel/components/modals/ChannelCreateModal.tsx:37
 #: src/features/user/components/modals/tabs/EmbedDebuggerTab.tsx:34
 #: src/features/user/components/settings_utils/search_index/EmbedDebuggerIndex.ts:19
@@ -35417,7 +35485,7 @@ msgstr "値"
 #. Join source label on the community members page. Shown when the member joined via the community vanity URL.
 #: src/features/channel/components/guild_members_page/GuildMembersPageDescriptors.ts:5
 #: src/features/guild/components/modals/guild_tabs/GuildVanityURLTab.tsx:216
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:138
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:146
 msgid "Vanity URL"
 msgstr "カスタムURL"
 
@@ -35522,7 +35590,7 @@ msgstr "認証済みパートナーコミュニティ"
 #. Short label in the community badge. Keep it concise.
 #: src/features/emoji/components/emojis/EmojiAttributionSubtext.tsx:14
 #: src/features/guild/components/GuildBadge.tsx:20
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:142
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:150
 msgid "Verified community"
 msgstr "認証済みコミュニティ"
 
@@ -36083,7 +36151,7 @@ msgid "Violent or graphic content"
 msgstr "暴力的なコンテンツまたは露骨なコンテンツ"
 
 #. Audit log community feature label for elevated voice capacity/quality.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:146
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:169
 msgid "VIP voice"
 msgstr "VIPボイス"
 
@@ -36094,7 +36162,7 @@ msgstr "公開設定"
 
 #. Audit log community feature label for the Visionary premium feature.
 #: src/features/app/components/dialogs/components/plutonium/SubscriptionCard.tsx:416
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:158
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:181
 msgid "Visionary"
 msgstr "Visionary"
 
@@ -36956,14 +37024,6 @@ msgstr "新機能"
 #: src/features/guild/components/modals/guild_tabs/guild_overview_tab/sections/MessageHistoryThresholdContent.tsx:66
 msgid "When a custom threshold date is not set, members without the <0>{readMessageHistoryPermissionLabel}</0> permission cannot view any historical messages. They'll only see messages in real time as they arrive, and they'll disappear when they restart their clients."
 msgstr "カスタムの履歴表示期間を設定しない場合、<0>{readMessageHistoryPermissionLabel}</0>の権限がないメンバーは過去のメッセージを閲覧できません。メッセージはリアルタイムでのみ表示され、クライアントを再起動すると消去されます。"
-
-#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:62
-msgid "When enabled, members of other communities can use the in-app one-click \"Clone\" shortcut on your custom emojis. This does not prevent them from saving the image and uploading it themselves."
-msgstr "有効にすると、他のコミュニティのメンバーがアプリ内のワンクリック「クローン」ショートカットを使って、あなたのカスタム絵文字を利用できるようになります。これは、メンバーが画像を保存して自分でアップロードするのを防ぐものではありません。"
-
-#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:67
-msgid "When enabled, members of other communities can use the in-app one-click \"Clone\" shortcut on your custom stickers. This does not prevent them from saving the image and uploading it themselves."
-msgstr "有効にすると、他のコミュニティのメンバーがアプリ内のワンクリック「クローン」ショートカットを使って、あなたのカスタムスタンプを利用できるようになります。ただし、これによりメンバーが画像を保存して自分でアップロードすることを防ぐことはできません。"
 
 #. Description text in the channel and chat active now sidebar.
 #: src/features/channel/components/active_now/ActiveNowSidebar.tsx:21

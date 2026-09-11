@@ -1637,6 +1637,11 @@ msgstr "12 måneder (1 år)"
 msgid "12-hour"
 msgstr "12-timers"
 
+#. Audit log community feature label for a raised voice channel bitrate ceiling. kbps means kilobits per second.
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:154
+msgid "128 kbps voice quality"
+msgstr "128 kbps stemmekvalitet"
+
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #: src/features/user/components/settings_utils/section_registry/VoiceVideoSections.ts:241
 msgid "1440p"
@@ -1685,6 +1690,11 @@ msgstr "24-timers"
 msgid "25 uses"
 msgstr "25 anvendelser"
 
+#. Audit log community feature label for a raised voice channel bitrate ceiling. kbps means kilobits per second.
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:159
+msgid "256 kbps voice quality"
+msgstr "256 kbps stemmekvalitet"
+
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #: src/features/user/components/settings_utils/section_registry/AccountSecuritySections.ts:37
 msgid "2FA"
@@ -1730,6 +1740,11 @@ msgstr "30 minutter"
 #: src/features/user/components/modals/tabs/component_gallery_tab/IndicatorsTab.tsx:300
 msgid "32px, 2 members"
 msgstr "32 px, 2 medlemmer"
+
+#. Audit log community feature label for a raised voice channel bitrate ceiling. kbps means kilobits per second.
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:164
+msgid "384 kbps voice quality"
+msgstr "384 kbps stemmekvalitet"
 
 #: src/features/app/components/pages/NotFoundPage.tsx:19
 msgid "404: page not found"
@@ -2719,7 +2734,7 @@ msgstr "Administratorer har sat invitationer på pause – du kan ikke deltage l
 #. Collapsed-by-default group at the end of the community overview tab holding less common settings.
 #. Disclosure button label in the voice connection status popout. Reveals technical bandwidth and network stats.
 #. User settings tab for power-user and experimental application preferences.
-#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:337
+#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:344
 #: src/features/guild/components/modals/guild_tabs/guild_overview_tab/index.tsx:28
 #: src/features/user/components/settings_utils/SettingsConstants.tsx:140
 #: src/features/voice/components/voice_connection_status/VoiceDetailsPopout.tsx:60
@@ -3033,14 +3048,6 @@ msgstr "Tillad omtaler for denne rolle"
 #: src/features/user/components/modals/tabs/UserVoiceTab.tsx:547
 msgid "Allow microphone"
 msgstr "Tillad mikrofon"
-
-#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:56
-msgid "Allow others to clone your emojis"
-msgstr "Tillad andre at klone dine emojis"
-
-#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:58
-msgid "Allow others to clone your stickers"
-msgstr "Tillad andre at klone dine klistermærker"
 
 #. Settings search entry description. One-line summary of what the settings search entry controls.
 #: src/features/user/components/settings_utils/search_index/AccessibilityIndex.ts:217
@@ -5890,7 +5897,7 @@ msgstr "Kategori-ID kopieret"
 
 #. Channel overview settings tab label, control, or validation message (name, topic, slowmode, voice region, mature content gate).
 #. Form field label for the name of a favorites category.
-#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:55
+#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:57
 #: src/features/expressions/components/modals/CreateFavoriteCategoryModal.tsx:20
 msgid "Category name"
 msgstr "Kategorinavn"
@@ -6289,7 +6296,7 @@ msgstr "Kanaladministration"
 
 #. Channel overview settings tab label, control, or validation message (name, topic, slowmode, voice region, mature content gate).
 #. Short label in the channel duplicate modal. Keep it concise.
-#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:60
+#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:62
 #: src/features/channel/components/modals/ChannelDuplicateModal.tsx:32
 msgid "Channel name"
 msgstr "Kanalnavn"
@@ -6349,7 +6356,7 @@ msgid "Channel synced with parent category"
 msgstr "Kanal synkroniseret med overordnet kategori"
 
 #. Channel overview settings tab label, control, or validation message (name, topic, slowmode, voice region, mature content gate).
-#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:46
+#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:48
 msgid "Channel topic is too long."
 msgstr "Kanalemnet er for langt."
 
@@ -6372,8 +6379,8 @@ msgstr "Kanaltype: {0}."
 
 #. Audit log entry label. Past-tense action describing that a channel was edited.
 #: src/features/app/config/AuditLogConstants.ts:16
-#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:206
-#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:225
+#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:209
+#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:228
 msgid "Channel updated"
 msgstr "Kanal opdateret"
 
@@ -6491,8 +6498,8 @@ msgstr "Afkrydsningsfelter"
 
 #. Loading label shown while permissions are being verified.
 #. Loading label shown while permissions are being verified.
-#: src/features/ui/action_menu/items/CloneEmojiMenuItem.tsx:29
-#: src/features/ui/action_menu/items/CloneStickerMenuItem.tsx:28
+#: src/features/ui/action_menu/items/CloneEmojiMenuItem.tsx:30
+#: src/features/ui/action_menu/items/CloneStickerMenuItem.tsx:29
 msgid "Checking access..."
 msgstr "Tjekker adgang ..."
 
@@ -7246,23 +7253,33 @@ msgstr "Klient-URL"
 msgid "Clock"
 msgstr "Ur"
 
+#. Settings search synonym. Used to match this term when the user types it in the settings search bar.
+#: src/features/user/components/settings_utils/search_index/AdvancedSettingsIndex.ts:35
+msgid "Clone emoji"
+msgstr "Klon emoji"
+
 #. Submenu label listing communities the emoji can be cloned to.
-#: src/features/ui/action_menu/items/CloneEmojiMenuItem.tsx:33
+#: src/features/ui/action_menu/items/CloneEmojiMenuItem.tsx:34
 msgid "Clone emoji to..."
 msgstr "Klon emoji til..."
 
+#. Settings search synonym. Used to match this term when the user types it in the settings search bar.
+#: src/features/user/components/settings_utils/search_index/AdvancedSettingsIndex.ts:39
+msgid "Clone sticker"
+msgstr "Klon klistermærke"
+
 #. Submenu label listing communities the sticker can be cloned to.
-#: src/features/ui/action_menu/items/CloneStickerMenuItem.tsx:32
+#: src/features/ui/action_menu/items/CloneStickerMenuItem.tsx:33
 msgid "Clone sticker to…"
 msgstr "Klon klistermærke til…"
 
 #. Toast confirming an emoji was cloned to a target community.
-#: src/features/ui/action_menu/items/CloneEmojiMenuItem.tsx:25
+#: src/features/ui/action_menu/items/CloneEmojiMenuItem.tsx:26
 msgid "Cloned :{sourceName}: to {targetName}"
 msgstr "Klonede :{sourceName}: til {targetName}"
 
 #. Toast confirming a sticker was cloned to a target community.
-#: src/features/ui/action_menu/items/CloneStickerMenuItem.tsx:24
+#: src/features/ui/action_menu/items/CloneStickerMenuItem.tsx:25
 msgid "Cloned sticker {stickerName} to {targetName}"
 msgstr "Klistermærket {stickerName} er klonet til {targetName}"
 
@@ -8561,6 +8578,11 @@ msgstr "Kopiér fællesskabs-ID"
 msgid "Copy device ID"
 msgstr "Kopiér enheds-id"
 
+#. Settings search synonym. Used to match this term when the user types it in the settings search bar.
+#: src/features/user/components/settings_utils/search_index/AdvancedSettingsIndex.ts:43
+msgid "Copy emoji"
+msgstr "Kopiér emoji"
+
 #. Developer-mode action that copies the emoji ID to the clipboard.
 #: src/features/ui/action_menu/items/EmojiContextMenuItems.tsx:32
 msgid "Copy emoji ID"
@@ -8726,6 +8748,11 @@ msgstr "Kopiér staksporing"
 #: src/features/voice/components/StatsForNerdsCopyDescriptors.ts:5
 msgid "Copy stats JSON"
 msgstr "Kopiér statistik (JSON)"
+
+#. Settings search synonym. Used to match this term when the user types it in the settings search bar.
+#: src/features/user/components/settings_utils/search_index/AdvancedSettingsIndex.ts:47
+msgid "Copy sticker"
+msgstr "Kopiér klistermærke"
 
 #. Developer-mode action that copies the sticker ID to the clipboard.
 #: src/features/ui/action_menu/items/StickerContextMenuItems.tsx:32
@@ -10943,7 +10970,7 @@ msgstr "Destinationswebadresse:"
 #. Audit log community feature label for detached banner layout support.
 #. Short label in the branding section. Keep it concise. Keep the tone plain and specific.
 #: src/features/guild/components/modals/guild_tabs/guild_overview_tab/sections/BrandingSection.tsx:35
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:98
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:106
 msgid "Detached banner"
 msgstr "Frakoblet banner"
 
@@ -12532,6 +12559,11 @@ msgstr "Emojis"
 msgid "emoji {emojiName}"
 msgstr "emoji {emojiName}"
 
+#. Settings search entry label for opting into the emoji and sticker cloning shortcuts.
+#: src/features/user/components/settings_utils/search_index/AdvancedSettingsIndex.ts:31
+msgid "Emoji and sticker cloning shortcuts"
+msgstr "Genveje til kloning af emojis og klistermærker"
+
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #: src/features/user/components/settings_utils/search_index/ChatSettingsIndex.ts:351
 msgid "Emoji autocomplete"
@@ -12546,6 +12578,11 @@ msgstr "Emoji-knap"
 #: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:90
 msgid "Emoji cloning disabled"
 msgstr "Kloning af emoji deaktiveret"
+
+#. Audit log community feature label indicating emoji cloning is enabled.
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:98
+msgid "Emoji cloning enabled"
+msgstr "Emoji-kloning aktiveret"
 
 #. Audit log entry label. A custom emoji was added to the community.
 #: src/features/app/config/AuditLogConstants.ts:108
@@ -12592,7 +12629,7 @@ msgid "Emoji slots are full"
 msgstr "Der er ikke plads til flere emojis"
 
 #. Status label shown when the target community has no available emoji slots.
-#: src/features/ui/action_menu/items/CloneEmojiMenuItem.tsx:37
+#: src/features/ui/action_menu/items/CloneEmojiMenuItem.tsx:38
 msgid "Emoji slots full"
 msgstr "Emoji-pladser optaget"
 
@@ -12726,6 +12763,11 @@ msgstr "Slå udviklertilstand til"
 #: src/features/app/components/setup/SetupWizardSteps.tsx:981
 msgid "Enable email delivery"
 msgstr "Aktivér e-mail-levering"
+
+#. Short label for the experimental advanced setting.
+#: src/features/user/components/modals/tabs/advanced_settings_tab/AdvancedExperimentalControls.tsx:27
+msgid "Enable emoji and sticker cloning shortcuts"
+msgstr "Aktivér genveje til kloning af emojis og klistermærker"
 
 #: src/features/user/components/modals/tabs/component_gallery_tab/index.tsx:157
 msgid "Enable extra option"
@@ -13694,7 +13736,7 @@ msgid "Expression picker categories"
 msgstr "Kategorier for udtryksvælger"
 
 #. Audit log community feature label for expression purge tooling.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:134
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:142
 msgid "Expression purge"
 msgstr "Udtryk slettet"
 
@@ -14421,7 +14463,7 @@ msgid "Flags"
 msgstr "Flag"
 
 #. Audit log community feature label for customized text channel naming rules.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:110
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:118
 msgid "Flexible text channel names"
 msgstr "Fleksible tekstkanalnavne"
 
@@ -16026,7 +16068,7 @@ msgstr "Skjul chat"
 #. Audit log community feature label for hiding the owner crown badge.
 #. Label in the owner crown section.
 #: src/features/guild/components/modals/guild_tabs/guild_overview_tab/sections/OwnerCrownSection.tsx:12
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:114
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:122
 msgid "Hide community owner crown"
 msgstr "Skjul fællesskabsejerens krone"
 
@@ -17147,7 +17189,7 @@ msgid "Installing desktop update…"
 msgstr "Installerer desktopopdatering …"
 
 #. Audit log operation flag label for invite creation.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:170
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:193
 msgid "Instant invites"
 msgstr "Invitationer"
 
@@ -17430,7 +17472,7 @@ msgid "Invite sent to {guildName}"
 msgstr "Invitation sendt til {guildName}"
 
 #. Audit log community feature label for invite splash image support.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:102
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:110
 msgid "Invite splash"
 msgstr "Inviteringssplash"
 
@@ -17520,7 +17562,7 @@ msgstr "Invitationer er sat på pause i dette fællesskab af en administrator. S
 #. Audit log community feature label meaning invite creation is disabled.
 #. Status label on a community invite embed when invites are paused or anti-raid mode is active.
 #: src/features/channel/components/InviteEmbed.tsx:75
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:106
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:114
 msgid "Invites disabled"
 msgstr "Inviter deaktiveret"
 
@@ -17687,7 +17729,7 @@ msgid "Join method"
 msgstr "Sådan blev du medlem"
 
 #. Audit log system-channel flag label for member join notification posts.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:182
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:205
 msgid "Join notifications"
 msgstr "Notifikationer om tilmelding"
 
@@ -18220,7 +18262,7 @@ msgid "Left tooltip"
 msgstr "Venstre værktøjstip"
 
 #. Audit log community feature label for the legacy increased custom emoji capacity feature.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:118
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:126
 msgid "Legacy emoji slots"
 msgstr "Gamle emoji-pladser"
 
@@ -18230,7 +18272,7 @@ msgid "Legacy rate"
 msgstr "Gammel pris"
 
 #. Audit log community feature label for the legacy increased custom sticker capacity feature.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:122
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:130
 msgid "Legacy sticker slots"
 msgstr "Gamle klistermærkepladser"
 
@@ -18253,6 +18295,14 @@ msgstr "Få alle indgående beskeder læst op, uanset hvilken kanal der er åben
 #: src/features/guild/components/modals/GuildPrivacySettingsModal.tsx:17
 msgid "Let members of this community DM you"
 msgstr "Tillad medlemmer af dette fællesskab at sende dig direkte beskeder"
+
+#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:55
+msgid "Let others clone your emojis"
+msgstr "Lad andre klone dine emojis"
+
+#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:55
+msgid "Let others clone your stickers"
+msgstr "Lad andre kopiere dine klistermærker"
 
 #. Description for the Bluesky connections service toggle in the setup wizard.
 #: src/features/app/components/setup/SetupWizardSteps.tsx:297
@@ -19378,7 +19428,7 @@ msgid "Member list unavailable"
 msgstr "Medlemsliste er ikke tilgængelig"
 
 #. Audit log operation flag label.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:178
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:201
 msgid "Member list updates"
 msgstr "Opdateringer af medlemsliste"
 
@@ -20676,7 +20726,7 @@ msgid "My awesome sticker"
 msgstr "Mit fede sticker"
 
 #. Channel overview settings tab label, control, or validation message (name, topic, slowmode, voice region, mature content gate).
-#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:65
+#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:67
 msgid "My category"
 msgstr "Min kategori"
 
@@ -22139,7 +22189,7 @@ msgstr "Kun venner kan ringe til dig (anbefales)"
 msgid "Only letters, numbers, and underscores"
 msgstr "Kun bogstaver, tal og understreger"
 
-#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:84
+#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:82
 msgid "Only members with the \"{manageCommunityPermissionLabel}\" permission can change this."
 msgstr "Kun medlemmer med tilladelsen \"{manageCommunityPermissionLabel}\" kan ændre dette."
 
@@ -22258,7 +22308,7 @@ msgid "Open {settingsMenuName} settings"
 msgstr "Åbn indstillinger for {settingsMenuName}"
 
 #. Button or menu action label in the channel and chat gif picker grid item. Keep it concise. Preserve {title}; it is inserted by code.
-#: src/features/channel/components/pickers/gif/GifPickerGridItem.tsx:36
+#: src/features/channel/components/pickers/gif/GifPickerGridItem.tsx:37
 msgid "Open {title}"
 msgstr "Åbn {title}"
 
@@ -24520,7 +24570,7 @@ msgid "Push notification inactive timeout"
 msgstr "Inaktivitetstimeout for push-notifikationer"
 
 #. Audit log operation flag label.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:162
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:185
 msgid "Push notifications"
 msgstr "Push-notifikationer"
 
@@ -27728,7 +27778,7 @@ msgid "Select friends"
 msgstr "Vælg venner"
 
 #. Button label in the gif picker grid item when picking a GIF for an avatar, banner, or video background. Keep it concise. Preserve {title}; it is inserted by code.
-#: src/features/channel/components/pickers/gif/GifPickerGridItem.tsx:50
+#: src/features/channel/components/pickers/gif/GifPickerGridItem.tsx:51
 msgid "Select GIF {title}"
 msgstr "Vælg GIF {title}"
 
@@ -27942,7 +27992,7 @@ msgid "Send friend request"
 msgstr "Send venneanmodning"
 
 #. Button or menu action label in the channel and chat gif picker grid item. Keep it concise. Preserve {title}; it is inserted by code.
-#: src/features/channel/components/pickers/gif/GifPickerGridItem.tsx:45
+#: src/features/channel/components/pickers/gif/GifPickerGridItem.tsx:46
 msgid "Send GIF {title}"
 msgstr "Send GIF {title}"
 
@@ -27964,7 +28014,7 @@ msgstr "Send besked"
 
 #. Audit log operation flag label for message sending.
 #. Permission name: allows sending chat messages.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:174
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:197
 #: src/features/permissions/utils/PermissionLabelDescriptors.ts:400
 msgid "Send messages"
 msgstr "Send beskeder"
@@ -28686,7 +28736,7 @@ msgid "Shorten the message and try again."
 msgstr "Forkort beskeden, og prøv igen."
 
 #. Body of the error modal shown when the channel topic exceeds the maximum length.
-#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:51
+#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:53
 msgid "Shorten the topic and try again."
 msgstr "Forkort emnet, og prøv igen."
 
@@ -28719,6 +28769,11 @@ msgstr "Vis en indholdsadvarsel"
 #: src/features/channel/components/modals/channel_tabs/channel_overview_tab/MatureContentSection.tsx:40
 msgid "Show a content warning in this channel"
 msgstr "Vis en indholdsadvarsel i denne kanal"
+
+#. Settings search entry description. One-line summary of what the setting controls.
+#: src/features/user/components/settings_utils/search_index/AdvancedSettingsIndex.ts:51
+msgid "Show a one-click shortcut for copying custom emojis and stickers from communities that allow it"
+msgstr "Vis en genvej med ét klik til at kopiere brugerdefinerede emojis og klistermærker fra fællesskaber, der tillader det"
 
 #. Settings search entry description. One-line summary of what the settings search entry controls.
 #: src/features/user/components/settings_utils/search_index/NotificationsIndex.ts:38
@@ -30440,6 +30495,11 @@ msgstr "Klistemærke-autofuldstændelse"
 msgid "Sticker cloning disabled"
 msgstr "Kloning af stickers deaktiveret"
 
+#. Audit log community feature label indicating sticker cloning is enabled.
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:102
+msgid "Sticker cloning enabled"
+msgstr "Klistreklon aktiveret"
+
 #. Title of the error modal shown when a sticker remains too large after automatic resizing and compression.
 #: src/features/expressions/components/modals/AddGuildStickerModal.tsx:43
 msgid "Sticker couldn't be compressed enough"
@@ -30475,7 +30535,7 @@ msgid "Sticker slots are full"
 msgstr "Stickerpladser er fyldt op"
 
 #. Status label shown when the target community has no available sticker slots.
-#: src/features/ui/action_menu/items/CloneStickerMenuItem.tsx:36
+#: src/features/ui/action_menu/items/CloneStickerMenuItem.tsx:37
 msgid "Sticker slots full"
 msgstr "Klistermærkepladser er fyldt op"
 
@@ -32339,6 +32399,14 @@ msgstr "Dette er ikke den kanal, du leder efter."
 msgid "This is not the community you're looking for."
 msgstr "Dette er ikke det fællesskab, du leder efter."
 
+#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:58
+msgid "This is off until you turn it on. While it is on, members of other communities can use the in-app one-click \"Clone\" shortcut on your custom emojis. Turning it off does not prevent anyone from saving the image and uploading it themselves."
+msgstr "Dette er slået fra, indtil du slår det til. Mens det er slået til, kan medlemmer af andre communities bruge genvejen \"Klon\" i appen til dine brugerdefinerede emojis. Hvis du slår det fra, forhindrer det ikke nogen i at gemme billedet og uploade det selv."
+
+#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:64
+msgid "This is off until you turn it on. While it is on, members of other communities can use the in-app one-click \"Clone\" shortcut on your custom stickers. Turning it off does not prevent anyone from saving the image and uploading it themselves."
+msgstr "Dette er slået fra, indtil du slår det til. Mens det er slået til, kan medlemmer af andre communities bruge genvejen \"Klon\" i appen med ét klik på dine brugerdefinerede klistermærker. Hvis du slår det fra, forhindrer det ikke nogen i at gemme billedet og uploade det selv."
+
 #. Description text in the too many reactions modal. Keep the tone plain and specific.
 #: src/features/messaging/components/alerts/TooManyReactionsModal.tsx:12
 msgid "This is one heavy message. Some reactions need to be removed before you can add more."
@@ -33579,7 +33647,7 @@ msgid "Typing avatars"
 msgstr "Skrive-avatarer"
 
 #. Audit log operation flag label.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:166
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:189
 msgid "Typing events"
 msgstr "Skrivehændelser"
 
@@ -33709,12 +33777,12 @@ msgid "Unavailable"
 msgstr "Utilgængelig"
 
 #. Audit log community feature label meaning the community is unavailable to all users.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:150
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:173
 msgid "Unavailable for everyone"
 msgstr "Utilgængelig for alle"
 
 #. Audit log community feature label meaning only staff can access the community.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:154
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:177
 msgid "Unavailable for everyone but staff"
 msgstr "Utilgængelig for alle undtagen personale"
 
@@ -34046,12 +34114,12 @@ msgid "unknown-role"
 msgstr "unknown-role"
 
 #. Audit log community feature label for unlimited custom emoji capacity.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:126
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:134
 msgid "Unlimited emoji"
 msgstr "Ubegrænset antal emoji"
 
 #. Audit log community feature label for unlimited custom sticker capacity.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:130
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:138
 msgid "Unlimited stickers"
 msgstr "Ubegrænset antal klistermærker"
 
@@ -34547,7 +34615,7 @@ msgid "Updater state"
 msgstr "Opdater status"
 
 #. Short label in the channel and chat gif picker grid item. Keep it concise.
-#: src/features/channel/components/pickers/gif/GifPickerGridItem.tsx:41
+#: src/features/channel/components/pickers/gif/GifPickerGridItem.tsx:42
 msgid "Updating favorites…"
 msgstr "Opdaterer favoritter…"
 
@@ -34758,7 +34826,7 @@ msgstr "Uploader emojis"
 #. Settings search synonym. Used to match this term when the user types it in the settings search bar.
 #. Short label for the URL input in the embed debugger.
 #. Short label in the channel create modal. Keep it concise.
-#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:70
+#: src/features/channel/components/modals/channel_tabs/ChannelOverviewTab.tsx:72
 #: src/features/channel/components/modals/ChannelCreateModal.tsx:37
 #: src/features/user/components/modals/tabs/EmbedDebuggerTab.tsx:34
 #: src/features/user/components/settings_utils/search_index/EmbedDebuggerIndex.ts:19
@@ -35417,7 +35485,7 @@ msgstr "Værdier"
 #. Join source label on the community members page. Shown when the member joined via the community vanity URL.
 #: src/features/channel/components/guild_members_page/GuildMembersPageDescriptors.ts:5
 #: src/features/guild/components/modals/guild_tabs/GuildVanityURLTab.tsx:216
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:138
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:146
 msgid "Vanity URL"
 msgstr "Vanity-URL"
 
@@ -35522,7 +35590,7 @@ msgstr "Verificeret fællesskab og partnerfællesskab"
 #. Short label in the community badge. Keep it concise.
 #: src/features/emoji/components/emojis/EmojiAttributionSubtext.tsx:14
 #: src/features/guild/components/GuildBadge.tsx:20
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:142
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:150
 msgid "Verified community"
 msgstr "Verificeret fællesskab"
 
@@ -36083,7 +36151,7 @@ msgid "Violent or graphic content"
 msgstr "Voldeligt eller stødende indhold"
 
 #. Audit log community feature label for elevated voice capacity/quality.
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:146
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:169
 msgid "VIP voice"
 msgstr "VIP-stemme"
 
@@ -36094,7 +36162,7 @@ msgstr "Synlighed"
 
 #. Audit log community feature label for the Visionary premium feature.
 #: src/features/app/components/dialogs/components/plutonium/SubscriptionCard.tsx:416
-#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:158
+#: src/features/guild/utils/guild_tabs/GuildAuditLogTabUtils.ts:181
 msgid "Visionary"
 msgstr "Visionær"
 
@@ -36956,14 +37024,6 @@ msgstr "Nyheder"
 #: src/features/guild/components/modals/guild_tabs/guild_overview_tab/sections/MessageHistoryThresholdContent.tsx:66
 msgid "When a custom threshold date is not set, members without the <0>{readMessageHistoryPermissionLabel}</0> permission cannot view any historical messages. They'll only see messages in real time as they arrive, and they'll disappear when they restart their clients."
 msgstr "Når der ikke er angivet en brugerdefineret tærskeldato, kan medlemmer uden tilladelsen <0>{readMessageHistoryPermissionLabel}</0> ikke se nogen historiske beskeder. De vil kun se beskeder i realtid, når de ankommer, og de forsvinder, når de genstarter deres klienter."
-
-#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:62
-msgid "When enabled, members of other communities can use the in-app one-click \"Clone\" shortcut on your custom emojis. This does not prevent them from saving the image and uploading it themselves."
-msgstr "Når den er aktiveret, kan medlemmer af andre fællesskaber bruge genvejen \"Klon\" med ét klik i appen på dine tilpassede emojis. Dette forhindrer dem ikke i at gemme billedet og uploade det selv."
-
-#: src/features/guild/components/modals/guild_tabs/CloneAllowedToggle.tsx:67
-msgid "When enabled, members of other communities can use the in-app one-click \"Clone\" shortcut on your custom stickers. This does not prevent them from saving the image and uploading it themselves."
-msgstr "Når den er aktiveret, kan medlemmer af andre fællesskaber bruge genvejen \"Klon\" med ét klik i appen på dine tilpassede klistermærker. Dette forhindrer dem ikke i at gemme billedet og uploade det selv."
 
 #. Description text in the channel and chat active now sidebar.
 #: src/features/channel/components/active_now/ActiveNowSidebar.tsx:21
