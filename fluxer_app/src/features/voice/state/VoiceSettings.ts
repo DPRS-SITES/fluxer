@@ -18,6 +18,7 @@ import {
 	type VoiceProcessingMode,
 } from '@app/features/voice/utils/VoiceProcessingProfile';
 import {clampVoiceVolumePercent} from '@app/features/voice/utils/VoiceVolumeUtils';
+import type {VoiceNoiseSuppressionBackend} from '@fluxer/schema/src/domains/admin/VoiceNoiseSuppressionSchemas';
 import {makeAutoObservable} from 'mobx';
 
 export type VoiceBackgroundMediaKind = 'static' | 'animated' | 'video';
@@ -122,6 +123,7 @@ type VoiceSettingsUpdate = Partial<{
 	screenShareAudioSourceMode: 'none' | 'system' | 'specific';
 	screenShareAudioIncludeSources: Array<Record<string, string>>;
 	screenShareAudioExcludeSources: Array<Record<string, string>>;
+	screenShareDeviceAudioUsesMicrophone: boolean;
 	openH264Enabled: boolean;
 	lastScreenShareSource: LastScreenShareSource | null;
 }>;
@@ -377,6 +379,8 @@ class VoiceSettings {
 	deepFilterNoiseSuppressionPrefV2 = DEFAULT_DEEP_FILTER_NOISE_SUPPRESSION;
 	deepFilterNoiseSuppressionLevelPrefV2 = 80;
 	noiseSuppressionStandardDefaultMigratedV1 = false;
+	noiseSuppressionBackendPrefV1: VoiceNoiseSuppressionBackend | null = null;
+	stereoMicrophonePrefV1: boolean | null = null;
 	voiceProcessingMode: VoiceProcessingMode = DEFAULT_VOICE_PROCESSING_MODE;
 	voiceProcessingModeByDeviceLabel: Record<string, VoiceProcessingMode> = {};
 	cameraResolution: CameraResolution = 'medium';
@@ -434,6 +438,7 @@ class VoiceSettings {
 	screenShareAudioSourceMode: 'none' | 'system' | 'specific' = 'system';
 	screenShareAudioIncludeSources: Array<Record<string, string>> = [];
 	screenShareAudioExcludeSources: Array<Record<string, string>> = [];
+	screenShareDeviceAudioUsesMicrophone = false;
 	openH264Enabled = true;
 	lastScreenShareSource: LastScreenShareSource | null = null;
 	prioritizeSpeakingParticipants = false;
@@ -510,6 +515,7 @@ class VoiceSettings {
 				getScreenShareAudioSourceMode: false,
 				getScreenShareAudioIncludeSources: false,
 				getScreenShareAudioExcludeSources: false,
+				getScreenShareDeviceAudioUsesMicrophone: false,
 				getOpenH264Enabled: false,
 				getLastScreenShareSource: false,
 				getPrioritizeSpeakingParticipants: false,
@@ -567,6 +573,8 @@ class VoiceSettings {
 			'deepFilterNoiseSuppressionPrefV2',
 			'deepFilterNoiseSuppressionLevelPrefV2',
 			'noiseSuppressionStandardDefaultMigratedV1',
+			'noiseSuppressionBackendPrefV1',
+			'stereoMicrophonePrefV1',
 			'voiceProcessingMode',
 			'voiceProcessingModeByDeviceLabel',
 			'cameraResolution',
@@ -623,6 +631,7 @@ class VoiceSettings {
 			'screenShareAudioSourceMode',
 			'screenShareAudioIncludeSources',
 			'screenShareAudioExcludeSources',
+			'screenShareDeviceAudioUsesMicrophone',
 			'openH264Enabled',
 			'lastScreenShareSource',
 			'prioritizeSpeakingParticipants',
@@ -643,6 +652,30 @@ class VoiceSettings {
 
 	set pauseOwnScreenSharePreviewOnUnfocus(value: boolean) {
 		this.pauseOwnScreenSharePreviewOnUnfocusPrefV2 = value;
+	}
+
+	get noiseSuppressionBackend(): VoiceNoiseSuppressionBackend | null {
+		return this.noiseSuppressionBackendPrefV1;
+	}
+
+	set noiseSuppressionBackend(value: VoiceNoiseSuppressionBackend | null) {
+		this.noiseSuppressionBackendPrefV1 = value;
+	}
+
+	getNoiseSuppressionBackend(): VoiceNoiseSuppressionBackend | null {
+		return this.noiseSuppressionBackendPrefV1;
+	}
+
+	get stereoMicrophone(): boolean | null {
+		return this.stereoMicrophonePrefV1;
+	}
+
+	set stereoMicrophone(value: boolean | null) {
+		this.stereoMicrophonePrefV1 = value;
+	}
+
+	getStereoMicrophone(): boolean | null {
+		return this.stereoMicrophonePrefV1;
 	}
 
 	get deepFilterNoiseSuppression(): boolean {
@@ -1008,6 +1041,10 @@ class VoiceSettings {
 		return this.screenShareAudioExcludeSources;
 	}
 
+	getScreenShareDeviceAudioUsesMicrophone(): boolean {
+		return this.screenShareDeviceAudioUsesMicrophone;
+	}
+
 	getEffectiveScreenShareAudioSourceMode(): 'none' | 'system' | 'specific' {
 		return this.getScreenShareAudioSourceMode();
 	}
@@ -1126,6 +1163,8 @@ class VoiceSettings {
 			this.screenShareAudioIncludeSources = validated.screenShareAudioIncludeSources;
 		if (validated.screenShareAudioExcludeSources !== undefined)
 			this.screenShareAudioExcludeSources = validated.screenShareAudioExcludeSources;
+		if (validated.screenShareDeviceAudioUsesMicrophone !== undefined)
+			this.screenShareDeviceAudioUsesMicrophone = validated.screenShareDeviceAudioUsesMicrophone;
 		if (validated.openH264Enabled !== undefined) this.openH264Enabled = validated.openH264Enabled;
 		if (validated.lastScreenShareSource !== undefined) this.lastScreenShareSource = validated.lastScreenShareSource;
 		this.notifyListeners();
@@ -1257,6 +1296,8 @@ class VoiceSettings {
 				validateSourceList(data.screenShareAudioIncludeSources) ?? this.screenShareAudioIncludeSources,
 			screenShareAudioExcludeSources:
 				validateSourceList(data.screenShareAudioExcludeSources) ?? this.screenShareAudioExcludeSources,
+			screenShareDeviceAudioUsesMicrophone:
+				data.screenShareDeviceAudioUsesMicrophone ?? this.screenShareDeviceAudioUsesMicrophone,
 			openH264Enabled: data.openH264Enabled ?? this.openH264Enabled,
 			lastScreenShareSource:
 				data.lastScreenShareSource === undefined

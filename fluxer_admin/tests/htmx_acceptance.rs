@@ -219,6 +219,16 @@ async fn user_fragment_alias_returns_drawer_fragment() {
 }
 
 #[tokio::test]
+async fn user_peek_alias_is_gone() {
+    let app = setup().await;
+
+    assert_eq!(
+        get_status(&app, "/users/1500000000000000001/peek").await,
+        StatusCode::NOT_FOUND
+    );
+}
+
+#[tokio::test]
 async fn drawer_triggers_use_htmx_and_native_popover() {
     let app = setup().await;
     let body = get(&app, "/users?ids=1500000000000000001", &[]).await;
@@ -420,6 +430,8 @@ async fn mutating_admin_pages_render_usable_csrf_tokens() {
             &[
                 "/instance-config?action=update_gateway_rollout",
                 "/instance-config?action=update_sso",
+                "/instance-config?action=update_voice_noise_suppression",
+                "/instance-config?action=update_experiment_delivery",
             ][..],
         ),
     ];
@@ -644,6 +656,23 @@ async fn get(app: &TestApp, uri: &str, headers: &[(&str, &str)]) -> String {
     get_with_headers(app, uri, headers).await.1
 }
 
+async fn get_status(app: &TestApp, uri: &str) -> StatusCode {
+    let response = app
+        .router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri(uri)
+                .header(header::COOKIE, &app.session_cookie)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    response.status()
+}
+
 async fn get_with_headers(
     app: &TestApp,
     uri: &str,
@@ -708,11 +737,11 @@ fn csrf_cookie(headers: &HeaderMap) -> Option<String> {
         .iter()
         .filter_map(|value| value.to_str().ok())
         .find_map(|value| {
-            value
-                .split(';')
-                .next()
-                .and_then(|pair| pair.strip_prefix("csrf_token="))
-                .map(str::to_owned)
+            let pair = value.split(';').next()?;
+            let token = pair
+                .strip_prefix("__Host-csrf_token=")
+                .or_else(|| pair.strip_prefix("csrf_token="))?;
+            (!token.is_empty()).then(|| token.to_owned())
         })
 }
 
@@ -752,8 +781,9 @@ async fn spawn_mock_api() -> String {
 }
 
 async fn mock_api(method: Method, uri: Uri) -> Response {
-    match (method, uri.path()) {
-        (Method::GET, "/admin/users/me") => json_response(json!({ "user": admin_user() })),
+    let path = uri.path().to_owned();
+    match (method, path.as_str()) {
+        (Method::GET, "/admin/users/@me") => json_response(json!({ "user": admin_user() })),
         (Method::GET, "/admin/api-keys") => json_response(json!([])),
         (Method::POST, "/admin/api-keys") => json_response(json!({
             "key_id": "1900000000000000001",
@@ -763,60 +793,56 @@ async fn mock_api(method: Method, uri: Uri) -> Response {
             "expires_at": null,
             "acls": ["*"]
         })),
-        (Method::POST, "/admin/users/search") => {
+        (Method::GET, "/admin/users") => {
             json_response(json!({ "users": [searched_user()], "total": 1 }))
         }
-        (Method::POST, "/admin/users/lookup") => {
+        (Method::GET, "/admin/users/1500000000000000001") => {
             json_response(json!({ "users": [searched_user()] }))
         }
-        (Method::POST, "/admin/users/update-has-verified-phone") => {
+        (Method::PUT, "/admin/users/1500000000000000001/phone-verification") => {
             json_response(json!({ "user": searched_user() }))
         }
-        (Method::POST, "/admin/guilds/search") => {
+        (Method::GET, "/admin/guilds") => {
             json_response(json!({ "guilds": [searched_guild()], "total": 1 }))
         }
-        (Method::POST, "/admin/guilds/lookup") => {
+        (Method::GET, "/admin/guilds/1600000000000000001") => {
             json_response(json!({ "guild": searched_guild_detail() }))
         }
-        (Method::POST, "/admin/applications/lookup") => {
-            json_response(json!({ "application": searched_application() }))
-        }
-        (Method::POST, "/admin/applications/list-by-owner") => {
+        (Method::GET, "/admin/applications") => {
             json_response(json!({ "applications": [searched_application()] }))
         }
-        (Method::POST, "/admin/reports/search") => json_response(
+        (Method::GET, "/admin/reports") => json_response(
             json!({ "reports": [searched_report()], "total": 1, "offset": 0, "limit": 25 }),
         ),
         (Method::GET, "/admin/reports/1800000000000000001") => json_response(searched_report()),
         (Method::GET, "/admin/reports/1800000000000000002") => {
             json_response(searched_message_report())
         }
-        (Method::POST, "/admin/reports/resolve") => json_response(json!({
+        (Method::PATCH, "/admin/reports/1800000000000000001") => json_response(json!({
             "report_id": "1800000000000000001",
             "status": 1,
             "resolved_at": "2026-05-26T12:03:00.000Z",
             "public_comment": "done"
         })),
-        (Method::POST, "/admin/jobs/list") => {
+        (Method::GET, "/admin/jobs") => {
             json_response(json!({ "jobs": [searched_job()], "next_cursor": null, "cursor": null }))
         }
-        (Method::POST, "/admin/jobs/get") => json_response(json!({ "job": searched_job() })),
-        (Method::POST, "/admin/instance-config/get") => json_response(instance_config()),
-        (Method::POST, "/admin/instance-config/registration-urls/create") => json_response(json!({
+        (Method::GET, "/admin/jobs/1900000000000000001") => {
+            json_response(json!({ "job": searched_job() }))
+        }
+        (Method::GET, "/admin/instance/config") => json_response(instance_config()),
+        (Method::POST, "/admin/instance/registration-urls") => json_response(json!({
             "registration_url": registration_url_fixture(),
             "code": "11111111-1111-4111-8111-111111111111",
             "url": "https://app.example.test/register?registration_url=11111111-1111-4111-8111-111111111111"
         })),
-        (Method::POST, "/admin/instance-config/registration-urls/revoke") => {
+        (Method::DELETE, path) if path.starts_with("/admin/instance/registration-urls/") => {
             json_response(instance_config_without_registration_urls())
         }
-        (Method::POST, "/admin/instance-config/pending-registrations/approve") => {
+        (Method::PATCH, path) if path.starts_with("/admin/instance/pending-registrations/") => {
             json_response(instance_config_without_pending_registrations())
         }
-        (Method::POST, "/admin/instance-config/pending-registrations/reject") => {
-            json_response(instance_config_without_pending_registrations())
-        }
-        (Method::POST, "/admin/limit-config/get") => json_response(limit_config()),
+        (Method::GET, "/admin/limit-config") => json_response(limit_config()),
         _ => (StatusCode::NOT_FOUND, Json(json!({ "error": "not found" }))).into_response(),
     }
 }
@@ -1056,6 +1082,32 @@ fn instance_config() -> Value {
             "max_concurrent_session_starts": 16,
             "max_concurrent_guild_starts": 16,
             "voice_e2ee_scope": "guild_feature_only"
+        },
+        "voice_noise_suppression": {
+            "enabled": false,
+            "config_version": 0,
+            "default_backend": "standard",
+            "enabled_backends": [
+                "none",
+                "standard",
+                "gate",
+                "speex",
+                "rnnoise",
+                "gtcrn",
+                "deep_filter"
+            ],
+            "allow_user_override": true,
+            "rollout_basis_points": 0,
+            "rollout_salt": "voice-ns-v1",
+            "included_user_ids": [],
+            "excluded_user_ids": [],
+            "guild_overrides": [],
+            "stereo_enabled": false,
+            "suppression_strength": 80
+        },
+        "experiment_delivery": {
+            "poll_interval_seconds": 300,
+            "poll_jitter_percent": 15
         },
         "registration": registration_config(),
         "self_hosted": false

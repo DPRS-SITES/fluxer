@@ -11,6 +11,7 @@ import {
 	RTC_REGION_ID_MAX_LENGTH,
 	RTC_REGION_ID_MIN_LENGTH,
 	VOICE_CHANNEL_BITRATE_MAX,
+	VOICE_CHANNEL_BITRATE_MAX_STANDARD,
 	VOICE_CHANNEL_BITRATE_MIN,
 	VOICE_CHANNEL_CONNECTION_LIMIT_MAX,
 	VOICE_CHANNEL_CONNECTION_LIMIT_MIN,
@@ -20,7 +21,7 @@ import {
 import {ChannelNicknameOverrides} from '@fluxer/schema/src/domains/channel/ChannelSchemas';
 import {ReadStateResponse} from '@fluxer/schema/src/domains/gateway/GatewaySchemas';
 import {ChannelOverwriteTypeSchema, GeneralChannelNameType} from '@fluxer/schema/src/primitives/ChannelValidators';
-import {createBase64StringType} from '@fluxer/schema/src/primitives/FileValidators';
+import {base64LengthForBytes, createBase64StringType} from '@fluxer/schema/src/primitives/FileValidators';
 import {ContentWarningLevelSchema} from '@fluxer/schema/src/primitives/GuildValidators';
 import {QueryBooleanType} from '@fluxer/schema/src/primitives/QueryValidators';
 import {
@@ -59,7 +60,9 @@ const ChannelCommonBase = z.object({
 		.min(VOICE_CHANNEL_BITRATE_MIN)
 		.max(VOICE_CHANNEL_BITRATE_MAX)
 		.nullish()
-		.describe(`Voice channel bitrate in bits per second (${VOICE_CHANNEL_BITRATE_MIN}-${VOICE_CHANNEL_BITRATE_MAX})`),
+		.describe(
+			`Voice channel bitrate in bits per second (${VOICE_CHANNEL_BITRATE_MIN}-${VOICE_CHANNEL_BITRATE_MAX}), clamped to ${VOICE_CHANNEL_BITRATE_MAX_STANDARD} unless the guild holds an AUDIO_BITRATE feature`,
+		),
 	user_limit: z
 		.number()
 		.int()
@@ -118,7 +121,7 @@ const ChannelUpdateCommon = ChannelCommonBase.extend({
 			'Legacy: setting true maps to nsfw_override=true; setting false maps to nsfw_override=null (inherit). Prefer nsfw_override.',
 		),
 	...ChannelContentWarningFields,
-	icon: createBase64StringType(1, Math.ceil(AVATAR_MAX_SIZE * (4 / 3)))
+	icon: createBase64StringType(1, base64LengthForBytes(AVATAR_MAX_SIZE))
 		.nullish()
 		.describe('Base64-encoded icon image for group DM channels'),
 	owner_id: SnowflakeType.nullish().describe('ID of the new owner for group DM channels'),
@@ -181,7 +184,7 @@ const ChannelUpdateLinkRequest = ChannelUpdateCommon.extend({
 const ChannelUpdateGroupDmRequest = z.object({
 	type: createNamedLiteral(ChannelTypes.GROUP_DM, 'GROUP_DM', 'Channel type (group DM)'),
 	name: GeneralChannelNameType.nullish().describe('The name of the group DM'),
-	icon: createBase64StringType(1, Math.ceil(AVATAR_MAX_SIZE * (4 / 3)))
+	icon: createBase64StringType(1, base64LengthForBytes(AVATAR_MAX_SIZE))
 		.nullish()
 		.describe('Base64-encoded icon image for the group DM'),
 	owner_id: SnowflakeType.nullish().describe('ID of the new owner of the group DM'),
