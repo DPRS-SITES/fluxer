@@ -1,5 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import {createGuildID} from '@app/api/BrandedTypes';
+import type {GuildDiscoveryRow} from '@app/api/database/types/GuildDiscoveryTypes';
+import {mapGuildFeatures} from '@app/api/guild/GuildFeatureUtils';
+import type {GuildService} from '@app/api/guild/services/GuildService';
+import {Logger} from '@app/api/Logger';
+import {requireAdminACL} from '@app/api/middleware/AdminMiddleware';
+import {RateLimitMiddleware} from '@app/api/middleware/RateLimitMiddleware';
+import {OpenAPI} from '@app/api/middleware/ResponseTypeMiddleware';
+import type {User} from '@app/api/models/User';
+import {RateLimitConfigs} from '@app/api/RateLimitConfig';
+import type {HonoApp} from '@app/api/types/HonoEnv';
+import type {IUserRepository} from '@app/api/user/IUserRepository';
+import {Validator} from '@app/api/Validator';
 import {AdminACLs} from '@fluxer/constants/src/AdminACLs';
 import {DiscoveryApplicationStatus, DiscoveryCategoryLabels} from '@fluxer/constants/src/DiscoveryConstants';
 import {GuildIdParam} from '@fluxer/schema/src/domains/common/CommonParamSchemas';
@@ -16,19 +29,6 @@ import {
 	DiscoveryCategoryIdParam,
 	DiscoveryCategoryListResponse,
 } from '@fluxer/schema/src/domains/guild/GuildDiscoverySchemas';
-
-import {createGuildID} from '../../BrandedTypes';
-import type {GuildDiscoveryRow} from '../../database/types/GuildDiscoveryTypes';
-import {mapGuildFeatures} from '../../guild/GuildFeatureUtils';
-import type {GuildService} from '../../guild/services/GuildService';
-import {requireAdminACL} from '../../middleware/AdminMiddleware';
-import {RateLimitMiddleware} from '../../middleware/RateLimitMiddleware';
-import {OpenAPI} from '../../middleware/ResponseTypeMiddleware';
-import type {User} from '../../models/User';
-import {RateLimitConfigs} from '../../RateLimitConfig';
-import type {HonoApp} from '../../types/HonoEnv';
-import type {IUserRepository} from '../../user/IUserRepository';
-import {Validator} from '../../Validator';
 
 function mapRowToApplicationResponse(row: GuildDiscoveryRow) {
 	return {
@@ -281,6 +281,7 @@ export function DiscoveryAdminController(app: HonoApp) {
 		async (ctx) => {
 			const data = ctx.req.valid('json');
 			const adminUserId = ctx.get('adminUserId');
+			const auditLogReason = ctx.get('auditLogReason');
 			const discoveryService = ctx.get('discoveryService');
 			const guildIds = [...new Set(data.guild_ids)];
 			const failed: Array<string> = [];
@@ -293,10 +294,27 @@ export function DiscoveryAdminController(app: HonoApp) {
 						data: {category_type: data.category_type},
 					});
 					updated += 1;
-				} catch {
+				} catch (error) {
+					Logger.warn(
+						{err: error, guildId: rawGuildId.toString(), categoryType: data.category_type},
+						'Failed to move discovery listing to category',
+					);
 					failed.push(rawGuildId.toString());
 				}
 			}
+			await ctx.get('adminService').auditService.createAuditLog({
+				adminUserId,
+				targetType: 'guild',
+				targetId: BigInt(0),
+				action: 'update_discovery_categories',
+				auditLogReason,
+				metadata: new Map([
+					['category_type', data.category_type.toString()],
+					['guild_count', guildIds.length.toString()],
+					['updated', updated.toString()],
+					['failed', failed.length.toString()],
+				]),
+			});
 			return ctx.json({updated, failed_guild_ids: failed});
 		},
 	);

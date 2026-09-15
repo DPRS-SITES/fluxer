@@ -1667,7 +1667,7 @@
 						"content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}
 					}
 				},
-				"description": "Enqueue one background administrative job. The `task` discriminator selects both the body variant and the ACL evaluated for the request: `update_user_flags` needs bulk:update:user_flags, `update_suspicious_activity_flags` needs bulk:update:suspicious_activity, `update_guild_features` needs bulk:update:guild_features, `add_guild_members` needs bulk:add:guild_members, `schedule_user_deletion` needs bulk:delete:users, and `delete_user_messages` needs bulk:delete:user_messages. Returns a job_id immediately; observe progress at /admin/jobs/:job_id. Note: the schedule_user_deletion worker skips Stripe refunds, session termination, and identifier banning — apply those separately for high-risk accounts.",
+				"description": "Enqueue one background administrative job. The `task` discriminator selects both the body variant and the ACL evaluated for the request: `update_user_flags` needs bulk:update:user_flags, `update_suspicious_activity_flags` needs bulk:update:suspicious_activity, `update_guild_features` needs bulk:update:guild_features, `add_guild_members` needs bulk:add:guild_members, `schedule_user_deletion` needs bulk:delete:users, and `delete_user_messages` needs bulk:delete:user_messages. Returns a job_id immediately; observe progress at /admin/jobs/:job_id.",
 				"security": [{"adminApiKey": []}],
 				"requestBody": {
 					"required": true,
@@ -10562,7 +10562,16 @@
 					},
 					"gateway_rollout": {"$ref": "#/components/schemas/GatewayRolloutConfigResponse"},
 					"voice_noise_suppression": {"$ref": "#/components/schemas/VoiceNoiseSuppressionConfigResponse"},
+					"guild_activity_log_presentation": {
+						"$ref": "#/components/schemas/GuildActivityLogPresentationConfigResponse"
+					},
 					"experiment_delivery": {"$ref": "#/components/schemas/ExperimentDeliveryConfigResponse"},
+					"message_hover_tracking": {"$ref": "#/components/schemas/MessageHoverTrackingConfigResponse"},
+					"message_keyboard_focus": {"$ref": "#/components/schemas/MessageKeyboardFocusConfigResponse"},
+					"blocked_message_groups": {"$ref": "#/components/schemas/BlockedMessageGroupsConfigResponse"},
+					"expression_info_card": {"$ref": "#/components/schemas/ExpressionInfoCardConfigResponse"},
+					"guild_header_collapse": {"$ref": "#/components/schemas/GuildHeaderCollapseConfigResponse"},
+					"typing_indicator_rework": {"$ref": "#/components/schemas/TypingIndicatorReworkConfigResponse"},
 					"registration": {
 						"type": "object",
 						"properties": {
@@ -10965,7 +10974,14 @@
 					"sso",
 					"gateway_rollout",
 					"voice_noise_suppression",
+					"guild_activity_log_presentation",
 					"experiment_delivery",
+					"message_hover_tracking",
+					"message_keyboard_focus",
+					"blocked_message_groups",
+					"expression_info_card",
+					"guild_header_collapse",
+					"typing_indicator_rework",
 					"registration",
 					"self_hosted",
 					"app_public",
@@ -11099,9 +11115,37 @@
 						"nullable": true,
 						"allOf": [{"$ref": "#/components/schemas/VoiceNoiseSuppressionConfigUpdateRequest"}]
 					},
+					"guild_activity_log_presentation": {
+						"nullable": true,
+						"allOf": [{"$ref": "#/components/schemas/GuildActivityLogPresentationConfigUpdateRequest"}]
+					},
 					"experiment_delivery": {
 						"nullable": true,
 						"allOf": [{"$ref": "#/components/schemas/ExperimentDeliveryConfigUpdateRequest"}]
+					},
+					"message_hover_tracking": {
+						"nullable": true,
+						"allOf": [{"$ref": "#/components/schemas/MessageHoverTrackingConfigUpdateRequest"}]
+					},
+					"message_keyboard_focus": {
+						"nullable": true,
+						"allOf": [{"$ref": "#/components/schemas/MessageKeyboardFocusConfigUpdateRequest"}]
+					},
+					"blocked_message_groups": {
+						"nullable": true,
+						"allOf": [{"$ref": "#/components/schemas/BlockedMessageGroupsConfigUpdateRequest"}]
+					},
+					"expression_info_card": {
+						"nullable": true,
+						"allOf": [{"$ref": "#/components/schemas/ExpressionInfoCardConfigUpdateRequest"}]
+					},
+					"guild_header_collapse": {
+						"nullable": true,
+						"allOf": [{"$ref": "#/components/schemas/GuildHeaderCollapseConfigUpdateRequest"}]
+					},
+					"typing_indicator_rework": {
+						"nullable": true,
+						"allOf": [{"$ref": "#/components/schemas/TypingIndicatorReworkConfigUpdateRequest"}]
 					},
 					"registration": {
 						"nullable": true,
@@ -11859,7 +11903,39 @@
 								},
 								"process_count": {"$ref": "#/components/schemas/Int32Type"},
 								"process_limit": {"$ref": "#/components/schemas/Int32Type"},
-								"uptime_seconds": {"$ref": "#/components/schemas/Int32Type"}
+								"uptime_seconds": {"$ref": "#/components/schemas/Int32Type"},
+								"cluster_metrics": {
+									"type": "object",
+									"properties": {
+										"gateway_cluster_member_count": {"$ref": "#/components/schemas/Int32Type"},
+										"gateway_cluster_discovery_resolve_failures_total": {"$ref": "#/components/schemas/Int32Type"},
+										"gateway_cluster_membership_transitions_total": {
+											"type": "object",
+											"properties": {
+												"up": {"$ref": "#/components/schemas/Int32Type"},
+												"down": {"$ref": "#/components/schemas/Int32Type"}
+											},
+											"required": ["up", "down"],
+											"additionalProperties": false
+										},
+										"gateway_node_router_owner_resolutions_total": {
+											"type": "object",
+											"properties": {
+												"self": {"$ref": "#/components/schemas/Int32Type"},
+												"peer": {"$ref": "#/components/schemas/Int32Type"}
+											},
+											"required": ["self", "peer"],
+											"additionalProperties": false
+										}
+									},
+									"required": [
+										"gateway_cluster_member_count",
+										"gateway_cluster_discovery_resolve_failures_total",
+										"gateway_cluster_membership_transitions_total",
+										"gateway_node_router_owner_resolutions_total"
+									],
+									"additionalProperties": false
+								}
 							},
 							"required": [
 								"node_id",
@@ -14885,7 +14961,10 @@
 						"nullable": true,
 						"type": "string"
 					},
-					"reason": {"description": "The reason provided for the action", "type": "string"},
+					"reason": {
+						"description": "The audit log reason. For bans and timeouts without an X-Audit-Log-Reason header this is the reason sent in the request body",
+						"type": "string"
+					},
 					"options": {
 						"description": "Additional options depending on action type",
 						"type": "object",
@@ -14893,15 +14972,22 @@
 							"channel_id": {"description": "Channel ID for relevant actions", "type": "string"},
 							"count": {"description": "Count of items affected", "type": "number"},
 							"delete_member_days": {
-								"description": "Number of days of messages to delete on member ban",
+								"description": "Deprecated. Whole days of messages deleted, written only by bans recorded before delete_message_seconds",
 								"type": "string"
+							},
+							"delete_message_seconds": {
+								"description": "Seconds of the banned user's messages that the ban deleted, present only when positive",
+								"type": "number"
 							},
 							"id": {"description": "ID of the affected entity", "type": "string"},
 							"integration_type": {"description": "Type of integration", "type": "number"},
 							"message_id": {"description": "Message ID for relevant actions", "type": "string"},
 							"members_removed": {"description": "Number of members removed", "type": "number"},
-							"role_name": {"description": "Name of the role", "type": "string"},
-							"type": {"description": "Type identifier", "type": "number"},
+							"role_name": {"description": "Name of the role when the entry was written", "type": "string"},
+							"type": {
+								"description": "Channel type for CHANNEL_CREATE, CHANNEL_UPDATE and CHANNEL_DELETE. Overwrite target type (0 role, 1 member) for CHANNEL_OVERWRITE_*",
+								"type": "number"
+							},
 							"inviter_id": {"description": "ID of the user who created the invite", "type": "string"},
 							"max_age": {"description": "Maximum age of the invite in seconds", "type": "number"},
 							"max_uses": {"description": "Maximum number of uses for the invite", "type": "number"},
@@ -15127,11 +15213,137 @@
 				"enum": ["open", "approval", "closed"],
 				"type": "string"
 			},
+			"TypingIndicatorReworkConfigUpdateRequest": {
+				"type": "object",
+				"properties": {
+					"enabled": {"type": "boolean"},
+					"rollout_basis_points": {"type": "integer", "minimum": 0, "maximum": 10000},
+					"rollout_salt": {"type": "string", "minLength": 1, "maxLength": 64},
+					"included_user_ids": {
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					},
+					"excluded_user_ids": {
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					}
+				}
+			},
+			"GuildHeaderCollapseConfigUpdateRequest": {
+				"type": "object",
+				"properties": {
+					"enabled": {"type": "boolean"},
+					"rollout_basis_points": {"type": "integer", "minimum": 0, "maximum": 10000},
+					"rollout_salt": {"type": "string", "minLength": 1, "maxLength": 64},
+					"included_user_ids": {
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					},
+					"excluded_user_ids": {
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					}
+				}
+			},
+			"ExpressionInfoCardConfigUpdateRequest": {
+				"type": "object",
+				"properties": {
+					"enabled": {"type": "boolean"},
+					"rollout_basis_points": {"type": "integer", "minimum": 0, "maximum": 10000},
+					"rollout_salt": {"type": "string", "minLength": 1, "maxLength": 64},
+					"included_user_ids": {
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					},
+					"excluded_user_ids": {
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					}
+				}
+			},
+			"BlockedMessageGroupsConfigUpdateRequest": {
+				"type": "object",
+				"properties": {
+					"enabled": {"type": "boolean"},
+					"rollout_basis_points": {"type": "integer", "minimum": 0, "maximum": 10000},
+					"rollout_salt": {"type": "string", "minLength": 1, "maxLength": 64},
+					"included_user_ids": {
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					},
+					"excluded_user_ids": {
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					}
+				}
+			},
+			"MessageKeyboardFocusConfigUpdateRequest": {
+				"type": "object",
+				"properties": {
+					"enabled": {"type": "boolean"},
+					"rollout_basis_points": {"type": "integer", "minimum": 0, "maximum": 10000},
+					"rollout_salt": {"type": "string", "minLength": 1, "maxLength": 64},
+					"included_user_ids": {
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					},
+					"excluded_user_ids": {
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					}
+				}
+			},
+			"MessageHoverTrackingConfigUpdateRequest": {
+				"type": "object",
+				"properties": {
+					"enabled": {"type": "boolean"},
+					"rollout_basis_points": {"type": "integer", "minimum": 0, "maximum": 10000},
+					"rollout_salt": {"type": "string", "minLength": 1, "maxLength": 64},
+					"included_user_ids": {
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					},
+					"excluded_user_ids": {
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					}
+				}
+			},
 			"ExperimentDeliveryConfigUpdateRequest": {
 				"type": "object",
 				"properties": {
 					"poll_interval_seconds": {"type": "integer", "minimum": 60, "maximum": 86400},
 					"poll_jitter_percent": {"type": "integer", "minimum": 0, "maximum": 50}
+				}
+			},
+			"GuildActivityLogPresentationConfigUpdateRequest": {
+				"type": "object",
+				"properties": {
+					"enabled": {"type": "boolean"},
+					"rollout_basis_points": {"type": "integer", "minimum": 0, "maximum": 10000},
+					"rollout_salt": {"type": "string", "minLength": 1, "maxLength": 64},
+					"included_user_ids": {
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					},
+					"excluded_user_ids": {
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					}
 				}
 			},
 			"VoiceNoiseSuppressionConfigUpdateRequest": {
@@ -15191,6 +15403,186 @@
 				"type": "string",
 				"enum": ["none", "standard", "gate", "speex", "rnnoise", "gtcrn", "deep_filter"]
 			},
+			"TypingIndicatorReworkConfigResponse": {
+				"type": "object",
+				"properties": {
+					"enabled": {"default": false, "type": "boolean"},
+					"config_version": {"default": 0, "type": "integer", "minimum": 0, "maximum": 9007199254740991},
+					"rollout_basis_points": {"default": 0, "type": "integer", "minimum": 0, "maximum": 10000},
+					"rollout_salt": {"default": "typing-indicator-rework-v1", "type": "string", "minLength": 1, "maxLength": 64},
+					"included_user_ids": {
+						"default": [],
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					},
+					"excluded_user_ids": {
+						"default": [],
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					}
+				},
+				"required": [
+					"enabled",
+					"config_version",
+					"rollout_basis_points",
+					"rollout_salt",
+					"included_user_ids",
+					"excluded_user_ids"
+				],
+				"additionalProperties": false
+			},
+			"GuildHeaderCollapseConfigResponse": {
+				"type": "object",
+				"properties": {
+					"enabled": {"default": false, "type": "boolean"},
+					"config_version": {"default": 0, "type": "integer", "minimum": 0, "maximum": 9007199254740991},
+					"rollout_basis_points": {"default": 0, "type": "integer", "minimum": 0, "maximum": 10000},
+					"rollout_salt": {"default": "guild-header-collapse-v1", "type": "string", "minLength": 1, "maxLength": 64},
+					"included_user_ids": {
+						"default": [],
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					},
+					"excluded_user_ids": {
+						"default": [],
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					}
+				},
+				"required": [
+					"enabled",
+					"config_version",
+					"rollout_basis_points",
+					"rollout_salt",
+					"included_user_ids",
+					"excluded_user_ids"
+				],
+				"additionalProperties": false
+			},
+			"ExpressionInfoCardConfigResponse": {
+				"type": "object",
+				"properties": {
+					"enabled": {"default": false, "type": "boolean"},
+					"config_version": {"default": 0, "type": "integer", "minimum": 0, "maximum": 9007199254740991},
+					"rollout_basis_points": {"default": 0, "type": "integer", "minimum": 0, "maximum": 10000},
+					"rollout_salt": {"default": "expression-info-card-v1", "type": "string", "minLength": 1, "maxLength": 64},
+					"included_user_ids": {
+						"default": [],
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					},
+					"excluded_user_ids": {
+						"default": [],
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					}
+				},
+				"required": [
+					"enabled",
+					"config_version",
+					"rollout_basis_points",
+					"rollout_salt",
+					"included_user_ids",
+					"excluded_user_ids"
+				],
+				"additionalProperties": false
+			},
+			"BlockedMessageGroupsConfigResponse": {
+				"type": "object",
+				"properties": {
+					"enabled": {"default": false, "type": "boolean"},
+					"config_version": {"default": 0, "type": "integer", "minimum": 0, "maximum": 9007199254740991},
+					"rollout_basis_points": {"default": 0, "type": "integer", "minimum": 0, "maximum": 10000},
+					"rollout_salt": {"default": "blocked-message-groups-v1", "type": "string", "minLength": 1, "maxLength": 64},
+					"included_user_ids": {
+						"default": [],
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					},
+					"excluded_user_ids": {
+						"default": [],
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					}
+				},
+				"required": [
+					"enabled",
+					"config_version",
+					"rollout_basis_points",
+					"rollout_salt",
+					"included_user_ids",
+					"excluded_user_ids"
+				],
+				"additionalProperties": false
+			},
+			"MessageKeyboardFocusConfigResponse": {
+				"type": "object",
+				"properties": {
+					"enabled": {"default": false, "type": "boolean"},
+					"config_version": {"default": 0, "type": "integer", "minimum": 0, "maximum": 9007199254740991},
+					"rollout_basis_points": {"default": 0, "type": "integer", "minimum": 0, "maximum": 10000},
+					"rollout_salt": {"default": "message-keyboard-focus-v1", "type": "string", "minLength": 1, "maxLength": 64},
+					"included_user_ids": {
+						"default": [],
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					},
+					"excluded_user_ids": {
+						"default": [],
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					}
+				},
+				"required": [
+					"enabled",
+					"config_version",
+					"rollout_basis_points",
+					"rollout_salt",
+					"included_user_ids",
+					"excluded_user_ids"
+				],
+				"additionalProperties": false
+			},
+			"MessageHoverTrackingConfigResponse": {
+				"type": "object",
+				"properties": {
+					"enabled": {"default": false, "type": "boolean"},
+					"config_version": {"default": 0, "type": "integer", "minimum": 0, "maximum": 9007199254740991},
+					"rollout_basis_points": {"default": 0, "type": "integer", "minimum": 0, "maximum": 10000},
+					"rollout_salt": {"default": "message-hover-tracking-v1", "type": "string", "minLength": 1, "maxLength": 64},
+					"included_user_ids": {
+						"default": [],
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					},
+					"excluded_user_ids": {
+						"default": [],
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					}
+				},
+				"required": [
+					"enabled",
+					"config_version",
+					"rollout_basis_points",
+					"rollout_salt",
+					"included_user_ids",
+					"excluded_user_ids"
+				],
+				"additionalProperties": false
+			},
 			"ExperimentDeliveryConfigResponse": {
 				"type": "object",
 				"properties": {
@@ -15198,6 +15590,41 @@
 					"poll_jitter_percent": {"default": 15, "type": "integer", "minimum": 0, "maximum": 50}
 				},
 				"required": ["poll_interval_seconds", "poll_jitter_percent"],
+				"additionalProperties": false
+			},
+			"GuildActivityLogPresentationConfigResponse": {
+				"type": "object",
+				"properties": {
+					"enabled": {"default": false, "type": "boolean"},
+					"config_version": {"default": 0, "type": "integer", "minimum": 0, "maximum": 9007199254740991},
+					"rollout_basis_points": {"default": 0, "type": "integer", "minimum": 0, "maximum": 10000},
+					"rollout_salt": {
+						"default": "guild-activity-log-presentation-v1",
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 64
+					},
+					"included_user_ids": {
+						"default": [],
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					},
+					"excluded_user_ids": {
+						"default": [],
+						"maxItems": 1000,
+						"type": "array",
+						"items": {"type": "string", "pattern": "^\\d{1,20}$"}
+					}
+				},
+				"required": [
+					"enabled",
+					"config_version",
+					"rollout_basis_points",
+					"rollout_salt",
+					"included_user_ids",
+					"excluded_user_ids"
+				],
 				"additionalProperties": false
 			},
 			"VoiceNoiseSuppressionConfigResponse": {

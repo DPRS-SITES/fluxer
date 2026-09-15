@@ -20,9 +20,37 @@ import {
 	VoiceNoiseSuppressionConfigUpdateRequest,
 } from '@fluxer/schema/src/domains/admin/VoiceNoiseSuppressionSchemas';
 import {
+	BlockedMessageGroupsConfigResponse,
+	BlockedMessageGroupsConfigUpdateRequest,
+} from '@fluxer/schema/src/domains/experiment/BlockedMessageGroupsSchemas';
+import {
 	ExperimentDeliveryConfigResponse,
 	ExperimentDeliveryConfigUpdateRequest,
 } from '@fluxer/schema/src/domains/experiment/ExperimentSchemas';
+import {
+	ExpressionInfoCardConfigResponse,
+	ExpressionInfoCardConfigUpdateRequest,
+} from '@fluxer/schema/src/domains/experiment/ExpressionInfoCardSchemas';
+import {
+	GuildActivityLogPresentationConfigResponse,
+	GuildActivityLogPresentationConfigUpdateRequest,
+} from '@fluxer/schema/src/domains/experiment/GuildActivityLogPresentationSchemas';
+import {
+	GuildHeaderCollapseConfigResponse,
+	GuildHeaderCollapseConfigUpdateRequest,
+} from '@fluxer/schema/src/domains/experiment/GuildHeaderCollapseSchemas';
+import {
+	MessageHoverTrackingConfigResponse,
+	MessageHoverTrackingConfigUpdateRequest,
+} from '@fluxer/schema/src/domains/experiment/MessageHoverTrackingSchemas';
+import {
+	MessageKeyboardFocusConfigResponse,
+	MessageKeyboardFocusConfigUpdateRequest,
+} from '@fluxer/schema/src/domains/experiment/MessageKeyboardFocusSchemas';
+import {
+	TypingIndicatorReworkConfigResponse,
+	TypingIndicatorReworkConfigUpdateRequest,
+} from '@fluxer/schema/src/domains/experiment/TypingIndicatorReworkSchemas';
 import {GuildMemberResponse} from '@fluxer/schema/src/domains/guild/GuildMemberSchemas';
 import {
 	InstanceCaptchaProviderSchema,
@@ -413,6 +441,8 @@ export const GenerateGiftCodesRequest = z.object({
 
 export type GenerateGiftCodesRequest = z.infer<typeof GenerateGiftCodesRequest>;
 
+const SsoAllowedDomainsSchema = z.array(z.string()).max(100);
+
 const SsoConfigResponse = z.object({
 	enabled: z.boolean(),
 	enforced: z.boolean(),
@@ -425,7 +455,7 @@ const SsoConfigResponse = z.object({
 	client_id: z.string().nullable(),
 	client_secret_set: z.boolean(),
 	scope: z.string().nullable(),
-	allowed_domains: z.array(z.string()).max(100),
+	allowed_domains: SsoAllowedDomainsSchema,
 	auto_provision: z.boolean(),
 	redirect_uri: z.string().nullable(),
 });
@@ -448,6 +478,7 @@ const RegistrationUrlResponse = z.object({
 	last_used_at: z.iso.datetime().nullable(),
 	last_used_by_user_id: SnowflakeStringType.nullable(),
 });
+export type RegistrationUrlResponse = z.infer<typeof RegistrationUrlResponse>;
 
 const PendingRegistrationResponse = z.object({
 	user_id: SnowflakeStringType,
@@ -459,6 +490,7 @@ const PendingRegistrationResponse = z.object({
 	registration_url_id: createStringType(1, 128).nullable(),
 	client_ip: z.string().nullable(),
 });
+export type PendingRegistrationResponse = z.infer<typeof PendingRegistrationResponse>;
 
 const InstanceRegistrationResponse = InstanceRegistrationConfigResponse.extend({
 	urls: z.array(RegistrationUrlResponse),
@@ -625,7 +657,14 @@ export const InstanceConfigResponse = z.object({
 	sso: SsoConfigResponse,
 	gateway_rollout: GatewayRolloutConfigResponse,
 	voice_noise_suppression: VoiceNoiseSuppressionConfigResponse,
+	guild_activity_log_presentation: GuildActivityLogPresentationConfigResponse,
 	experiment_delivery: ExperimentDeliveryConfigResponse,
+	message_hover_tracking: MessageHoverTrackingConfigResponse,
+	message_keyboard_focus: MessageKeyboardFocusConfigResponse,
+	blocked_message_groups: BlockedMessageGroupsConfigResponse,
+	expression_info_card: ExpressionInfoCardConfigResponse,
+	guild_header_collapse: GuildHeaderCollapseConfigResponse,
+	typing_indicator_rework: TypingIndicatorReworkConfigResponse,
 	registration: InstanceRegistrationResponse,
 	self_hosted: z.boolean(),
 	app_public: AppPublicConfigResponse,
@@ -636,10 +675,39 @@ export const InstanceConfigResponse = z.object({
 
 export type InstanceConfigResponse = z.infer<typeof InstanceConfigResponse>;
 
+const InstancePolicyUpdateSchema = z.object({
+	single_community_enabled: z.boolean().optional(),
+	single_community_name: z.string().trim().min(1).max(100).optional(),
+	direct_messages_disabled: z.boolean().optional(),
+	direct_messages_locked: z.literal(false).optional(),
+	premium_mode: z.enum(['mirror', 'everyone']).optional(),
+	services: z
+		.object({
+			gif_enabled: z.boolean().nullish(),
+			youtube_enabled: z.boolean().nullish(),
+			bluesky_enabled: z.boolean().nullish(),
+		})
+		.nullish(),
+	deferred_phone_gate: z
+		.object({
+			enabled: z.boolean().optional(),
+			window_hours: z.number().positive().max(8760).optional(),
+			member_threshold: z.number().int().positive().max(1_000_000).optional(),
+		})
+		.nullish(),
+});
+
 export const InstanceConfigUpdateRequest = z.object({
 	gateway_rollout: GatewayRolloutConfigUpdateRequest.nullish(),
 	voice_noise_suppression: VoiceNoiseSuppressionConfigUpdateRequest.nullish(),
+	guild_activity_log_presentation: GuildActivityLogPresentationConfigUpdateRequest.nullish(),
 	experiment_delivery: ExperimentDeliveryConfigUpdateRequest.nullish(),
+	message_hover_tracking: MessageHoverTrackingConfigUpdateRequest.nullish(),
+	message_keyboard_focus: MessageKeyboardFocusConfigUpdateRequest.nullish(),
+	blocked_message_groups: BlockedMessageGroupsConfigUpdateRequest.nullish(),
+	expression_info_card: ExpressionInfoCardConfigUpdateRequest.nullish(),
+	guild_header_collapse: GuildHeaderCollapseConfigUpdateRequest.nullish(),
+	typing_indicator_rework: TypingIndicatorReworkConfigUpdateRequest.nullish(),
 	registration: z
 		.object({
 			mode: InstanceRegistrationModeSchema.optional(),
@@ -659,7 +727,7 @@ export const InstanceConfigUpdateRequest = z.object({
 			client_id: z.string().nullish(),
 			client_secret: z.string().nullish(),
 			scope: z.string().nullish(),
-			allowed_domains: z.array(z.string()).max(100).optional(),
+			allowed_domains: SsoAllowedDomainsSchema.optional(),
 			auto_provision: z.boolean().optional(),
 		})
 		.nullish(),
@@ -741,29 +809,7 @@ export const InstanceConfigUpdateRequest = z.object({
 				.nullish(),
 		})
 		.nullish(),
-	policy: z
-		.object({
-			single_community_enabled: z.boolean().optional(),
-			single_community_name: z.string().trim().min(1).max(100).optional(),
-			direct_messages_disabled: z.boolean().optional(),
-			direct_messages_locked: z.literal(false).optional(),
-			premium_mode: z.enum(['mirror', 'everyone']).optional(),
-			services: z
-				.object({
-					gif_enabled: z.boolean().nullish(),
-					youtube_enabled: z.boolean().nullish(),
-					bluesky_enabled: z.boolean().nullish(),
-				})
-				.nullish(),
-			deferred_phone_gate: z
-				.object({
-					enabled: z.boolean().optional(),
-					window_hours: z.number().positive().max(8760).optional(),
-					member_threshold: z.number().int().positive().max(1_000_000).optional(),
-				})
-				.nullish(),
-		})
-		.nullish(),
+	policy: InstancePolicyUpdateSchema.nullish(),
 });
 
 export type InstanceConfigUpdateRequest = z.infer<typeof InstanceConfigUpdateRequest>;
@@ -1140,6 +1186,20 @@ export const NodeStatsResponse = z.object({
 				process_count: Int32Type,
 				process_limit: Int32Type,
 				uptime_seconds: Int32Type,
+				cluster_metrics: z
+					.object({
+						gateway_cluster_member_count: Int32Type,
+						gateway_cluster_discovery_resolve_failures_total: Int32Type,
+						gateway_cluster_membership_transitions_total: z.object({
+							up: Int32Type,
+							down: Int32Type,
+						}),
+						gateway_node_router_owner_resolutions_total: z.object({
+							self: Int32Type,
+							peer: Int32Type,
+						}),
+					})
+					.optional(),
 			}),
 		)
 		.max(1000),
