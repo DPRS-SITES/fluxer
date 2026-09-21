@@ -1,4 +1,4 @@
-name: build desktop maybe
+name: build Avia Client
 
 on:
   workflow_dispatch:
