@@ -75,10 +75,11 @@ jobs:
         include:
           - platform: linux
             arch: x64
-            os: ubuntu-latest
+            os: ubuntu-22.04
           - platform: windows
             arch: x64
             os: windows-latest
+
     env:
       CHANNEL: ${{ needs.meta.outputs.channel }}
       BUILD_CHANNEL: ${{ needs.meta.outputs.build_channel }}
@@ -95,6 +96,7 @@ jobs:
       PLATFORM: ${{ matrix.platform }}
       ARCH: ${{ matrix.arch }}
       ELECTRON_ARCH: ${{ matrix.arch }}
+
     steps:
       - name: Checkout CI helpers
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
@@ -112,6 +114,15 @@ jobs:
         uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9
         with:
           toolchain: "1.93.0"
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: "3.13"
+
+      - name: Install Python setuptools (Linux)
+        if: matrix.platform == 'linux'
+        run: pip install setuptools --break-system-packages || pip install setuptools
 
       - name: Shorten Windows paths and pin pnpm store
         if: runner.os == 'Windows'
