@@ -1,4 +1,4 @@
-name: build Avia Client
+name: build AviaClient
 
 on:
   workflow_dispatch:
