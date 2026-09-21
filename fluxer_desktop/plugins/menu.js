@@ -644,12 +644,19 @@
     function injectToolbarButton() {
         if (document.getElementById("avia-menu-toolbar-btn")) return;
 
-        const pinBtn = document.querySelector('button[aria-label="Pinned messages"]');
-        if (!pinBtn) return;
+        const targetPath = "M19.3333 2H4.15583C2.95333 2 2.01083 2.96417 2.01083 4.16667L2 19.3333C2 20.525 2.95333 21.5 4.15583 21.5H19.3333C20.525 21.5 21.5 20.525 21.5 19.3333V4.16667C21.5 2.96417 20.525 2 19.3333 2ZM19.3333 15H15C15 16.7983 13.5375 18.25 11.75 18.25C9.9625 18.25 8.5 16.7983 8.5 15H4.15583V4.16667H19.3333V15Z";
 
-        const btn = pinBtn.cloneNode(false);
+        const svgPath = [...document.querySelectorAll("path")].find(p =>
+            (p.getAttribute("d") || "").trim() === targetPath
+        );
+        if (!svgPath) return;
+
+        const sourceBtn = svgPath.closest("button") || svgPath.closest("a");
+        if (!sourceBtn) return;
+
+        const btn = sourceBtn.cloneNode(false);
         btn.id = "avia-menu-toolbar-btn";
-        btn.setAttribute("aria-label", "Avia Menu");
+        btn.removeAttribute("aria-label");
         btn.removeAttribute("aria-haspopup");
         btn.removeAttribute("aria-expanded");
 
@@ -665,7 +672,7 @@
             openMenu(btn);
         });
 
-        pinBtn.insertAdjacentElement("afterend", btn);
+        sourceBtn.insertAdjacentElement("afterend", btn);
     }
 
     const observer = new MutationObserver(() => {
