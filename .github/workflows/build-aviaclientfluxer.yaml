@@ -61,7 +61,6 @@ jobs:
           cargo run --locked --quiet --manifest-path tools/ci/Cargo.toml -- build-desktop
           --step set_metadata
           --channel "${{ inputs.channel }}"
-          --test-build "true"
 
   build:
     name: Build ${{ matrix.platform }} (${{ matrix.arch }})
