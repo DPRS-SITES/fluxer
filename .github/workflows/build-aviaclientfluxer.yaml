@@ -147,7 +147,7 @@ jobs:
       - name: Set up pnpm via corepack
         run: >-
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step setup_pnpm_corepack
+          --step setup_pnpm
 
       - name: Resolve pnpm store path (Windows)
         if: runner.os == 'Windows'
