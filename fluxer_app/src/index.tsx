@@ -18,6 +18,8 @@ import {Routes} from '@app/app/Routes';
 import {AppErrorBoundary} from '@app/features/app/components/AppErrorBoundary';
 import {BootstrapErrorScreen} from '@app/features/app/components/BootstrapErrorScreen';
 import {ErrorFallback} from '@app/features/app/components/ErrorFallback';
+import {runDomainMigrationPreMount} from '@app/features/app/domain_migration/DomainMigrationPreMount';
+import {resolvePasskeyBridgeOpenerOrigin} from '@app/features/auth/utils/PasskeyBridgeProtocol';
 import {installSelfXssNotice} from '@app/features/devtools/utils/SelfXssNotice';
 import {AppI18nProvider} from '@app/features/i18n/components/AppI18nProvider';
 import {installLocaleSwitchWatchdog} from '@app/features/i18n/utils/LocaleSwitchWatchdog';
@@ -86,7 +88,19 @@ async function logClientInfo(): Promise<void> {
 	}
 }
 
+async function preloadMarkdownParser(): Promise<void> {
+	try {
+		const {preloadMarkdownParserWasm} = await loadLazyModule(
+			() => import('@app/features/messaging/utils/markdown/parser/MarkdownParserWasm'),
+		);
+		await preloadMarkdownParserWasm();
+	} catch (error) {
+		logger.warn('Failed to preload markdown parser:', error);
+	}
+}
+
 async function bootstrapThemeStudio(): Promise<void> {
+	const markdownParserReady = preloadMarkdownParser();
 	const [{ThemeStudioStandaloneApp}, {setupHttp}, {default: AccountManager}] = await Promise.all([
 		loadLazyModule(() => import('@app/features/theme_studio/ThemeStudioStandaloneApp')),
 		loadLazyModule(() => import('@app/app/SetupHttp')),
@@ -94,6 +108,7 @@ async function bootstrapThemeStudio(): Promise<void> {
 	]);
 	await AccountManager.bootstrap();
 	setupHttp();
+	await markdownParserReady;
 	mountRoot(
 		<AppI18nProvider i18n={i18n}>
 			<ThemeStudioStandaloneApp data-flx="index.render-theme-studio.theme-studio-standalone-app" />
@@ -102,7 +117,21 @@ async function bootstrapThemeStudio(): Promise<void> {
 	);
 }
 
+async function bootstrapPasskeyBridge(openerOrigin: string): Promise<void> {
+	const [{PasskeyBridgeScreen}] = await Promise.all([
+		loadLazyModule(() => import('@app/features/auth/passkey_bridge/PasskeyBridgeScreen')),
+		initI18n(),
+	]);
+	mountRoot(
+		<AppI18nProvider i18n={i18n}>
+			<PasskeyBridgeScreen openerOrigin={openerOrigin} data-flx="index.passkey-bridge.passkey-bridge-screen" />
+		</AppI18nProvider>,
+		'index.passkey-bridge',
+	);
+}
+
 async function bootstrapApp(): Promise<void> {
+	const markdownParserReady = preloadMarkdownParser();
 	const [
 		{App},
 		{setupHttp},
@@ -148,12 +177,21 @@ async function bootstrapApp(): Promise<void> {
 	await AccountManager.bootstrap();
 	setupHttp();
 	initializeEmojiParser();
+	await markdownParserReady;
 	mountRoot(<App data-flx="index.bootstrap.app" />, 'index.bootstrap');
 	QuickSwitcher.preloadModal();
 	registerServiceWorker();
 }
 
 async function bootstrap(): Promise<void> {
+	const passkeyBridgeOpenerOrigin = resolvePasskeyBridgeOpenerOrigin(window.location.origin, window.location.pathname);
+	if (passkeyBridgeOpenerOrigin !== null) {
+		await bootstrapPasskeyBridge(passkeyBridgeOpenerOrigin);
+		return;
+	}
+	if (await runDomainMigrationPreMount()) {
+		return;
+	}
 	scheduleNonLatinScriptFaces();
 	await initI18n();
 	installLocaleSwitchWatchdog();

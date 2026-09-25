@@ -26,7 +26,6 @@ import {
 	appendEnabledBlinkFeature,
 	appendEnabledChromiumFeatures,
 	appendLinuxChromiumFlagsConfig,
-	appendLinuxOzonePlatformHint,
 	appendWindowsGpuDriverWorkaroundSwitches,
 	BASE_DISABLED_CHROMIUM_FEATURES,
 	MIDDLE_CLICK_AUTOSCROLL_BLINK_FEATURE,
@@ -296,7 +295,6 @@ if (launchConfigurationError) {
 	if (launchDiagnosticOptions.safeMode !== true) {
 		appendLinuxChromiumFlagsConfig(userDataConfig.channel);
 	}
-	appendLinuxOzonePlatformHint();
 	if (process.platform === 'win32') {
 		app.setToastActivatorCLSID(WINDOWS_TOAST_ACTIVATOR_CLSID);
 		app.setAppUserModelId(WINDOWS_APP_USER_MODEL_ID);
