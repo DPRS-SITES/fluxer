@@ -1,0 +1,734 @@
+(function () {
+
+    if (window.__AVIA_PLUGINS__) return;
+    window.__AVIA_PLUGINS__ = true;
+
+    const STORAGE_KEY = "avia_plugins";
+
+    const runningPlugins = {};
+    const pluginErrors = {};
+    const injectionQueue = [];
+
+    const getPlugins = () => JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    const setPlugins = (data) => localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+    function normalizePluginUrl(url) {
+        try {
+            const u = new URL(url);
+
+            if (u.hostname === "github.com") {
+                const m = u.pathname.match(/^\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/);
+                if (m) {
+                    return `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}/${m[4]}`;
+                }
+                return url;
+            }
+
+            if (u.hostname === "raw.githubusercontent.com") return url;
+
+            if (u.hostname === "raw.codeberg.page") return url;
+
+            if (u.hostname === "codeberg.org") {
+
+                if (u.pathname.startsWith("/api/v1/repos/")) return url;
+
+                const parts = u.pathname.split("/").filter(Boolean);
+
+                if (parts.length >= 5 && (parts[2] === "raw" || parts[2] === "src")) {
+                    const user       = parts[0];
+                    const repo       = parts[1];
+                    const branchName = parts[3] === "branch" || parts[3] === "commit" || parts[3] === "tag"
+                        ? parts[4]
+                        : parts[3];
+                    const fileStart  = parts[3] === "branch" || parts[3] === "commit" || parts[3] === "tag"
+                        ? 5
+                        : 4;
+                    const filePath   = parts.slice(fileStart).join("/");
+
+                    return `https://codeberg.org/api/v1/repos/${user}/${repo}/raw/${filePath}?ref=${branchName}`;
+                }
+
+                if (parts.length >= 4 && parts[2] === "raw") {
+                    const user       = parts[0];
+                    const repo       = parts[1];
+                    const branchName = parts[3];
+                    const filePath   = parts.slice(4).join("/");
+
+                    return `https://codeberg.org/api/v1/repos/${user}/${repo}/raw/${filePath}?ref=${branchName}`;
+                }
+
+                if (parts.length >= 5 && parts[2] === "src" && parts[3] === "branch") {
+                    const user     = parts[0];
+                    const repo     = parts[1];
+                    const branch   = parts[4];
+                    const filePath = parts.slice(5).join("/");
+                    return `https://codeberg.org/api/v1/repos/${user}/${repo}/raw/${filePath}?ref=${branch}`;
+                }
+            }
+        } catch (_) {}
+        return url;
+    }
+
+    async function processQueue() {
+        if (processQueue.running) return;
+        processQueue.running = true;
+        while (injectionQueue.length) {
+            const { plugin, force } = injectionQueue.shift();
+            await loadPluginInternal(plugin, force);
+        }
+        processQueue.running = false;
+    }
+
+    function queuePlugin(plugin, force = false) {
+        injectionQueue.push({ plugin, force });
+        processQueue();
+    }
+
+    async function loadPluginInternal(plugin, force = false) {
+        if (runningPlugins[plugin.url] && !force) return;
+        if (force) stopPlugin(plugin);
+        try {
+            const fetchUrl = normalizePluginUrl(plugin.url);
+            const res = await fetch(fetchUrl);
+            if (!res.ok) throw new Error("Fetch failed");
+            const code = await res.text();
+            delete pluginErrors[plugin.url];
+            const script = document.createElement("script");
+            script.textContent = code;
+            script.dataset.pluginUrl = plugin.url;
+            document.body.appendChild(script);
+            runningPlugins[plugin.url] = script;
+        } catch {
+            pluginErrors[plugin.url] = true;
+        }
+        renderPanel();
+    }
+
+    function stopPlugin(plugin) {
+        const script = runningPlugins[plugin.url];
+        if (!script) return;
+        script.remove();
+        delete runningPlugins[plugin.url];
+        delete pluginErrors[plugin.url];
+        renderPanel();
+    }
+
+    function preloadMonaco() {
+        return new Promise(resolve => {
+            if (window.monaco) return resolve();
+            const loader = document.createElement("script");
+            loader.src = "https://cdn.jsdelivr.net/npm/monaco-editor@0.50.0/min/vs/loader.js";
+            loader.onload = function () {
+                require.config({ paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.50.0/min/vs" } });
+                require(["vs/editor/editor.main"], () => resolve());
+            };
+            document.head.appendChild(loader);
+        });
+    }
+
+    async function openViewerPanel(plugin) {
+        await preloadMonaco();
+        const existing = document.getElementById("avia-plugin-viewer-panel");
+        if (existing) existing.remove();
+
+        const panel = document.createElement("div");
+        panel.id = "avia-plugin-viewer-panel";
+        Object.assign(panel.style, {
+            position: "fixed",
+            bottom: "24px",
+            left: "24px",
+            width: "700px",
+            height: "480px",
+            background: "var(--md-sys-color-surface, #1e1e1e)",
+            borderRadius: "16px",
+            boxShadow: "0 8px 28px rgba(0,0,0,0.45)",
+            zIndex: "9999999",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            border: "1px solid rgba(255,255,255,0.08)",
+            backdropFilter: "blur(12px)",
+            color: "#fff"
+        });
+
+        const header = document.createElement("div");
+        Object.assign(header.style, {
+            padding: "14px 16px",
+            fontWeight: "600",
+            fontSize: "14px",
+            background: "var(--md-sys-color-surface-container, rgba(255,255,255,0.04))",
+            borderBottom: "1px solid rgba(255,255,255,0.08)",
+            cursor: "move",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            flex: "0 0 auto"
+        });
+
+        const titleText = document.createElement("span");
+        titleText.textContent = `Viewing: ${plugin.name}`;
+        titleText.style.flex = "1";
+
+        const readOnlyBadge = document.createElement("span");
+        readOnlyBadge.textContent = "READ ONLY";
+        Object.assign(readOnlyBadge.style, {
+            fontSize: "10px",
+            fontWeight: "700",
+            letterSpacing: "0.08em",
+            padding: "2px 8px",
+            borderRadius: "20px",
+            background: "rgba(255,180,0,0.15)",
+            color: "#ffb400",
+            border: "1px solid rgba(255,180,0,0.3)"
+        });
+
+        const closeBtn = document.createElement("div");
+        closeBtn.textContent = "✕";
+        Object.assign(closeBtn.style, {
+            cursor: "pointer",
+            opacity: "0.6",
+            fontSize: "15px",
+            lineHeight: "1",
+            padding: "2px 4px"
+        });
+        closeBtn.onmouseenter = () => closeBtn.style.opacity = "1";
+        closeBtn.onmouseleave = () => closeBtn.style.opacity = "0.6";
+        closeBtn.onclick = () => panel.remove();
+
+        header.appendChild(titleText);
+        header.appendChild(readOnlyBadge);
+        header.appendChild(closeBtn);
+
+        const urlBar = document.createElement("div");
+        Object.assign(urlBar.style, {
+            padding: "8px 16px",
+            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            fontSize: "11px",
+            color: "rgba(255,255,255,0.35)",
+            fontFamily: "monospace",
+            background: "rgba(0,0,0,0.15)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            flex: "0 0 auto"
+        });
+        urlBar.textContent = plugin.url;
+        urlBar.title = plugin.url;
+
+        const editorContainer = document.createElement("div");
+        editorContainer.style.flex = "1";
+        editorContainer.style.overflow = "hidden";
+
+        const loadingMsg = document.createElement("div");
+        Object.assign(loadingMsg.style, {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            height: "100%",
+            opacity: "0.4",
+            fontSize: "13px"
+        });
+        loadingMsg.textContent = "Fetching source…";
+        editorContainer.appendChild(loadingMsg);
+
+        panel.appendChild(header);
+        panel.appendChild(urlBar);
+        panel.appendChild(editorContainer);
+        document.body.appendChild(panel);
+        enableDragOn(panel, header);
+
+        let code;
+        try {
+            const res = await fetch(normalizePluginUrl(plugin.url));
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            code = await res.text();
+        } catch (err) {
+            loadingMsg.textContent = `Failed to fetch source: ${err.message}`;
+            loadingMsg.style.color = "#ff4d4d";
+            loadingMsg.style.opacity = "1";
+            return;
+        }
+
+        editorContainer.removeChild(loadingMsg);
+        monaco.editor.create(editorContainer, {
+            value: code,
+            language: "javascript",
+            theme: "vs-dark",
+            readOnly: true,
+            automaticLayout: true,
+            minimap: { enabled: true },
+            fontSize: 13,
+            scrollBeyondLastLine: false,
+            wordWrap: "off",
+            domReadOnly: true,
+            renderValidationDecorations: "off",
+            renderLineHighlight: "none",
+            cursorStyle: "block",
+            cursorBlinking: "solid"
+        });
+    }
+
+    function togglePluginsPanel() {
+        let panel = document.getElementById('avia-plugins-panel');
+        if (panel) {
+            if (panel.style.display === 'none') {
+                panel.style.display = 'flex';
+                renderPanel();
+            } else {
+                panel.style.display = 'none';
+            }
+            return;
+        }
+
+        panel = document.createElement('div');
+        panel.id = 'avia-plugins-panel';
+        Object.assign(panel.style, {
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            width: '560px',
+            height: '520px',
+            background: 'var(--md-sys-color-surface, #1e1e1e)',
+            color: 'var(--md-sys-color-on-surface, #fff)',
+            borderRadius: '16px',
+            boxShadow: '0 8px 28px rgba(0,0,0,0.35)',
+            zIndex: '999999',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            border: '1px solid rgba(255,255,255,0.08)',
+            backdropFilter: 'blur(12px)'
+        });
+
+        const header = document.createElement('div');
+        Object.assign(header.style, {
+            padding: '14px 16px',
+            fontWeight: '600',
+            fontSize: '14px',
+            background: 'var(--md-sys-color-surface-container, rgba(255,255,255,0.04))',
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            cursor: 'move',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flex: '0 0 auto'
+        });
+
+        const headerTitle = document.createElement('span');
+        headerTitle.textContent = 'Plugins';
+
+        const closeBtn = document.createElement('div');
+        closeBtn.textContent = '✕';
+        Object.assign(closeBtn.style, {
+            cursor: 'pointer',
+            opacity: '0.7',
+            fontSize: '15px',
+            lineHeight: '1',
+            padding: '2px 4px'
+        });
+        closeBtn.onmouseenter = () => closeBtn.style.opacity = '1';
+        closeBtn.onmouseleave = () => closeBtn.style.opacity = '0.7';
+        closeBtn.onclick = () => panel.style.display = 'none';
+
+        header.appendChild(headerTitle);
+        header.appendChild(closeBtn);
+
+        const controlsBar = document.createElement('div');
+        Object.assign(controlsBar.style, {
+            padding: '12px 16px',
+            display: 'flex',
+            gap: '8px',
+            alignItems: 'center',
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            flex: '0 0 auto'
+        });
+
+        const nameInput = document.createElement('input');
+        nameInput.placeholder = 'Name';
+        styleInput(nameInput);
+        nameInput.style.width = '110px';
+
+        const urlInput = document.createElement('input');
+        urlInput.placeholder = 'Plugin URL';
+        styleInput(urlInput);
+        urlInput.style.flex = '1';
+
+        const addBtn = document.createElement('button');
+        addBtn.textContent = '+ Add';
+        styleBtn(addBtn);
+        addBtn.onclick = () => {
+            const name = nameInput.value.trim();
+            const url = urlInput.value.trim();
+            if (!name || !url) return;
+            const plugins = getPlugins();
+            plugins.push({ name, url, enabled: false });
+            setPlugins(plugins);
+            nameInput.value = '';
+            urlInput.value = '';
+            renderPanel();
+        };
+
+        const refreshBtn = document.createElement('button');
+        refreshBtn.textContent = 'Refresh';
+        styleBtn(refreshBtn);
+        refreshBtn.onclick = () => {
+            getPlugins().forEach(p => { if (p.enabled) queuePlugin(p, true); });
+        };
+
+        controlsBar.appendChild(nameInput);
+        controlsBar.appendChild(urlInput);
+        controlsBar.appendChild(addBtn);
+        controlsBar.appendChild(refreshBtn);
+
+        const searchBar = document.createElement('div');
+        Object.assign(searchBar.style, {
+            padding: '10px 16px',
+            borderBottom: '1px solid rgba(255,255,255,0.08)',
+            flex: '0 0 auto'
+        });
+
+        const searchInput = document.createElement('input');
+        searchInput.placeholder = 'Search plugins…';
+        styleInput(searchInput);
+        searchInput.style.width = '100%';
+        searchInput.oninput = () => renderPanel(searchInput.value.toLowerCase());
+        searchBar.appendChild(searchInput);
+
+        const content = document.createElement('div');
+        content.id = 'avia-plugins-content';
+        Object.assign(content.style, {
+            flex: '1',
+            overflowY: 'auto',
+            padding: '12px 16px 16px',
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none'
+        });
+        if (!document.getElementById('avia-scrollbar-hide')) {
+            const s = document.createElement('style');
+            s.id = 'avia-scrollbar-hide';
+            s.textContent = '#avia-plugins-content::-webkit-scrollbar{display:none}';
+            document.head.appendChild(s);
+        }
+
+        panel.appendChild(header);
+        panel.appendChild(controlsBar);
+        panel.appendChild(searchBar);
+        panel.appendChild(content);
+        document.body.appendChild(panel);
+        enableDragOn(panel, header);
+        renderPanel();
+    }
+
+    function renderPanel(filter = '') {
+        const content = document.getElementById('avia-plugins-content');
+        if (!content) return;
+        content.innerHTML = '';
+
+        const plugins = getPlugins();
+        const runSnap = { ...runningPlugins };
+        const errSnap = { ...pluginErrors };
+
+        const visible = (filter
+            ? plugins.filter(p => p.name.toLowerCase().includes(filter))
+            : plugins).slice().reverse();
+
+        if (visible.length === 0) {
+            const empty = document.createElement('div');
+            empty.textContent = plugins.length === 0
+                ? 'No plugins yet. Add one above.'
+                : 'No plugins match your search.';
+            Object.assign(empty.style, { opacity: '0.4', fontSize: '13px', textAlign: 'center', padding: '24px 0' });
+            content.appendChild(empty);
+            return;
+        }
+
+        const sectionLabel = document.createElement('div');
+        sectionLabel.textContent = `User Plugins: ${visible.length}`;
+        Object.assign(sectionLabel.style, {
+            fontSize: '11px',
+            fontWeight: '700',
+            letterSpacing: '0.06em',
+            textTransform: 'uppercase',
+            color: 'rgba(255,255,255,0.35)',
+            marginBottom: '10px'
+        });
+        content.appendChild(sectionLabel);
+
+        const grid = document.createElement('div');
+        Object.assign(grid.style, {
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+            gap: '10px'
+        });
+
+        visible.forEach((plugin) => {
+            const realIndex = plugins.indexOf(plugin);
+            const isRunning = !!runSnap[plugin.url];
+            const hasError = !!errSnap[plugin.url];
+
+            const card = document.createElement('div');
+            Object.assign(card.style, {
+                background: 'rgba(255,255,255,0.04)',
+                border: `1px solid ${hasError ? 'rgba(255,77,77,0.3)' : isRunning ? 'rgba(77,255,136,0.25)' : 'rgba(255,255,255,0.06)'}`,
+                borderRadius: '10px',
+                padding: '12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+            });
+            card.onmouseenter = () => {
+                if (!hasError && !isRunning) card.style.borderColor = 'rgba(255,255,255,0.13)';
+            };
+            card.onmouseleave = () => {
+                card.style.borderColor = hasError ? 'rgba(255,77,77,0.3)' : isRunning ? 'rgba(77,255,136,0.25)' : 'rgba(255,255,255,0.06)';
+            };
+
+            const topRow = document.createElement('div');
+            Object.assign(topRow.style, {
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '8px'
+            });
+
+            const nameWrap = document.createElement('div');
+            Object.assign(nameWrap.style, { display: 'flex', alignItems: 'center', gap: '7px', minWidth: '0', flex: '1' });
+
+            const dot = document.createElement('div');
+            Object.assign(dot.style, {
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                flexShrink: '0',
+                background: hasError ? '#ff4d4d' : isRunning ? '#4dff88' : '#555',
+                boxShadow: hasError ? '0 0 5px #ff4d4d' : isRunning ? '0 0 5px #4dff88' : 'none'
+            });
+
+            const nameEl = document.createElement('div');
+            nameEl.textContent = plugin.name;
+            Object.assign(nameEl.style, {
+                fontSize: '13px',
+                fontWeight: '600',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap'
+            });
+
+            nameWrap.appendChild(dot);
+            nameWrap.appendChild(nameEl);
+
+            const switchWrap = document.createElement('div');
+            Object.assign(switchWrap.style, {
+                position: 'relative',
+                width: '36px',
+                height: '20px',
+                flexShrink: '0',
+                cursor: 'pointer'
+            });
+
+            const track = document.createElement('div');
+            Object.assign(track.style, {
+                position: 'absolute',
+                inset: '0',
+                borderRadius: '10px',
+                background: plugin.enabled ? 'rgba(100,160,255,0.6)' : 'rgba(255,255,255,0.15)',
+                transition: 'background 0.2s'
+            });
+
+            const thumb = document.createElement('div');
+            Object.assign(thumb.style, {
+                position: 'absolute',
+                top: '3px',
+                left: plugin.enabled ? '19px' : '3px',
+                width: '14px',
+                height: '14px',
+                borderRadius: '50%',
+                background: '#fff',
+                transition: 'left 0.2s',
+                pointerEvents: 'none'
+            });
+
+            switchWrap.appendChild(track);
+            switchWrap.appendChild(thumb);
+
+            switchWrap.onclick = () => {
+                plugin.enabled = !plugin.enabled;
+                setPlugins(plugins);
+                if (plugin.enabled) queuePlugin(plugin);
+                else stopPlugin(plugin);
+                renderPanel(filter);
+            };
+
+            topRow.appendChild(nameWrap);
+            topRow.appendChild(switchWrap);
+
+            const footer = document.createElement('div');
+            Object.assign(footer.style, { display: 'flex', gap: '6px', marginTop: 'auto', paddingTop: '2px' });
+
+            const LOCAL_KEY = "avia_local_plugins";
+            const getLocals = () => JSON.parse(localStorage.getItem(LOCAL_KEY) || "[]");
+
+            const toLocalBtn = document.createElement('button');
+            styleBtn(toLocalBtn, 'rgba(80,200,120,0.15)');
+            toLocalBtn.style.flex = '1';
+            const alreadyLocal = getLocals().some(p => p.name === plugin.name);
+            if (alreadyLocal) {
+                toLocalBtn.textContent = 'In Local';
+                toLocalBtn.disabled = true;
+                toLocalBtn.style.opacity = '0.45';
+                toLocalBtn.onmouseenter = null;
+                toLocalBtn.onmouseleave = null;
+            } else {
+                toLocalBtn.textContent = 'To Local';
+            }
+
+            toLocalBtn.onclick = async () => {
+                if (toLocalBtn.disabled) return;
+                toLocalBtn.textContent = '…';
+                toLocalBtn.disabled = true;
+
+                let code = null;
+                const scriptEl = runningPlugins[plugin.url];
+                if (scriptEl && scriptEl.textContent) code = scriptEl.textContent;
+
+                if (!code) {
+                    try {
+                        const res = await fetch(normalizePluginUrl(plugin.url));
+                        if (!res.ok) throw new Error("HTTP " + res.status);
+                        code = await res.text();
+                    } catch {
+                        toLocalBtn.textContent = 'Failed';
+                        setTimeout(() => { toLocalBtn.textContent = 'Local'; toLocalBtn.disabled = false; }, 2000);
+                        return;
+                    }
+                }
+
+                const locals = getLocals();
+                if (locals.some(p => p.name === plugin.name)) {
+                    toLocalBtn.textContent = 'In Local';
+                    return;
+                }
+                locals.push({
+                    id: "local_" + Date.now() + "_" + Math.random().toString(36).slice(2),
+                    name: plugin.name,
+                    code,
+                    enabled: plugin.enabled
+                });
+                localStorage.setItem(LOCAL_KEY, JSON.stringify(locals));
+                window.dispatchEvent(new Event("avia-local-plugin-list-changed"));
+                stopPlugin(plugin);
+                plugins.splice(realIndex, 1);
+                setPlugins(plugins);
+                renderPanel(filter);
+            };
+
+            const viewBtn = document.createElement('button');
+            viewBtn.textContent = 'View';
+            styleBtn(viewBtn, 'rgba(100,160,255,0.15)');
+            viewBtn.style.flex = '1';
+            viewBtn.onclick = () => openViewerPanel(plugin);
+
+            const removeBtn = document.createElement('button');
+            removeBtn.textContent = '✕';
+            styleBtn(removeBtn, 'rgba(255,80,80,0.15)');
+            removeBtn.onclick = () => {
+                stopPlugin(plugin);
+                plugins.splice(realIndex, 1);
+                setPlugins(plugins);
+                renderPanel(filter);
+            };
+
+            footer.appendChild(toLocalBtn);
+            footer.appendChild(viewBtn);
+            footer.appendChild(removeBtn);
+
+            card.appendChild(topRow);
+            card.appendChild(footer);
+            grid.appendChild(card);
+        });
+
+        content.appendChild(grid);
+    }
+
+    function styleInput(input) {
+        Object.assign(input.style, {
+            padding: '6px 8px',
+            borderRadius: '8px',
+            border: '1px solid rgba(255,255,255,0.1)',
+            background: 'rgba(255,255,255,0.05)',
+            color: '#fff',
+            fontSize: '13px'
+        });
+    }
+
+    function styleBtn(btn, bg) {
+        Object.assign(btn.style, {
+            padding: '5px 12px',
+            borderRadius: '8px',
+            border: 'none',
+            background: bg || 'rgba(255,255,255,0.08)',
+            color: '#fff',
+            cursor: 'pointer',
+            fontSize: '12px',
+            whiteSpace: 'nowrap'
+        });
+        btn.onmouseenter = () => btn.style.opacity = '0.75';
+        btn.onmouseleave = () => btn.style.opacity = '1';
+    }
+
+    function enableDragOn(panel, header) {
+        let isDragging = false, offsetX, offsetY;
+        header.addEventListener('mousedown', e => {
+            isDragging = true;
+            offsetX = e.clientX - panel.offsetLeft;
+            offsetY = e.clientY - panel.offsetTop;
+            document.body.style.userSelect = 'none';
+        });
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+            document.body.style.userSelect = '';
+        });
+        document.addEventListener('mousemove', e => {
+            if (!isDragging) return;
+            panel.style.left = (e.clientX - offsetX) + 'px';
+            panel.style.top = (e.clientY - offsetY) + 'px';
+            panel.style.right = 'auto';
+            panel.style.bottom = 'auto';
+        });
+    }
+
+    function registerWithAviaMenu() {
+        if (window.AviaMenu) {
+            window.AviaMenu.register({ id: "avia_plugins_online", name: "Plugins", icon: "extension", onClick: togglePluginsPanel });
+        } else {
+            const interval = setInterval(() => {
+                if (window.AviaMenu) {
+                    clearInterval(interval);
+                    window.AviaMenu.register({ id: "avia_plugins_online", name: "Plugins", icon: "extension", onClick: togglePluginsPanel });
+                }
+            }, 100);
+        }
+    }
+
+    function registerWithAviaCategory() {
+        if (window.AviaCategory) {
+            window.AviaCategory.register({ id: "avia_plugins_online", name: "Plugins", icon: "extension_fill", onClick: togglePluginsPanel });
+        } else {
+            const interval = setInterval(() => {
+                if (window.AviaCategory) {
+                    clearInterval(interval);
+                    window.AviaCategory.register({ id: "avia_plugins_online", name: "Plugins", icon: "extension_fill", onClick: togglePluginsPanel });
+                }
+            }, 100);
+        }
+    }
+
+    getPlugins().forEach(plugin => {
+        if (plugin.enabled) queuePlugin(plugin);
+    });
+
+    preloadMonaco();
+    registerWithAviaMenu();
+    registerWithAviaCategory();
+
+})();
