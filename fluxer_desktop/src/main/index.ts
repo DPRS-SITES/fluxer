@@ -121,8 +121,14 @@ loadDesktopConfig(userDataConfig.base);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const AVIA_PLUGINS: string[] = [
+	'RefreshTitlebarButton.js',
 	'menu.js',
+	'CategoryAPI.js',
+	'FontLoader.js',
+	'OnlinePlugins.js',
 	'localplugins.js',
+	'ThemesManager.js',
+	'AviaPluginThemeRepo.js',
 ];
 
 function loadAviaInject(window: Electron.BrowserWindow): void {
