@@ -76,11 +76,13 @@ export class UserAuthRequestService {
 		if (user.suspiciousActivityFlags !== 0) {
 			return;
 		}
-		const guildIds = await this.userRepository.getUserGuildIds(user.id);
-		if (guildIds.length > 0) {
-			const guilds = await this.guildRepository.listGuilds(guildIds);
-			if (guilds.some((g) => g.verificationLevel >= GuildVerificationLevel.VERY_HIGH)) {
-				return;
+		if (this.apiContext.services.config.instance.phoneVerificationEnabled) {
+			const guildIds = await this.userRepository.getUserGuildIds(user.id);
+			if (guildIds.length > 0) {
+				const guilds = await this.guildRepository.listGuilds(guildIds);
+				if (guilds.some((g) => g.verificationLevel >= GuildVerificationLevel.VERY_HIGH)) {
+					return;
+				}
 			}
 		}
 		throw new PhoneAddNotEligibleError();
@@ -126,13 +128,19 @@ export class UserAuthRequestService {
 		user,
 		data,
 		clientIp,
+		hasCaptchaToken,
+		verifyCaptcha,
 	}: UserAuthRequest<PhoneSendVerificationRequest> & {
 		clientIp: string;
+		hasCaptchaToken: boolean;
+		verifyCaptcha: () => Promise<boolean>;
 	}): Promise<PhoneSendVerificationResponse> {
 		await this.assertPhoneEligible(user);
 		const result = await AuthPhone.sendPhoneVerificationCode(this.apiContext, data.phone, user.id, {
 			clientIp,
 			channel: data.channel,
+			hasCaptchaToken,
+			verifyCaptcha,
 		});
 		if (result.channel === 'inbound_challenge') {
 			return {
@@ -140,7 +148,7 @@ export class UserAuthRequestService {
 				challenge_code: result.challengeCode,
 				our_number: result.ourNumber,
 				expires_at: result.expiresAt.toISOString(),
-				reason: result.reason,
+				reason: 'verification_required',
 			};
 		}
 		return {channel: result.channel};

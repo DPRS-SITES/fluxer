@@ -2,19 +2,21 @@
 
 import {Config} from '@app/api/Config';
 import type {UserRow} from '@app/api/database/types/UserTypes';
+import {sharedListHas} from '@app/api/infrastructure/activity/SharedLists';
 import {getCachedInstancePremiumMode} from '@app/api/limits/InstancePremiumModeCache';
 import type {User} from '@app/api/models/User';
-import {accountPolicyContactHasCapability} from '@app/api/risk/AccountPolicyService';
-import {getCachedDeferredPhoneGateEnabled} from '@app/api/risk/DeferredPhoneGateCache';
+import {extractEmailDomain} from '@app/api/utils/EmailDomainUtils';
 import {
 	DEFERRABLE_PHONE_FLAGS,
 	DEFERRED_PHONE_ON_COMMUNITY_JOIN,
+	PREMIUM_GRACE_PERIOD_DAYS,
+	PREMIUM_PAYMENT_RECOVERY_GRACE_DAYS,
 	PremiumFlags,
 	SuspiciousActivityFlags,
 	UserFlags,
 } from '@fluxer/constants/src/UserConstants';
+import {MS_PER_DAY} from '@fluxer/date_utils/src/DateConstants';
 import type {RequiredAction} from '@fluxer/schema/src/domains/user/UserResponseSchemas';
-import {ms} from 'itty-time';
 
 type ClauseAction = Exclude<RequiredAction, 'REQUIRE_INBOUND_PHONE_VERIFICATION'>;
 type VerificationChannel = 'email' | 'phone';
@@ -134,9 +136,6 @@ function suppressDeferredPhoneFlags(rawFlags: number): number {
 	if ((rawFlags & DEFERRED_PHONE_ON_COMMUNITY_JOIN) === 0) {
 		return rawFlags;
 	}
-	if (getCachedDeferredPhoneGateEnabled() === false && Config.abusePolicy.phoneFlagging.enabled) {
-		return rawFlags & ~DEFERRED_PHONE_ON_COMMUNITY_JOIN;
-	}
 	return rawFlags & ~DEFERRABLE_PHONE_FLAGS;
 }
 
@@ -148,7 +147,7 @@ export function getRequiredActions(user: User): ReadonlyArray<RequiredAction> {
 	if (!user.email) {
 		return [];
 	}
-	if (accountPolicyContactHasCapability(user.email, 'required_actions_exempt')) {
+	if (sharedListHas('email_domain_exempt', extractEmailDomain(user.email))) {
 		return [];
 	}
 	const activeClauses = buildRequiredActionClauses(flags).filter(
@@ -171,6 +170,33 @@ export function getRequiredActions(user: User): ReadonlyArray<RequiredAction> {
 	return requiredActions;
 }
 
+export function isAccountClosed(user: Pick<User, 'flags' | 'deletionStartedAt'>): boolean {
+	return (user.flags & UserFlags.DELETED) !== 0n || user.deletionStartedAt != null;
+}
+
+export function isTemporarilyBanned(user: Pick<User, 'flags' | 'tempBannedUntil'>, now = Date.now()): boolean {
+	return (
+		(user.flags & UserFlags.DISABLED) !== 0n && user.tempBannedUntil != null && user.tempBannedUntil.getTime() > now
+	);
+}
+
+function isAccountDisabled(user: Pick<User, 'flags' | 'tempBannedUntil'>, now = Date.now()): boolean {
+	if ((user.flags & UserFlags.DISABLED) === 0n) return false;
+	return user.tempBannedUntil == null || user.tempBannedUntil.getTime() > now;
+}
+
+export function isSignInRefused(user: Pick<User, 'flags' | 'deletionStartedAt' | 'tempBannedUntil'>): boolean {
+	return isAccountClosed(user) || isTemporarilyBanned(user);
+}
+
+export function canOwnerRunBots(owner: Pick<User, 'flags' | 'deletionStartedAt' | 'tempBannedUntil'>): boolean {
+	return !isAccountClosed(owner) && !isAccountDisabled(owner);
+}
+
+export function isDirectDeliverySuppressed(user: Pick<User, 'isBot' | 'flags'>): boolean {
+	return !user.isBot && (user.flags & UserFlags.SPAMMER) === UserFlags.SPAMMER;
+}
+
 export function getEffectiveSuspiciousFlags(user: User): number {
 	let flags = 0;
 	for (const action of getRequiredActions(user)) {
@@ -190,7 +216,15 @@ interface PremiumCheckable {
 	premiumFlags: number;
 }
 
-export const PREMIUM_GRACE_PERIOD_MS = ms('3 days');
+export const PREMIUM_GRACE_PERIOD_MS = PREMIUM_GRACE_PERIOD_DAYS * MS_PER_DAY;
+
+export function getPremiumPaymentRecoveryGraceMs(billingCycle: string | null | undefined): number {
+	const days =
+		billingCycle === 'yearly'
+			? PREMIUM_PAYMENT_RECOVERY_GRACE_DAYS.yearly
+			: PREMIUM_PAYMENT_RECOVERY_GRACE_DAYS.monthly;
+	return days * MS_PER_DAY;
+}
 
 export function getEffectivePremiumUntil(
 	user: Pick<PremiumCheckable, 'premiumUntil' | 'premiumGiftExtensionEndsAt'>,
@@ -287,8 +321,4 @@ export function isProfileSubstringExempt(user: Pick<PremiumCheckable, 'flags'>):
 
 export function isBugHunterBotUser(user: Pick<User, 'flags' | 'isBot'>): boolean {
 	return user.isBot && (user.flags & UserFlags.BUG_HUNTER) !== 0n;
-}
-
-export function canUseProfileTimezone(user: Pick<PremiumCheckable, 'flags'>): boolean {
-	return (user.flags & UserFlags.STAFF) !== 0n;
 }

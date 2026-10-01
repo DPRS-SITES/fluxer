@@ -20,7 +20,7 @@ An OAuth2 protocol failure raised by the [OAuth2 resource](/http-api/oauth2/) an
 
 ## Supplementary members
 
-The error code determines which supplementary members a failure has, and most codes have none. A client reads only the members documented for the code it matched. `errors` is the list of field violations. `retry_after` is the delay before another attempt is admitted. `global` is `true` on a global rate limit denial and `false` on a route one. `required_scope` is the OAuth2 scope the request is missing. `has_mfa` and `methods` are the [sudo mode](/http-api/users/mfa/#sudo-mode) proofs an account can supply.
+The error code determines which supplementary members a failure has, and most codes have none. A client reads only the members documented for the code it matched. `errors` is the list of field violations. `retry_after` is the delay before another attempt is admitted. `global` is `true` on a global rate limit denial and `false` on a route one. `required_scope` is the OAuth2 scope the request is missing. `has_mfa` and `methods` are the [sudo mode](/http-api/users/mfa/#sudo-mode) proofs an account can supply. `captcha_provider` and `altcha_challenge` are the challenge described in [CAPTCHA handling](/topics/captcha/).
 
 `GLOBAL_IP_BANNED` and `GLOBAL_IP_TEMPORARILY_BANNED` have their own members:
 
@@ -110,7 +110,7 @@ Fluxer answers an unrecognised failure with 500 `INTERNAL_SERVER_ERROR` and a ge
 
 ## Client errors as an abuse signal
 
-Repeated invalid requests or credentials can trigger a temporary IP ban. A `4xx` answer to a request with no authenticated user adds to that signal, weighted by status. A 429 weighs 3, a 401 weighs 0.75, a 403 weighs 0.5, and every other 4xx weighs 0.25. One request adds at most one signal, and a request from a private or exempt address adds none. Stop using a rejected credential. Change a rejected request before sending it again, and after a 429 wait `retry_after` before the next attempt.
+Repeated invalid requests or credentials can trigger a temporary IP ban. Stop using a rejected credential. Change a rejected request before sending it again, and after a 429 wait `retry_after` before the next attempt.
 
 :::caution[An automatic ban answers every request for 24 hours]
 A temporary ban lasts 24 hours by default. Requests from the banned address return 403 `GLOBAL_IP_TEMPORARILY_BANNED`. Use `expires_at` from the response when available.
@@ -163,6 +163,10 @@ You've already completed age verification
 ### `ALREADY_FRIENDS`
 
 You're already friends with this user
+
+### `ANNOUNCEMENT_CHANNEL_REQUIRED`
+
+This action is only available in announcement channels
 
 ### `APPLICATION_NOT_OWNED`
 
@@ -286,7 +290,19 @@ Community ownership can't be transferred to a bot
 
 ### `CAPTCHA_REQUIRED`
 
-Captcha is required
+Verification required. Try again
+
+### `CHANNEL_ALREADY_FOLLOWED`
+
+This channel already receives updates from that announcement channel
+
+### `CHANNEL_HAS_FOLLOWED_CHANNELS`
+
+Remove the followed channels posting here before converting it to an announcement channel
+
+### `CHANNEL_TYPE_CONVERSION_NOT_SUPPORTED`
+
+Only text and announcement channels can be converted into each other
 
 ### `COMMUNICATION_DISABLED`
 
@@ -404,6 +420,14 @@ This feature is temporarily disabled
 
 File size is too large
 
+### `FOLLOW_TARGET_CONTENT_WARNING_REQUIRED`
+
+Updates from a channel with a content warning can only go to a channel with a content warning or an age restriction
+
+### `FOLLOW_TARGET_NOT_AGE_RESTRICTED`
+
+Updates from an age-restricted channel can only go to an age-restricted channel
+
 ### `FORBIDDEN`
 
 Forbidden
@@ -447,6 +471,10 @@ One or more selected users can't be added to this group DM
 ### `GUILD_CREATION_EMAIL_VERIFICATION_REQUIRED`
 
 Email verification is required for this action
+
+### `GUILD_CREATION_PERMISSION_REQUIRED`
+
+You don't have permission to create communities on this instance
 
 ### `GUILD_EMAIL_VERIFICATION_REQUIRED`
 
@@ -506,7 +534,7 @@ Invalid bot flag
 
 ### `INVALID_CAPTCHA`
 
-Invalid captcha
+Verification failed. Try again
 
 ### `INVALID_CHANNEL_TYPE`
 
@@ -531,6 +559,10 @@ Invalid DSA verification code
 ### `INVALID_FLAGS_FORMAT`
 
 Invalid flags format
+
+### `INVALID_FOLLOW_TARGET_CHANNEL`
+
+Followed channels can only post into text channels
 
 ### `INVALID_FORM_BODY`
 
@@ -700,6 +732,18 @@ You've reached the maximum of {count, plural, one {# webhook} other {# webhooks}
 
 Media metadata error
 
+### `MESSAGE_ALREADY_CROSSPOSTED`
+
+This message has already been published
+
+### `MESSAGE_CROSSPOST_RATE_LIMITED`
+
+This channel has reached its publishing limit
+
+### `MESSAGE_NOT_CROSSPOSTABLE`
+
+This message cannot be published
+
 ### `METHOD_NOT_ALLOWED`
 
 Method not allowed
@@ -840,6 +884,10 @@ We couldn't process the request
 
 Email verification is required for this action
 
+### `PUBLISHED_MESSAGE_EDIT_RATE_LIMITED`
+
+This published message has reached its editing limit
+
 ### `PURCHASE_EMAIL_VERIFICATION_REQUIRED`
 
 Email verification is required for this action
@@ -919,6 +967,26 @@ Service unavailable
 ### `SSO_REQUIRED`
 
 Invalid request
+
+### `STORE_BILLING_UNAVAILABLE`
+
+In-app purchases are unavailable right now
+
+### `STORE_NOTIFICATION_UNAUTHORIZED`
+
+The notification signature is invalid
+
+### `STORE_PURCHASE_INVALID`
+
+This purchase could not be verified
+
+### `STORE_PURCHASE_OWNED_BY_OTHER_ACCOUNT`
+
+This purchase is linked to a different account
+
+### `STORE_PURCHASE_SANDBOX_NOT_ENTITLED`
+
+Test purchases cannot be applied to this account
 
 ### `STREAM_KEY_CHANNEL_MISMATCH`
 
@@ -1131,6 +1199,10 @@ Role wasn't found
 ### `UNKNOWN_STICKER`
 
 Unknown sticker
+
+### `UNKNOWN_STORE_PURCHASE`
+
+Unknown store purchase
 
 ### `UNKNOWN_SUSPICIOUS_FLAG`
 

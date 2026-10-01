@@ -3,6 +3,7 @@
 import {createHash, randomBytes} from 'node:crypto';
 import type {ApiContext} from '@app/api/ApiContext';
 import * as AuthSession from '@app/api/auth/AuthSession';
+import {assertEmailNotBlocklisted} from '@app/api/auth/EmailBlocklist';
 import {SsoIdentityRepository} from '@app/api/auth/services/SsoIdentityRepository';
 import {
 	parseTokenEndpointResponse,
@@ -11,6 +12,7 @@ import {
 } from '@app/api/auth/services/SsoUtils';
 import type {UserID} from '@app/api/BrandedTypes';
 import type {ILogger} from '@app/api/ILogger';
+import {emitActivity} from '@app/api/infrastructure/activity/ActivityEvents';
 import type {IDiscriminatorService} from '@app/api/infrastructure/DiscriminatorService';
 import type {KVActivityTracker} from '@app/api/infrastructure/KVActivityTracker';
 import {
@@ -33,6 +35,7 @@ import * as FetchUtils from '@app/api/utils/FetchUtils';
 import {isJsonRecord, parseJsonRecord, parseJsonWithGuard} from '@app/api/utils/JsonBoundaryUtils';
 import {generateRandomUsername} from '@app/api/utils/UsernameGenerator';
 import {deriveUsernameFromDisplayName} from '@app/api/utils/UsernameSuggestionUtils';
+import {SSO_MOBILE_CALLBACK_URI, SSO_MOBILE_STATE_PREFIX} from '@fluxer/constants/src/SsoConstants';
 import {ProfileFieldPrivacyFlags} from '@fluxer/constants/src/UserConstants';
 import {ValidationErrorCodes} from '@fluxer/constants/src/ValidationErrorCodes';
 import {RegistrationClosedError} from '@fluxer/errors/src/domains/auth/RegistrationClosedError';
@@ -104,7 +107,6 @@ interface JwksCacheEntry {
 const CODE_VERIFIER_BYTE_LENGTH = 32;
 const STATE_BYTE_LENGTH = 16;
 const NONCE_BYTE_LENGTH = 16;
-const MOBILE_SSO_REDIRECT_URI = 'fluxer://auth/sso/callback';
 
 let ssoLogger: ILogger | undefined;
 
@@ -134,11 +136,10 @@ function buildDiscoveryCacheKey(issuer: string): string {
 	return `sso:oidc-discovery:${key}`;
 }
 
-function resolveSsoRedirectUri(requestedRedirectUri: string | undefined, defaultRedirectUri: string): string {
-	if (!requestedRedirectUri) return defaultRedirectUri;
-	const trimmed = requestedRedirectUri.trim();
-	if (!trimmed) return defaultRedirectUri;
-	if (trimmed === defaultRedirectUri || trimmed === MOBILE_SSO_REDIRECT_URI) return trimmed;
+function isMobileSsoRedirectUri(requestedRedirectUri: string | undefined, defaultRedirectUri: string): boolean {
+	const trimmed = requestedRedirectUri?.trim();
+	if (!trimmed || trimmed === defaultRedirectUri) return false;
+	if (trimmed === SSO_MOBILE_CALLBACK_URI) return true;
 	throw InputValidationError.fromCode('redirect_uri', ValidationErrorCodes.INVALID_URL_FORMAT);
 }
 
@@ -283,16 +284,16 @@ export class SsoService {
 		redirect_uri: string;
 	}> {
 		const config = await this.requireReadyConfig();
-		const state = randomHexToken(STATE_BYTE_LENGTH);
+		const isMobile = isMobileSsoRedirectUri(redirectUri, config.redirectUri);
+		const state = `${isMobile ? SSO_MOBILE_STATE_PREFIX : ''}${randomHexToken(STATE_BYTE_LENGTH)}`;
 		const codeVerifier = randomBase64UrlToken(CODE_VERIFIER_BYTE_LENGTH);
 		const codeChallenge = buildCodeChallenge(codeVerifier);
 		const nonce = randomBase64UrlToken(NONCE_BYTE_LENGTH);
-		const ssoRedirectUri = resolveSsoRedirectUri(redirectUri, config.redirectUri);
 		const statePayload: SsoStatePayload = {
 			codeVerifier,
 			nonce,
 			redirectTo: sanitizeSsoRedirectTo(redirectTo),
-			redirectUri: ssoRedirectUri,
+			redirectUri: config.redirectUri,
 			createdAt: Date.now(),
 		};
 		const {cache} = this.apiContext.services;
@@ -300,7 +301,7 @@ export class SsoService {
 		const searchParams = new URLSearchParams({
 			response_type: 'code',
 			client_id: config.clientId ?? '',
-			redirect_uri: ssoRedirectUri,
+			redirect_uri: config.redirectUri,
 			scope: config.scope,
 			state,
 			code_challenge: codeChallenge,
@@ -322,7 +323,7 @@ export class SsoService {
 				throw new FeatureTemporarilyDisabledError();
 			}
 		}
-		return {authorization_url: authorizationUrlString, state, redirect_uri: ssoRedirectUri};
+		return {authorization_url: authorizationUrlString, state, redirect_uri: config.redirectUri};
 	}
 
 	async completeLogin({code, state, request}: {code: string; state: string; request: Request}): Promise<{
@@ -381,6 +382,7 @@ export class SsoService {
 		if (registrationConfig.mode === 'closed') {
 			throw new RegistrationClosedError();
 		}
+		await assertEmailNotBlocklisted(emailLower, 'email');
 		const pendingApproval = registrationConfig.mode === 'approval';
 		const user = await this.provisionUserFromClaims(claims, config, {pendingApproval});
 		if (pendingApproval) {
@@ -552,6 +554,25 @@ export class SsoService {
 			void this.kvActivityTracker.updateActivity(user.id, now).catch((error: unknown) => {
 				getLogger().warn({error, userId: user.id}, 'Failed to update real-time user activity');
 			});
+			await emitActivity(
+				'registration',
+				user.id.toString(),
+				{
+					user_id: user.id.toString(),
+					method: 'oauth',
+					email: user.email,
+					username: user.username,
+					username_user_chosen: false,
+					global_name: user.globalName,
+					locale: user.locale,
+					timezone: null,
+					invite_code: null,
+					suspicious_flags: user.suspiciousActivityFlags ?? 0,
+					flags: user.flags.toString(),
+				},
+				null,
+				user.id.toString(),
+			);
 			return user;
 		} catch (error) {
 			if (!userCreated) {

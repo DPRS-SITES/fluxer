@@ -170,13 +170,12 @@ describe('buildAPIConfigFromMaster stripe legacy prices', () => {
 function withOptionalOutboundLookups(
 	master: MasterConfig,
 	selfHosted: boolean,
-	overrides: {torExitList?: boolean; breachedPasswordCheck?: boolean} = {},
+	overrides: {breachedPasswordCheck?: boolean} = {},
 ): MasterConfig {
 	return {
 		...master,
 		integrations: {
 			...master.integrations,
-			tor_exit_list: {enabled: overrides.torExitList},
 			breached_password_check: {enabled: overrides.breachedPasswordCheck},
 		},
 		instance: {
@@ -192,31 +191,61 @@ describe('buildAPIConfigFromMaster optional outbound lookups', () => {
 		master = await loadConfig();
 	});
 
-	it('keeps both lookups on when the instance is not self-hosted', () => {
+	it('keeps the lookup on when the instance is not self-hosted', () => {
 		const config = buildAPIConfigFromMaster(withOptionalOutboundLookups(master, false));
-		expect(config.torExitList.enabled).toBe(true);
 		expect(config.breachedPasswordCheck.enabled).toBe(true);
 	});
 
-	it('leaves both lookups off on a self-hosted instance', () => {
+	it('leaves the lookup off on a self-hosted instance', () => {
 		const config = buildAPIConfigFromMaster(withOptionalOutboundLookups(master, true));
-		expect(config.torExitList.enabled).toBe(false);
 		expect(config.breachedPasswordCheck.enabled).toBe(false);
 	});
 
-	it('lets a self-hosted operator switch each lookup on', () => {
-		const config = buildAPIConfigFromMaster(
-			withOptionalOutboundLookups(master, true, {torExitList: true, breachedPasswordCheck: true}),
-		);
-		expect(config.torExitList.enabled).toBe(true);
+	it('lets a self-hosted operator switch the lookup on', () => {
+		const config = buildAPIConfigFromMaster(withOptionalOutboundLookups(master, true, {breachedPasswordCheck: true}));
 		expect(config.breachedPasswordCheck.enabled).toBe(true);
 	});
 
-	it('lets an operator switch each lookup off when the instance is not self-hosted', () => {
-		const config = buildAPIConfigFromMaster(
-			withOptionalOutboundLookups(master, false, {torExitList: false, breachedPasswordCheck: false}),
-		);
-		expect(config.torExitList.enabled).toBe(false);
+	it('lets an operator switch the lookup off when the instance is not self-hosted', () => {
+		const config = buildAPIConfigFromMaster(withOptionalOutboundLookups(master, false, {breachedPasswordCheck: false}));
 		expect(config.breachedPasswordCheck.enabled).toBe(false);
+	});
+});
+
+function withPhoneVerification(master: MasterConfig, selfHosted: boolean, enabled?: boolean): MasterConfig {
+	return {
+		...master,
+		instance: {
+			...master.instance,
+			self_hosted: selfHosted,
+			phone_verification_enabled: enabled,
+		},
+	};
+}
+
+describe('buildAPIConfigFromMaster phone verification', () => {
+	let master: MasterConfig;
+	beforeAll(async () => {
+		master = await loadConfig();
+	});
+
+	it('is on by default when the instance is not self-hosted', () => {
+		expect(buildAPIConfigFromMaster(withPhoneVerification(master, false)).instance.phoneVerificationEnabled).toBe(true);
+	});
+
+	it('is off by default on a self-hosted instance', () => {
+		expect(buildAPIConfigFromMaster(withPhoneVerification(master, true)).instance.phoneVerificationEnabled).toBe(false);
+	});
+
+	it('lets a self-hosted operator switch it on', () => {
+		expect(buildAPIConfigFromMaster(withPhoneVerification(master, true, true)).instance.phoneVerificationEnabled).toBe(
+			true,
+		);
+	});
+
+	it('lets an operator switch it off when the instance is not self-hosted', () => {
+		expect(
+			buildAPIConfigFromMaster(withPhoneVerification(master, false, false)).instance.phoneVerificationEnabled,
+		).toBe(false);
 	});
 });
