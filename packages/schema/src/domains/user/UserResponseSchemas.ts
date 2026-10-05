@@ -168,6 +168,21 @@ export const UserPrivateResponse = UserPartialResponse.extend({
 
 export type UserPrivateResponse = z.infer<typeof UserPrivateResponse>;
 
+export const UserUpdateResponse = UserPrivateResponse.extend({
+	token: z
+		.string()
+		.optional()
+		.describe('Authentication token for the replacement session, present when the password was changed'),
+	auth_session_id_hash: z
+		.string()
+		.optional()
+		.describe(
+			'Base64url-encoded hash of the replacement authentication session, present when the password was changed',
+		),
+});
+
+export type UserUpdateResponse = z.infer<typeof UserUpdateResponse>;
+
 export const EmailChangeStartResponse = z.object({
 	ticket: z.string().describe('Ticket returned for email change actions'),
 	require_original: z.boolean().describe('Whether verification of the original email is required'),
@@ -223,6 +238,29 @@ export const PasswordChangeCompleteResponse = z.object({
 });
 
 export type PasswordChangeCompleteResponse = z.infer<typeof PasswordChangeCompleteResponse>;
+
+export const UserPasswordUpdateResponse = z.object({
+	token: z.string().describe('Authentication token for the newly created session'),
+	auth_session_id_hash: z.string().describe('Base64url-encoded hash of the newly created authentication session'),
+});
+
+export type UserPasswordUpdateResponse = z.infer<typeof UserPasswordUpdateResponse>;
+
+export const RecoveryKitStatusResponse = z.object({
+	has_recovery_kit: z.boolean().describe('Whether the account has a recovery kit'),
+	created_at: z.iso.datetime().nullable().describe('ISO 8601 timestamp when the current recovery kit was created'),
+});
+
+export type RecoveryKitStatusResponse = z.infer<typeof RecoveryKitStatusResponse>;
+
+export const RecoveryKitCreateResponse = z.object({
+	recovery_key: z
+		.string()
+		.describe('New recovery key as 8 groups of 4 joined by dashes, shown only once. Any previous kit stops working'),
+	created_at: z.iso.datetime().describe('ISO 8601 timestamp when the recovery kit was created'),
+});
+
+export type RecoveryKitCreateResponse = z.infer<typeof RecoveryKitCreateResponse>;
 
 export interface UserProfileResponse {
 	bio: string | null;

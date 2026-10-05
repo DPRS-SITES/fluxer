@@ -463,6 +463,7 @@ export const getGuildDiscoveryService = singleton(
 			getGuildRepository(),
 			getGatewayService(),
 			getGuildSearchService(),
+			getChannelRepository().channelData,
 		),
 );
 export const getReadStateRequestService = singleton(() => new ReadStateRequestService(getReadStateService()));
@@ -505,6 +506,8 @@ export async function initializeServiceSingletons(): Promise<void> {
 			const limitConfigService = getLimitConfigService();
 			owner.limitConfigService = limitConfigService;
 			await getInstanceConfigRepository().initialize();
+			assertServiceSingletonInitializationActive(owner);
+			await getInstanceConfigRepository().ensureAccountIdentityMode();
 			assertServiceSingletonInitializationActive(owner);
 			await limitConfigService.initialize();
 			assertServiceSingletonInitializationActive(owner);
