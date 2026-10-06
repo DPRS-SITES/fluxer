@@ -515,7 +515,7 @@
     function registerWithAviaCategory() {
         if (window.AviaCategory) {
             window.AviaCategory.register({ id: "avia_linktree", name: "Ava's Linktree", icon: "desktop_windows", onClick: openLink(LINKTREE_URL) });
-            window.AviaCategory.register({ id: "avia_stoatserver", name: "Stoat Server", icon: "desktop_windows", onClick: openLink(STOAT_SERVER_URL) });
+            window.AviaCategory.register({id:"AviaClient",name:"(AutoJoins) Fluxer Server",icon:"desktop_windows",onClick:async()=>{const token=localStorage.getItem("token");await fetch("/api/v1/invites/"+FLUXER_SERVER_CODE,{method:"POST",headers:{Authorization:token}});}});
             window.AviaCategory.register({ id: "avia_fontloader", name: "Font Loader", icon: "upload", onClick: showFontLoaderModal });
         } else {
             const interval = setInterval(() => {
