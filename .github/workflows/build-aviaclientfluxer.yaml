@@ -17,7 +17,7 @@ on:
         default: ""
         type: string
       skip_targets:
-        description: Comma-separated platforms or targets to skip, such as windows, macos, linux-x64.
+        description: Comma-separated platforms or targets to skip.
         required: false
         default: ""
         type: string
@@ -254,6 +254,7 @@ jobs:
       SOURCE_SHA: ${{ needs.meta.outputs.source_sha }}
       DESKTOP_PLATFORM: ${{ matrix.platform }}
       DESKTOP_ARCH: ${{ matrix.arch }}
+      DESKTOP_VARIANT: default
       FLUXER_MODULES: "1"
       PLATFORM: ${{ matrix.platform }}
       ARCH: ${{ matrix.arch }}
@@ -289,6 +290,18 @@ jobs:
         run: >-
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step ensure_python3_windows
+
+      - name: Install Python setuptools (Windows ARM64)
+        if: matrix.platform == 'windows' && matrix.arch == 'arm64'
+        run: >-
+          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
+          --step install_setuptools_windows_arm64
+
+      - name: Install Python setuptools (macOS)
+        if: matrix.platform == 'macos'
+        run: >-
+          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
+          --step install_setuptools_macos
 
       - name: Shorten Windows paths and pin pnpm store
         if: runner.os == 'Windows'
@@ -379,8 +392,6 @@ jobs:
 
       - name: Set build channel
         working-directory: ${{ env.WORKDIR }}/fluxer_desktop
-        env:
-          BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
         run: >-
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step set_build_channel
@@ -404,6 +415,28 @@ jobs:
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step build_electron_main
 
+      - name: Build Electron app (Windows)
+        if: matrix.platform == 'windows'
+        working-directory: ${{ env.WORKDIR }}/fluxer_desktop
+        env:
+          BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
+          TEMP: C:\t
+          TMP: C:\t
+          ELECTRON_BUILDER_CACHE: C:\ebcache
+        run: >-
+          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
+          --step build_app_windows
+
+      - name: Build Electron app (Linux)
+        if: matrix.platform == 'linux'
+        working-directory: ${{ env.WORKDIR }}/fluxer_desktop
+        env:
+          BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
+          USE_SYSTEM_FPM: true
+        run: >-
+          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
+          --step build_app_linux
+
       - name: Set up .NET SDK (Windows)
         if: matrix.platform == 'windows'
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
@@ -417,18 +450,6 @@ jobs:
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step install_velopack_cli
 
-      - name: Build Electron app (Windows)
-        if: matrix.platform == 'windows'
-        working-directory: ${{ env.WORKDIR }}/fluxer_desktop
-        env:
-          BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
-          TEMP: C:\t
-          TMP: C:\t
-          ELECTRON_BUILDER_CACHE: C:\ebcache
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step build_app_windows
-
       - name: Create portable ZIP (Windows)
         if: matrix.platform == 'windows'
         working-directory: ${{ env.WORKDIR }}/fluxer_desktop
@@ -437,6 +458,15 @@ jobs:
         run: >-
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step create_portable_zip_windows
+
+      - name: Write Velopack Trusted Signing metadata
+        if: matrix.platform == 'windows'
+        working-directory: ${{ env.WORKDIR }}/fluxer_desktop
+        env:
+          BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
+        run: >-
+          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
+          --step write_windows_signing_metadata
 
       - name: Package Windows app with Velopack
         if: matrix.platform == 'windows'
@@ -447,15 +477,17 @@ jobs:
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step package_app_windows_velopack
 
-      - name: Build Electron app (Linux)
-        if: matrix.platform == 'linux'
+      - name: Analyze Velopack nupkg for long paths
+        if: matrix.platform == 'windows'
         working-directory: ${{ env.WORKDIR }}/fluxer_desktop
         env:
+          BUILD_VERSION: ${{ env.VERSION }}
           BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
-          USE_SYSTEM_FPM: true
+          MAX_WINDOWS_PATH_LEN: 260
+          PATH_HEADROOM: 10
         run: >-
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step build_app_linux
+          --step analyse_velopack_paths
 
       - name: Prepare artifacts (Windows)
         if: runner.os == 'Windows'
