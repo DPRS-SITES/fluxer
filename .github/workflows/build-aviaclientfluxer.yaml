@@ -336,18 +336,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-pnpm-store-
 
-      - name: Install Python setuptools (Windows ARM64)
-        if: matrix.platform == 'windows' && matrix.arch == 'arm64'
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step install_setuptools_windows_arm64
-
-      - name: Install Python setuptools (macOS)
-        if: matrix.platform == 'macos'
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step install_setuptools_macos
-
       - name: Install Linux dependencies
         if: matrix.platform == 'linux'
         env:
@@ -416,6 +404,19 @@ jobs:
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step build_electron_main
 
+      - name: Set up .NET SDK (Windows)
+        if: matrix.platform == 'windows'
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install Velopack CLI
+        if: matrix.platform == 'windows'
+        working-directory: ${{ env.WORKDIR }}/fluxer_desktop
+        run: >-
+          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
+          --step install_velopack_cli
+
       - name: Build Electron app (Windows)
         if: matrix.platform == 'windows'
         working-directory: ${{ env.WORKDIR }}/fluxer_desktop
@@ -436,6 +437,15 @@ jobs:
         run: >-
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step create_portable_zip_windows
+
+      - name: Package Windows app with Velopack
+        if: matrix.platform == 'windows'
+        working-directory: ${{ env.WORKDIR }}/fluxer_desktop
+        env:
+          BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
+        run: >-
+          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
+          --step package_app_windows_velopack
 
       - name: Build Electron app (Linux)
         if: matrix.platform == 'linux'
