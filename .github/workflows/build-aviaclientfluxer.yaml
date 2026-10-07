@@ -1,3 +1,4 @@
+```yaml
 name: build AviaClient
 
 on:
@@ -13,11 +14,6 @@ on:
         default: canary
       build_version:
         description: Explicit Fluxer CalVer build version (YYYY.MDD.MICRO, UTC HHMMSS without leading zeroes) to use instead of automatic UTC clock allocation.
-        required: false
-        default: ""
-        type: string
-      skip_targets:
-        description: Comma-separated platforms or targets to skip.
         required: false
         default: ""
         type: string
@@ -48,14 +44,14 @@ jobs:
       source_sha: ${{ steps.meta.outputs.source_sha }}
     steps:
       - name: Checkout source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
         with:
           ref: main
 
       - name: Set up Rust toolchain (CI helpers)
-        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de
+        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9
         with:
-          toolchain: "1.98.1"
+          toolchain: "1.94.1"
 
       - name: Set metadata
         id: meta
@@ -67,35 +63,11 @@ jobs:
           --step set_metadata
           --channel "${{ inputs.channel }}"
 
-  matrix:
-    name: Resolve build matrix
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-
-      - name: Set up Rust toolchain (CI helpers)
-        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de
-        with:
-          toolchain: "1.98.1"
-
-      - name: Build platform matrix
-        id: set-matrix
-        env:
-          SKIP_TARGETS: windows-arm64,macos,linux-arm64
-        run: >-
-          cargo run --locked --quiet --manifest-path tools/ci/Cargo.toml -- build-desktop
-          --step set_matrix
-          --skip-targets "${{ inputs.skip_targets }},${{ env.SKIP_TARGETS }}"
-
   shared_assets:
     name: Build shared renderer assets
     needs:
       - meta
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
       contents: read
@@ -232,16 +204,19 @@ jobs:
     name: Build ${{ matrix.platform }} (${{ matrix.arch }})
     needs:
       - meta
-      - matrix
       - shared_assets
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 180
-    permissions:
-      actions: read
-      contents: read
+    timeout-minutes: 60
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.matrix.outputs.matrix) }}
+      matrix:
+        include:
+          - platform: linux
+            arch: x64
+            os: ubuntu-22.04
+          - platform: windows
+            arch: x64
+            os: windows-latest
     env:
       CHANNEL: ${{ needs.meta.outputs.channel }}
       BUILD_CHANNEL: ${{ needs.meta.outputs.build_channel }}
@@ -258,8 +233,7 @@ jobs:
       FLUXER_MODULES: "1"
       PLATFORM: ${{ matrix.platform }}
       ARCH: ${{ matrix.arch }}
-      ELECTRON_ARCH: ${{ matrix.electron_arch }}
-      TEST_BUILD: "true"
+      ELECTRON_ARCH: ${{ matrix.arch }}
 
     steps:
       - name: Checkout CI helpers
@@ -279,29 +253,14 @@ jobs:
         with:
           toolchain: "1.98.1"
 
-      - name: Set up Python (Windows)
-        if: runner.os == 'Windows'
+      - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
         with:
           python-version: "3.14"
 
-      - name: Ensure python3 command (Windows)
-        if: runner.os == 'Windows'
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step ensure_python3_windows
-
-      - name: Install Python setuptools (Windows ARM64)
-        if: matrix.platform == 'windows' && matrix.arch == 'arm64'
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step install_setuptools_windows_arm64
-
-      - name: Install Python setuptools (macOS)
-        if: matrix.platform == 'macos'
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step install_setuptools_macos
+      - name: Install Python setuptools (Linux)
+        if: matrix.platform == 'linux'
+        run: pip install setuptools --break-system-packages || pip install setuptools
 
       - name: Shorten Windows paths and pin pnpm store
         if: runner.os == 'Windows'
@@ -345,7 +304,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ${{ env.PNPM_STORE_PATH }}
-          key: ${{ runner.os }}-${{ matrix.arch }}-pnpm-store-${{ hashFiles('source/pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-${{ matrix.arch }}-pnpm-store-${{ hashFiles('source/**/pnpm-lock.yaml') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-pnpm-store-
 
@@ -392,6 +351,8 @@ jobs:
 
       - name: Set build channel
         working-directory: ${{ env.WORKDIR }}/fluxer_desktop
+        env:
+          BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
         run: >-
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step set_build_channel
@@ -406,6 +367,17 @@ jobs:
         run: >-
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step restore_shared_assets
+
+      - name: Download desktop module packages
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: desktop-modules-${{ needs.meta.outputs.build_channel }}-${{ needs.meta.outputs.version }}-${{ needs.meta.outputs.source_sha }}
+          path: desktop-modules
+
+      - name: Build desktop module manifest
+        run: >-
+          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
+          --step build_module_manifest
 
       - name: Build Electron main process
         working-directory: ${{ env.WORKDIR }}/fluxer_desktop
@@ -427,6 +399,15 @@ jobs:
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step build_app_windows
 
+      - name: Create portable ZIP (Windows)
+        if: matrix.platform == 'windows'
+        working-directory: ${{ env.WORKDIR }}/fluxer_desktop
+        env:
+          BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
+        run: >-
+          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
+          --step create_portable_zip_windows
+
       - name: Build Electron app (Linux)
         if: matrix.platform == 'linux'
         working-directory: ${{ env.WORKDIR }}/fluxer_desktop
@@ -437,93 +418,11 @@ jobs:
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step build_app_linux
 
-      - name: Set up .NET SDK (Windows)
-        if: matrix.platform == 'windows'
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+      - name: Upload artifacts to GitHub Actions
+        uses: actions/upload-artifact@v4
         with:
-          dotnet-version: "10.0.x"
-
-      - name: Install Velopack CLI
-        if: matrix.platform == 'windows'
-        working-directory: ${{ env.WORKDIR }}/fluxer_desktop
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step install_velopack_cli
-
-      - name: Create portable ZIP (Windows)
-        if: matrix.platform == 'windows'
-        working-directory: ${{ env.WORKDIR }}/fluxer_desktop
-        env:
-          BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step create_portable_zip_windows
-
-      - name: Write Velopack Trusted Signing metadata
-        if: matrix.platform == 'windows'
-        working-directory: ${{ env.WORKDIR }}/fluxer_desktop
-        env:
-          BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step write_windows_signing_metadata
-
-      - name: Package Windows app with Velopack
-        if: matrix.platform == 'windows'
-        working-directory: ${{ env.WORKDIR }}/fluxer_desktop
-        env:
-          BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step package_app_windows_velopack
-
-      - name: Analyze Velopack nupkg for long paths
-        if: matrix.platform == 'windows'
-        working-directory: ${{ env.WORKDIR }}/fluxer_desktop
-        env:
-          BUILD_VERSION: ${{ env.VERSION }}
-          BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
-          MAX_WINDOWS_PATH_LEN: 260
-          PATH_HEADROOM: 10
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step analyse_velopack_paths
-
-      - name: Prepare artifacts (Windows)
-        if: runner.os == 'Windows'
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step prepare_artifacts_windows
-
-      - name: Prepare artifacts (Unix)
-        if: runner.os != 'Windows'
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step prepare_artifacts_unix
-
-      - name: Generate SHA256 checksums (Unix)
-        if: runner.os != 'Windows'
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step generate_checksums_unix
-
-      - name: Generate SHA256 checksums (Windows)
-        if: runner.os == 'Windows'
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step generate_checksums_windows
-
-      - name: Stage build artifacts
-        id: handoff
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step stage_handoff
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: ${{ steps.handoff.outputs.artifact_name }}
-          path: upload_staging
-          if-no-files-found: error
+          name: fluxer-${{ matrix.platform }}-${{ matrix.arch }}-unsigned
+          path: ${{ env.WORKDIR }}/fluxer_desktop/dist-electron/**
+          if-no-files-found: warn
           retention-days: 14
-          compression-level: 0
+```
