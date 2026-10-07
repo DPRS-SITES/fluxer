@@ -1,4 +1,3 @@
-```yaml
 name: build AviaClient
 
 on:
@@ -425,4 +424,3 @@ jobs:
           path: ${{ env.WORKDIR }}/fluxer_desktop/dist-electron/**
           if-no-files-found: warn
           retention-days: 14
-```
