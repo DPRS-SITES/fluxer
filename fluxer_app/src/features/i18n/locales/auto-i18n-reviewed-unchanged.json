@@ -2618,6 +2618,9 @@
         "msgid": "Anyone can request an account, but an administrator must approve it."
       },
       {
+        "msgid": "Anyone in my communities"
+      },
+      {
         "msgid": "Anyone with this key can reset your password. Never share it."
       },
       {
@@ -2643,6 +2646,9 @@
       },
       {
         "msgid": "Applied a server mute."
+      },
+      {
+        "msgid": "Apply to these communities too"
       },
       {
         "msgid": "Approval required"
@@ -2921,6 +2927,9 @@
         "msgid": "Check again"
       },
       {
+        "msgid": "Checking the sign-in request…"
+      },
+      {
         "msgid": "Checkout is blocked for this account."
       },
       {
@@ -2952,6 +2961,9 @@
       },
       {
         "msgid": "Choose where its published messages should go. You can unfollow any time in Community settings → Webhooks."
+      },
+      {
+        "msgid": "Choose who can send you direct messages."
       },
       {
         "msgid": "Choose your defaults"
@@ -3008,6 +3020,9 @@
         "msgid": "Closed the thread"
       },
       {
+        "msgid": "Code from the {productName} app"
+      },
+      {
         "msgid": "Codec negotiation testing"
       },
       {
@@ -3054,6 +3069,9 @@
       },
       {
         "msgid": "Connection volume controls"
+      },
+      {
+        "msgid": "Continue in your browser"
       },
       {
         "msgid": "Continue to checkout"
@@ -3156,6 +3174,9 @@
       },
       {
         "msgid": "Couldn't search threads. Try again later."
+      },
+      {
+        "msgid": "Couldn't start signing in with your browser."
       },
       {
         "msgid": "Couldn't unfollow this channel"
@@ -3458,6 +3479,12 @@
         "msgid": "Enter the PIN for your security key to continue."
       },
       {
+        "msgid": "Enter the code from the {PRODUCT_NAME} app"
+      },
+      {
+        "msgid": "Enter this code in your browser"
+      },
+      {
         "msgid": "Enter this code in your old {PRODUCT_NAME} app to complete sign-in."
       },
       {
@@ -3563,6 +3590,9 @@
         "msgid": "Forum channel"
       },
       {
+        "msgid": "Friends can always send you direct messages. Choose whether people who share a community with you can message you without sending a friend request first."
+      },
+      {
         "msgid": "From {sourceGuildName}"
       },
       {
@@ -3612,6 +3642,12 @@
       },
       {
         "msgid": "Global shortcut"
+      },
+      {
+        "msgid": "Go back to the {PRODUCT_NAME} app. It finishes signing in on its own."
+      },
+      {
+        "msgid": "Go back to the {PRODUCT_NAME} app. You can close this tab."
       },
       {
         "msgid": "Go back to {productName} to continue."
@@ -3818,7 +3854,13 @@
         "msgid": "Largest file you can upload"
       },
       {
+        "msgid": "Leave private thread"
+      },
+      {
         "msgid": "Leave thread"
+      },
+      {
+        "msgid": "Leave {threadName}? It's private, so you can only come back if someone adds you again."
       },
       {
         "msgid": "Let others clone your emojis"
@@ -3924,6 +3966,9 @@
       },
       {
         "msgid": "Made the channel inherit its mature content setting."
+      },
+      {
+        "msgid": "Make sure this code matches the one in the {PRODUCT_NAME} app."
       },
       {
         "msgid": "Make the instance yours"
@@ -4151,7 +4196,13 @@
         "msgid": "On <0>{listPriceEffectiveDate}</0> your subscription moves from {listPriceCurrentLabel} to {listPriceNewLabel}. Nothing is charged today, and the rest of your subscription stays exactly as it is."
       },
       {
+        "msgid": "On your other device, sign in at {signInAddress} and enter this code when asked."
+      },
+      {
         "msgid": "Only @mentions"
+      },
+      {
+        "msgid": "Only continue if you started this sign-in on a device you control."
       },
       {
         "msgid": "Only moderators can apply this tag."
@@ -4184,6 +4235,9 @@
         "msgid": "Open an application window, then try again."
       },
       {
+        "msgid": "Open browser again"
+      },
+      {
         "msgid": "Open in full view"
       },
       {
@@ -4209,6 +4263,9 @@
       },
       {
         "msgid": "Open your old {PRODUCT_NAME} app and choose Link a new device, then enter the code below."
+      },
+      {
+        "msgid": "Open {PRODUCT_NAME}"
       },
       {
         "msgid": "Open {host} in Safari."
@@ -4274,10 +4331,16 @@
         "msgid": "Pay once and get a gift link to share. Gifts never renew."
       },
       {
+        "msgid": "People need to be your friend before they can message you. They can still send you a friend request."
+      },
+      {
         "msgid": "People sign in with a username and password. No email address is collected. Each person can save a recovery kit in case they forget their password."
       },
       {
         "msgid": "People sign in with an email address and password. Password resets and verification need email delivery, which you can set up later."
+      },
+      {
+        "msgid": "People who share a community with you can message you directly."
       },
       {
         "msgid": "Per-device volume"
@@ -4404,6 +4467,9 @@
       },
       {
         "msgid": "Print"
+      },
+      {
+        "msgid": "Privacy setup nagbar"
       },
       {
         "msgid": "Private"
@@ -4787,6 +4853,9 @@
         "msgid": "Review microphone, camera, screen recording, and Input Monitoring access."
       },
       {
+        "msgid": "Review privacy settings"
+      },
+      {
         "msgid": "Review the permissions {productName} uses for voice, video, screen sharing, and shortcuts."
       },
       {
@@ -5144,6 +5213,21 @@
         "msgid": "Sign in again as {accountLabel}"
       },
       {
+        "msgid": "Sign in to the {PRODUCT_NAME} app"
+      },
+      {
+        "msgid": "Sign in to the {PRODUCT_NAME} desktop app"
+      },
+      {
+        "msgid": "Sign in to the {PRODUCT_NAME} mobile app"
+      },
+      {
+        "msgid": "Sign in to {instanceName} in your browser and confirm. This app finishes signing in on its own."
+      },
+      {
+        "msgid": "Sign in to {instanceName} in your browser, and check that it shows this code:"
+      },
+      {
         "msgid": "Sign in with email"
       },
       {
@@ -5162,10 +5246,22 @@
         "msgid": "Sign out {accountTag}"
       },
       {
+        "msgid": "Sign-in cancelled"
+      },
+      {
         "msgid": "Sign-in details"
       },
       {
         "msgid": "Sign-in method"
+      },
+      {
+        "msgid": "Signing in as {name}"
+      },
+      {
+        "msgid": "Signing in on another device?"
+      },
+      {
+        "msgid": "Signing in…"
       },
       {
         "msgid": "Silent when the capture device has no audio input of its own"
@@ -5393,6 +5489,9 @@
         "msgid": "Text is rendered with grayscale antialiasing instead of ClearType while transparency is enabled, so it will look softer."
       },
       {
+        "msgid": "That code is not valid on {instanceHost}. Check the code in the {productName} app and try again."
+      },
+      {
         "msgid": "That doesn't look like an instance address. Try a domain such as {exampleInstanceDomain}."
       },
       {
@@ -5471,6 +5570,12 @@
         "msgid": "The role granted {permissions}."
       },
       {
+        "msgid": "The sign-in request expired before your browser approved it."
+      },
+      {
+        "msgid": "The sign-in was cancelled in your browser."
+      },
+      {
         "msgid": "The sticker was uploaded by {user}."
       },
       {
@@ -5481,6 +5586,15 @@
       },
       {
         "msgid": "The webhook was created by {user}."
+      },
+      {
+        "msgid": "The {PRODUCT_NAME} app asked to sign in as {requestedIdentifier}, but you chose {name}."
+      },
+      {
+        "msgid": "The {PRODUCT_NAME} app on your other device shows it under Signing in on another device. Only enter a code from a device you control."
+      },
+      {
+        "msgid": "The {PRODUCT_NAME} app was not signed in. You can close this tab."
       },
       {
         "msgid": "There are no posts yet"
@@ -5496,6 +5610,9 @@
       },
       {
         "msgid": "These options change how people use the instance. Some can only be chosen during setup."
+      },
+      {
+        "msgid": "This account is on {accountHost}, but the {productName} app is signing in to {requestHost}. Choose an account on {requestHost}."
       },
       {
         "msgid": "This animation is too long or too large to crop. Try a shorter or smaller file."
@@ -5601,6 +5718,9 @@
       },
       {
         "msgid": "This reset link has expired. Reset links last 1 hour. Please request a new one."
+      },
+      {
+        "msgid": "This sign-in request expired or was cancelled in the {productName} app. Start again from the app."
       },
       {
         "msgid": "This sticker is from"
@@ -5750,6 +5870,12 @@
         "msgid": "Up to 720p at 30 FPS"
       },
       {
+        "msgid": "Update available"
+      },
+      {
+        "msgid": "Update now"
+      },
+      {
         "msgid": "Update passkey"
       },
       {
@@ -5769,6 +5895,9 @@
       },
       {
         "msgid": "Upload files and media in this channel."
+      },
+      {
+        "msgid": "Use a different account"
       },
       {
         "msgid": "Use a self-hosted instance URL"
@@ -5927,6 +6056,12 @@
         "msgid": "Who can join"
       },
       {
+        "msgid": "Who can message you"
+      },
+      {
+        "msgid": "Who can message you?"
+      },
+      {
         "msgid": "With {PREMIUM_PRODUCT_NAME}, you can use animated avatars ({ANIMATED_AVATAR_FORMATS}) and profile banners, and unlock many other {PREMIUM_PRODUCT_NAME} perks."
       },
       {
@@ -5973,6 +6108,9 @@
       },
       {
         "msgid": "You're a {premiumProductName} member. Thanks for supporting an independent communication platform."
+      },
+      {
+        "msgid": "You're signed in"
       },
       {
         "msgid": "YouTube enrichment"
@@ -6713,6 +6851,9 @@
         "msgid": "{count, plural, one {# channel follows} other {# channels follow}} this channel. Converting it to a text channel removes those follows."
       },
       {
+        "msgid": "{count, plural, one {# community uses a different setting} other {# communities use a different setting}}"
+      },
+      {
         "msgid": "{count, plural, one {# file} other {# files}}"
       },
       {
@@ -6801,6 +6942,9 @@
       },
       {
         "msgid": "{productName} cannot start a safe isolated route for this app's audio."
+      },
+      {
+        "msgid": "{productName} closes, installs the update and opens again."
       },
       {
         "msgid": "{productName} has moved to {host}. Add it to your Home Screen or Dock, then sign in with this app."
@@ -10767,6 +10911,9 @@
         "msgid": "Debug"
       },
       {
+        "msgid": "Debug thread"
+      },
+      {
         "msgid": "Desktop"
       },
       {
@@ -11915,6 +12062,9 @@
         "msgid": "Cyprus"
       },
       {
+        "msgid": "Debug thread"
+      },
+      {
         "msgid": "Desktop"
       },
       {
@@ -12084,6 +12234,9 @@
       },
       {
         "msgid": "Open thread"
+      },
+      {
+        "msgid": "Open {PRODUCT_NAME}"
       },
       {
         "msgid": "Open {contextName}"

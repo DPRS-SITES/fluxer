@@ -59,6 +59,7 @@ import {
 import {recordDesktopLastRoute} from '@electron/main/DesktopLastRoute';
 import {cleanupDesktopOutboundHTTP} from '@electron/main/DesktopOutboundHTTP';
 import {registerDesktopRuntimeConfigHandlers} from '@electron/main/DesktopRuntimeConfigIpc';
+import {installDesktopSystemTrustVerifier} from '@electron/main/DesktopSystemTrustVerifier';
 import {destroyDesktopTray, hasActiveDesktopTray, initializeDesktopTray} from '@electron/main/DesktopTray';
 import {registerDisplayMediaHandlers} from '@electron/main/DisplayMedia';
 import {initializeDockMenu} from '@electron/main/DockMenu';
@@ -82,6 +83,7 @@ import {initializeMainI18n, t} from '@electron/main/MainI18n';
 import {
 	armOpenUrlForwarding,
 	armSecondInstanceForwarding,
+	setMainWindowFactory,
 	setOpenUrlSink,
 	setSecondInstanceSink,
 } from '@electron/main/ModuleBootHandoff';
@@ -100,6 +102,7 @@ import {
 	createWindow,
 	getMainWindow,
 	hideWindow,
+	isMainWindowTakenOver,
 	setQuitting,
 	showWindow,
 } from '@electron/main/Window';
@@ -117,7 +120,7 @@ import {
 	DesktopLegacyImportPhase,
 	readDesktopLegacyImportPhase,
 } from '@fluxer/desktop_ipc/src/StorageContract';
-import {app, dialog, ipcMain, netLog, shell} from 'electron';
+import {app, dialog, ipcMain, netLog, session, shell} from 'electron';
 import log from 'electron-log';
 
 log.transports.file.level = 'info';
@@ -404,6 +407,7 @@ if (launchConfigurationError) {
 		});
 		armSecondInstanceForwarding();
 		setSecondInstanceSink(handleSecondInstance);
+		setMainWindowFactory(() => createWindow());
 		app.on('child-process-gone', (_event, details) => {
 			log.error('Child process gone', details);
 		});
@@ -422,6 +426,11 @@ if (launchConfigurationError) {
 					log.error('[Init] Failed to configure the host resolver:', error);
 				}
 				await runStartupPhaseAsync('launch-net-log', startLaunchNetLog);
+				try {
+					runStartupPhase('system-trust', () => installDesktopSystemTrustVerifier(session.defaultSession));
+				} catch (error) {
+					log.error('[Init] Failed to install the system trust verifier:', error);
+				}
 				try {
 					await runStartupPhaseAsync('desktop-debug-info', async () => {
 						logDesktopDebugInfo(await getDesktopDebugInfo(userDataConfig.base, {nativeProbes: false}));
@@ -625,6 +634,7 @@ if (launchConfigurationError) {
 					initializeDesktopTray({
 						createWindow,
 						getMainWindow,
+						isMainWindowTakenOver,
 						hideWindow,
 						setQuitting,
 						showWindow,
@@ -636,7 +646,7 @@ if (launchConfigurationError) {
 				}
 				app.on('activate', () => {
 					const mainWindow = getMainWindow();
-					if (mainWindow === null || mainWindow.isDestroyed()) {
+					if ((mainWindow === null || mainWindow.isDestroyed()) && !isMainWindowTakenOver()) {
 						createWindow();
 						const reactivatedWindow = getMainWindow();
 						if (reactivatedWindow) {
@@ -655,6 +665,10 @@ if (launchConfigurationError) {
 		app.on('window-all-closed', () => {
 			if (startupWindowsPending) {
 				log.info('[Shutdown] All windows closed before startup created the main window, keeping app alive');
+				return;
+			}
+			if (isMainWindowTakenOver()) {
+				log.info('[Shutdown] The update splash closed mid update, keeping app alive to reopen the main window');
 				return;
 			}
 			const settings = getDesktopWindowBehaviorSettings();

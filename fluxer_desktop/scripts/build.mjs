@@ -53,7 +53,6 @@ const publicBuildDefines = {
 const electronExternals = [
 	'electron',
 	'electron-log',
-	'update-electron-app',
 	'velopack',
 	'@fluxer/app-store',
 	'@fluxer/gateway-socket',
