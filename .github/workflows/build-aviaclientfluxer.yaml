@@ -367,17 +367,6 @@ jobs:
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step restore_shared_assets
 
-      - name: Download desktop module packages
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          name: desktop-modules-${{ needs.meta.outputs.build_channel }}-${{ needs.meta.outputs.version }}-${{ needs.meta.outputs.source_sha }}
-          path: desktop-modules
-
-      - name: Build desktop module manifest
-        run: >-
-          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
-          --step build_module_manifest
-
       - name: Build Electron main process
         working-directory: ${{ env.WORKDIR }}/fluxer_desktop
         env:
