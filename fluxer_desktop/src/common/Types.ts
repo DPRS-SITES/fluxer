@@ -27,10 +27,12 @@ import type {
 	NativeAudioAvailability,
 	NativeAudioEndMessage,
 	NativeAudioFrameMessage,
+	NativeAudioPlaybackDevice,
 	NativeAudioStartOptions,
 	NativeAudioStartResult,
 	NativeScreenCaptureLifecycleMessage,
 	SetDesktopTroubleshootingDisableHardwareAccelerationOptions,
+	SetDesktopTroubleshootingDisableModuleUpdatesOptions,
 	SpellcheckBundledDictionary,
 	SpellcheckEngine,
 	SpellcheckResolvedEngineInfo,
@@ -58,6 +60,7 @@ import type {DesktopCapabilityManifest} from '@fluxer/desktop_ipc/src/Capability
 import type {NativeGatewayTransportAPI} from '@fluxer/desktop_ipc/src/GatewayTransportContract';
 import type {DesktopKnownInstanceStorageAPI} from '@fluxer/desktop_ipc/src/KnownInstanceContract';
 import type {DesktopModuleAPI, DesktopUpdateAPI} from '@fluxer/desktop_ipc/src/ModuleContract';
+import type {OtherPlatformTemplateAPI} from '@fluxer/desktop_ipc/src/OtherPlatformTemplateContract';
 import type {DesktopStorageAPI} from '@fluxer/desktop_ipc/src/StorageContract';
 import type {VoiceEngineV2BridgeHardwareEncoderApi} from '@fluxer/voice_engine_v2/bridge';
 import type {
@@ -88,6 +91,7 @@ export interface DesktopInfo {
 
 export interface DesktopWindowBehaviorSettings {
 	showTrayIcon: boolean;
+	coloredTrayIcon: boolean;
 	minimizeToTray: boolean;
 	closeToTray: boolean;
 	startMinimized: boolean;
@@ -183,6 +187,8 @@ export interface NativeAudioApi {
 	resolveAudioRootPidForSource: (sourceId: string) => Promise<number | null>;
 	start: (options: NativeAudioStartOptions) => Promise<NativeAudioStartResult>;
 	setRule: (captureId: string, linuxRule: NonNullable<NativeAudioStartOptions['linuxRule']>) => Promise<boolean>;
+	listPlaybackDevices: () => Promise<Array<NativeAudioPlaybackDevice>>;
+	setWinEndpoints: (captureId: string, endpoints: Array<string>) => Promise<boolean>;
 	stop: (captureId: string) => Promise<void>;
 	onFrame: (callback: (message: NativeAudioFrameMessage) => void) => () => void;
 	onEnd: (callback: (message: NativeAudioEndMessage) => void) => () => void;
@@ -256,6 +262,9 @@ export interface ElectronAPI {
 	setDesktopDisableHardwareAcceleration: (
 		options: SetDesktopTroubleshootingDisableHardwareAccelerationOptions,
 	) => Promise<DesktopTroubleshootingSettings>;
+	setDesktopDisableModuleUpdates: (
+		options: SetDesktopTroubleshootingDisableModuleUpdatesOptions,
+	) => Promise<DesktopTroubleshootingSettings>;
 	onUpdaterEvent: (callback: (event: UpdaterEvent) => void) => () => void;
 	updaterCheck: (context: UpdaterContext) => Promise<void>;
 	windowMinimize: () => void;
@@ -299,6 +308,7 @@ export interface ElectronAPI {
 	closeNotifications: (ids: Array<string>) => void;
 	onNotificationClick: (callback: (id: string, url?: string) => void) => () => void;
 	setBadgeCount: (count: number) => void;
+	setUnreadBadge: (badge: number) => void;
 	setNativeLocale: (locale: string, strings: Record<string, string>) => void;
 	flashFrame: (persistent?: boolean) => void;
 	stopFlashFrame: () => void;
@@ -381,6 +391,7 @@ export interface ElectronAPI {
 	desktopKnownInstances: DesktopKnownInstanceStorageAPI;
 	desktopHandoff: DesktopHandoffAPI;
 	nativeGatewayTransport: NativeGatewayTransportAPI;
+	otherPlatformTemplate: OtherPlatformTemplateAPI;
 }
 
 export interface GlobalShortcutsPortalStatus {
