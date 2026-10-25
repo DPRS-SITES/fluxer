@@ -7,7 +7,15 @@ import {
 	UserFlags,
 	UserFlagsDescriptions,
 } from '@fluxer/constants/src/UserConstants';
+import {AccountTierSchema} from '@fluxer/schema/src/domains/account/AccountTierSchemas';
 import {ADMIN_ACL_COUNT, AdminAclType} from '@fluxer/schema/src/domains/admin/AdminAclType';
+import {
+	BulkModerationBasis,
+	ModerationBasis,
+	NetworkBlockRequest,
+	SkippedNetworkBlock,
+} from '@fluxer/schema/src/domains/admin/EnforcementSchemas';
+import {AdminProfileBadgeResponse} from '@fluxer/schema/src/domains/user/ProfileBadgeSchemas';
 import {CalendarDateType} from '@fluxer/schema/src/primitives/DateValidators';
 import {NSFWLevelSchema} from '@fluxer/schema/src/primitives/GuildValidators';
 import {createQueryIntegerType, QueryBooleanType} from '@fluxer/schema/src/primitives/QueryValidators';
@@ -20,10 +28,15 @@ import {
 	Int32Type,
 	SnowflakeStringType,
 	SnowflakeType,
-	withFieldDescription,
 } from '@fluxer/schema/src/primitives/SchemaPrimitives';
 import {DiscriminatorType, EmailType, UsernameType} from '@fluxer/schema/src/primitives/UserValidators';
 import {z} from 'zod';
+
+const DeletionReasonCodeType = createInt32EnumType(
+	Object.entries(DeletionReasons).map(([name, value]) => [value, name] as const),
+	'Reason the account was scheduled for deletion',
+	'DeletionReasonCode',
+);
 
 export const UserAdminResponseSchema = z.object({
 	id: SnowflakeStringType,
@@ -54,11 +67,17 @@ export const UserAdminResponseSchema = z.object({
 	premium_until: z.string().nullable(),
 	premium_grace_ends_at: z.string().nullable(),
 	premium_lifetime_sequence: Int32Type.nullable(),
+	profile_badges: z
+		.array(AdminProfileBadgeResponse)
+		.describe('Every badge the account qualifies for in display order, including ones hidden from the public'),
 	temp_banned_until: z.string().nullable(),
 	pending_deletion_at: z.string().nullable(),
 	pending_bulk_message_deletion_at: z.string().nullable(),
-	deletion_reason_code: Int32Type.nullable(),
-	deletion_public_reason: z.string().nullable(),
+	deletion_reason_code: DeletionReasonCodeType.nullable(),
+	deletion_public_reason: z
+		.string()
+		.nullable()
+		.describe('Public reason of a deletion scheduled before enforcement decisions existed. No longer written'),
 	deletion_audit_log_reason: z
 		.string()
 		.nullable()
@@ -67,9 +86,18 @@ export const UserAdminResponseSchema = z.object({
 		'ID of the account that scheduled the pending deletion, null when it was not recorded',
 	),
 	deletion_scheduled_at: z.string().nullable().describe('ISO 8601 timestamp when the pending deletion was scheduled'),
+	enforcement_decision_id: SnowflakeStringType.nullable().describe(
+		'The enforcement decision behind the current suspension or closure, null when none owns it',
+	),
 	acls: z.array(z.string()).max(ADMIN_ACL_COUNT),
 	traits: z.array(z.string()).max(100),
 	has_totp: z.boolean(),
+	has_password: z.boolean().describe('Whether the account has a password'),
+	claimed: z.boolean().describe('Whether the account can be signed in to from another device'),
+	account_tier: AccountTierSchema.describe('How far the account has got with setting up a way to sign in'),
+	date_of_birth_required: z
+		.boolean()
+		.describe('Whether the account still has to enter its date of birth, which clients ask for before anything else'),
 	authenticator_types: z.array(Int32Type).max(10),
 	last_active_at: z.string().nullable(),
 	last_active_ip: z.string().nullable(),
@@ -108,13 +136,22 @@ export const ListUserChangeLogResponseSchema = z.object({
 
 export const AdminUsersMeResponse = z.object({
 	user: UserAdminResponseSchema,
+	pending_registration_count: Int32Type.nullable(),
 });
 
 export type AdminUsersMeResponse = z.infer<typeof AdminUsersMeResponse>;
 
-export const UserMutationResponse = AdminUsersMeResponse;
+export const UserMutationResponse = z.object({
+	user: UserAdminResponseSchema,
+});
 
 export type UserMutationResponse = z.infer<typeof UserMutationResponse>;
+
+export const UserRestrictionResponse = UserMutationResponse.extend({
+	skipped_ips: z.array(SkippedNetworkBlock).describe('Requested network blocks that were not written, with the reason'),
+});
+
+export type UserRestrictionResponse = z.infer<typeof UserRestrictionResponse>;
 
 export const LookupUserResponse = z.object({
 	users: z.array(UserAdminResponseSchema),
@@ -152,6 +189,8 @@ export const ListUserDmChannelsRequest = z
 	});
 
 export type ListUserDmChannelsRequest = z.infer<typeof ListUserDmChannelsRequest>;
+
+export type AdminResolvedUser = z.infer<typeof AdminResolvedUserSchema>;
 
 const AdminResolvedUserSchema = z.object({
 	id: SnowflakeStringType,
@@ -240,12 +279,21 @@ const UserProfileFieldEnum = createNamedStringLiteralUnion(
 	],
 	'User profile field that can be cleared',
 );
-export const ClearUserFieldsRequest = z.object({
-	user_id: SnowflakeType.describe('ID of the user to clear fields for'),
-	fields: z.array(UserProfileFieldEnum).max(10).describe('List of profile fields to clear'),
+export type UserProfileField = z.infer<typeof UserProfileFieldEnum>;
+
+export const SetUserBotStatusRequest = z.object({
+	user_id: SnowflakeType.describe('ID of the user to update'),
+	bot: z.boolean().describe('Whether the user should be marked as a bot'),
 });
 
-export type ClearUserFieldsRequest = z.infer<typeof ClearUserFieldsRequest>;
+export type SetUserBotStatusRequest = z.infer<typeof SetUserBotStatusRequest>;
+
+export const SetUserSystemStatusRequest = z.object({
+	user_id: SnowflakeType.describe('ID of the user to update'),
+	system: z.boolean().describe('Whether the user should be marked as a system user'),
+});
+
+export type SetUserSystemStatusRequest = z.infer<typeof SetUserSystemStatusRequest>;
 
 export const VerifyUserEmailRequest = z.object({
 	user_id: SnowflakeType.describe('ID of the user to verify email for'),
@@ -272,6 +320,32 @@ export const AdminPasswordResetLinkResponse = z.object({
 
 export type AdminPasswordResetLinkResponse = z.infer<typeof AdminPasswordResetLinkResponse>;
 
+export const AdminSignInLinkResponse = z.object({
+	url: z.string().describe('Sign-in link to open in a browser. It works once and is shown only once'),
+	expires_at: z.iso.datetime().describe('ISO 8601 timestamp when the link stops working'),
+});
+
+export type AdminSignInLinkResponse = z.infer<typeof AdminSignInLinkResponse>;
+
+export const AdminUserCreateRequest = z.object({
+	username: UsernameType.describe('Username for the new account'),
+	email: EmailType.optional().describe(
+		'Email address for the new account. Required on an instance where people sign in with email, and refused where they sign in with a username',
+	),
+	admin: z.boolean().default(false).describe('Whether to give the new account full admin access'),
+});
+
+export type AdminUserCreateRequest = z.infer<typeof AdminUserCreateRequest>;
+
+export const AdminUserCreateResponse = z.object({
+	user: UserAdminResponseSchema,
+	password_reset: AdminPasswordResetLinkResponse.describe(
+		'One-time link the new user opens to choose a password. Hand it to them yourself',
+	),
+});
+
+export type AdminUserCreateResponse = z.infer<typeof AdminUserCreateResponse>;
+
 export const ChangeUsernameRequest = z.object({
 	user_id: SnowflakeType.describe('ID of the user to change username for'),
 	username: UsernameType.describe('New username for the user'),
@@ -293,50 +367,14 @@ export const TerminateSessionsRequest = z.object({
 
 export type TerminateSessionsRequest = z.infer<typeof TerminateSessionsRequest>;
 
-export const TempBanUserRequest = z.object({
-	user_id: SnowflakeType.describe('ID of the user to temporarily ban'),
-	duration_hours: z
-		.number()
-		.int()
-		.min(0)
-		.max(8760)
-		.describe('Duration of the ban in hours. Use 0 for a permanent ban (until manually unbanned).'),
-	reason: createStringType(0, 512).optional().describe('Reason shown to the user in the ban email'),
-	notify_user: z
-		.boolean()
-		.default(true)
-		.describe('Whether to email the user about a temporary ban. Permanent bans (duration_hours 0) are never emailed'),
-});
-
-export type TempBanUserRequest = z.infer<typeof TempBanUserRequest>;
-
-const DeletionReasonCodeType = createInt32EnumType(
-	Object.entries(DeletionReasons).map(([name, value]) => [value, name] as const),
-	'Reason the account was scheduled for deletion',
-	'DeletionReasonCode',
-);
-
-export const ScheduleAccountDeletionRequest = z.object({
-	user_id: SnowflakeType.describe('ID of the user to schedule deletion for'),
-	reason_code: withFieldDescription(DeletionReasonCodeType, 'Code indicating the reason for deletion'),
-	public_reason: createStringType(0, 512).optional().describe('Public-facing reason for the deletion'),
-	days_until_deletion: z
-		.number()
-		.int()
-		.min(1)
-		.max(365)
-		.default(60)
-		.describe('Number of days until the account is deleted'),
-	replace_pending_deletion_at: z.iso
-		.datetime()
-		.optional()
-		.describe(
-			'pending_deletion_at of the deletion this request replaces. Required when a deletion is already scheduled for the account',
-		),
-	notify_user: z.boolean().default(true).describe('Whether to email the user about the scheduled deletion'),
-});
-
-export type ScheduleAccountDeletionRequest = z.infer<typeof ScheduleAccountDeletionRequest>;
+const DaysUntilDeletionType = z
+	.number()
+	.int()
+	.min(1)
+	.max(365)
+	.describe(
+		'Days until the account is deleted. Raised to 14, or to 74 when a rule was broken so an appeal can be reviewed first. Self-hosted instances have no appeals and raise every basis to 14',
+	);
 
 export const SetUserAclsRequest = z.object({
 	user_id: SnowflakeType.describe('ID of the user to set ACLs for'),
@@ -373,14 +411,10 @@ export const BulkUpdateUserFlagsRequest = z.object({
 
 export type BulkUpdateUserFlagsRequest = z.infer<typeof BulkUpdateUserFlagsRequest>;
 
-export const BulkScheduleUserDeletionRequest = ScheduleAccountDeletionRequest.omit({
-	user_id: true,
-	replace_pending_deletion_at: true,
-}).extend({
+export const BulkScheduleUserDeletionRequest = z.object({
 	user_ids: z.array(SnowflakeType).max(1000).describe('List of user IDs to schedule deletion for'),
-	days_until_deletion: ScheduleAccountDeletionRequest.shape.days_until_deletion.describe(
-		'Number of days until the accounts are deleted',
-	),
+	days_until_deletion: DaysUntilDeletionType,
+	basis: BulkModerationBasis,
 });
 
 export type BulkScheduleUserDeletionRequest = z.infer<typeof BulkScheduleUserDeletionRequest>;
@@ -482,6 +516,9 @@ export const AdminUserListQuery = z.object({
 	last_active_ip: createStringType(1, 64)
 		.optional()
 		.describe('Restrict the results to the users whose last active IP address matches this one exactly'),
+	acl: AdminAclType.optional().describe(
+		'Restrict the results to the users granted this admin permission, ordered by user ID. Pass * to list the admins with full access',
+	),
 	limit: createQueryIntegerType({defaultValue: 50, minValue: 1, maxValue: 200}).describe(
 		'Maximum number of users to return',
 	),
@@ -557,9 +594,20 @@ export const AdminUserWebAuthnCredentialParam = z.object({
 
 export type AdminUserWebAuthnCredentialParam = z.infer<typeof AdminUserWebAuthnCredentialParam>;
 
-export const AdminUserClearFieldsRequest = ClearUserFieldsRequest.omit({user_id: true});
+export const AdminUserClearFieldsRequest = z.object({
+	fields: z.array(UserProfileFieldEnum).min(1).max(10).describe('List of profile fields to clear'),
+	basis: ModerationBasis,
+});
 
 export type AdminUserClearFieldsRequest = z.infer<typeof AdminUserClearFieldsRequest>;
+
+export const AdminUserBotStatusRequest = SetUserBotStatusRequest.omit({user_id: true});
+
+export type AdminUserBotStatusRequest = z.infer<typeof AdminUserBotStatusRequest>;
+
+export const AdminUserSystemStatusRequest = SetUserSystemStatusRequest.omit({user_id: true});
+
+export type AdminUserSystemStatusRequest = z.infer<typeof AdminUserSystemStatusRequest>;
 
 export const AdminUserUsernameUpdateRequest = ChangeUsernameRequest.omit({user_id: true});
 
@@ -569,11 +617,27 @@ export const AdminUserEmailUpdateRequest = ChangeEmailRequest.omit({user_id: tru
 
 export type AdminUserEmailUpdateRequest = z.infer<typeof AdminUserEmailUpdateRequest>;
 
-export const AdminUserBanRequest = TempBanUserRequest.omit({user_id: true});
-
-export type AdminUserBanRequest = z.infer<typeof AdminUserBanRequest>;
-
-export const AdminUserDeletionScheduleRequest = ScheduleAccountDeletionRequest.omit({user_id: true});
+export const AdminUserDeletionScheduleRequest = z.object({
+	days_until_deletion: DaysUntilDeletionType,
+	replace_pending_deletion_at: z.iso
+		.datetime()
+		.optional()
+		.describe(
+			'pending_deletion_at of the deletion this request replaces. Required when a deletion is already scheduled for the account',
+		),
+	basis: ModerationBasis,
+	remove_evidence: z
+		.boolean()
+		.optional()
+		.describe('Remove the evidence messages after they are snapshotted into the decision. Enforcement basis only'),
+	block_networks: NetworkBlockRequest.optional(),
+	immediate: z
+		.boolean()
+		.optional()
+		.describe(
+			'Self-hosted instances only. Delete the account now instead of after days_until_deletion, with no notice email. This cannot be undone',
+		),
+});
 
 export type AdminUserDeletionScheduleRequest = z.infer<typeof AdminUserDeletionScheduleRequest>;
 
@@ -581,26 +645,9 @@ export const AdminUserDeletionCancelRequest = z.object({
 	expected_pending_deletion_at: z.iso
 		.datetime()
 		.describe('pending_deletion_at of the deletion being cancelled, as shown on the account'),
-	notify_user: z.boolean().default(false).describe('Whether to email the user that the deletion was cancelled'),
 });
 
 export type AdminUserDeletionCancelRequest = z.infer<typeof AdminUserDeletionCancelRequest>;
-
-export const AdminUserUnbanRequest = z.object({
-	notify_user: z.boolean().default(true).describe('Whether to email the user that the suspension was lifted'),
-	public_reason: createStringType(0, 512)
-		.optional()
-		.describe('Reason shown to the user in the unban email. The audit log reason is never emailed'),
-});
-
-export type AdminUserUnbanRequest = z.infer<typeof AdminUserUnbanRequest>;
-
-export const AdminUserBanNoteRequest = z.object({
-	ban_audit_log_id: SnowflakeType.describe('Audit log entry of the current ban that the note refers to'),
-	note: createStringType(1, 512).describe('Note to append to the ban. Recorded as the reason of a new audit log entry'),
-});
-
-export type AdminUserBanNoteRequest = z.infer<typeof AdminUserBanNoteRequest>;
 
 export const AdminUserAclsRequest = SetUserAclsRequest.omit({user_id: true});
 

@@ -4,6 +4,7 @@ import type {ChannelID, GuildID, InviteCode, UserID} from '@app/api/BrandedTypes
 import {createInviteCode} from '@app/api/BrandedTypes';
 import {
 	BatchBuilder,
+	deleteOneOrMany,
 	executeConditional,
 	fetchMany,
 	fetchOne,
@@ -11,9 +12,9 @@ import {
 } from '@app/api/database/CassandraQueryExecution';
 import {Db} from '@app/api/database/CassandraTypes';
 import type {InviteRow} from '@app/api/database/types/ChannelTypes';
-import {IInviteRepository} from '@app/api/invite/IInviteRepository';
 import {Invite} from '@app/api/models/Invite';
 import {Invites, InvitesByChannel, InvitesByGuild} from '@app/api/Tables';
+import {InviteTypes} from '@fluxer/constants/src/ChannelConstants';
 
 const FETCH_INVITE_BY_CODE_CQL = Invites.selectCql({
 	where: Invites.where.eq('code'),
@@ -31,7 +32,7 @@ const FETCH_INVITES_BY_GUILD_CQL = InvitesByGuild.selectCql({
 interface CreateInviteParams {
 	code: InviteCode;
 	type: number;
-	guild_id: GuildID;
+	guild_id: GuildID | null;
 	channel_id?: ChannelID | null;
 	inviter_id?: UserID | null;
 	uses: number;
@@ -40,7 +41,7 @@ interface CreateInviteParams {
 	temporary?: boolean;
 }
 
-export class InviteRepository extends IInviteRepository {
+export class InviteRepository {
 	async findUnique(code: InviteCode): Promise<Invite | null> {
 		const invite = await fetchOne<InviteRow>(FETCH_INVITE_BY_CODE_CQL, {code});
 		return invite ? new Invite(invite) : null;
@@ -170,6 +171,31 @@ export class InviteRepository extends IInviteRepository {
 			}
 		}
 		return new Invite(inviteRow);
+	}
+
+	async claimVanityInvite(code: InviteCode, guildId: GuildID): Promise<Invite | null> {
+		const inviteRow: InviteRow = {
+			code,
+			type: InviteTypes.GUILD,
+			guild_id: guildId,
+			channel_id: null,
+			inviter_id: null,
+			created_at: new Date(),
+			uses: 0,
+			max_uses: 0,
+			max_age: 0,
+			temporary: false,
+			version: 1,
+		};
+		const applied = await executeConditional(Invites.insertIfNotExists(inviteRow));
+		if (!applied) return null;
+		await upsertOne(InvitesByGuild.upsertAll({guild_id: guildId, code}));
+		return new Invite(inviteRow);
+	}
+
+	async releaseVanityInvite(code: InviteCode, guildId: GuildID): Promise<void> {
+		await executeConditional(Invites.conditionalDeleteByPk({code}, {guild_id: guildId}));
+		await deleteOneOrMany(InvitesByGuild.deleteByPk({guild_id: guildId, code}));
 	}
 
 	async updateInviteUses(code: InviteCode, uses: number, invite: Invite): Promise<void> {

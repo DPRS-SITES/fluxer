@@ -35,16 +35,17 @@ const LANE_CONFIG = {
 		consumerName: 'workers_lifecycle',
 		tasks: [
 			'processStripeWebhook',
+			'closePaymentDisputeAccounts',
 			'sendSystemDm',
+			'notifyRegistrationApprovers',
 			'userProcessPendingDeletion',
 			'userProcessPendingDeletions',
 			'applicationProcessDeletion',
+			'guildProcessDeletion',
 			'bulkDeleteSelfMessagesImmediate',
 			'bulkDeleteUserMessages',
-			'bulkDeleteUserMessagesScoped',
 			'deleteUserMessagesInGuildByTime',
 			'messageShred',
-			'finalizeNcmecAttachmentReport',
 			'harvestGuildData',
 			'harvestUserData',
 			'batchGuildAuditLogMessageDeletes',
@@ -57,11 +58,16 @@ const LANE_CONFIG = {
 			'bulkScheduleUserDeletion',
 			'bulkUpdateGuildFeatures',
 			'bulkAddGuildMembers',
+			'joinSingleCommunityMembers',
 			'bulkBanFileShas',
 			'bulkDeleteMessagesForUsers',
 			'drainActivitySpool',
+			'liftExpiredGuildInvitePauses',
+			'endGuildVisitsForCode',
+			'pruneGuildVisits',
+			'endUnassignedGuildVisits',
 		] as const,
-		retiredTasks: ['sendScheduledMessage'],
+		retiredTasks: ['sendScheduledMessage', 'finalizeNcmecAttachmentReport'],
 		concurrency: 8,
 		maxAckPending: 50,
 		ackWaitMs: 60000,
@@ -71,6 +77,9 @@ const LANE_CONFIG = {
 		consumerName: 'workers_batch',
 		tasks: [
 			'expireAttachments',
+			'reconcileAttachmentDecay',
+			'expireReportSnapshots',
+			'clearAuthenticatedReporterEmails',
 			'expireStaleJobs',
 			'indexChannelMessages',
 			'indexGuildMembers',
@@ -87,16 +96,22 @@ const LANE_CONFIG = {
 			'refreshSearchIndex',
 			'seedThreadPermissions',
 			'archiveInactiveThreads',
-			'rebuildThreadAutoArchiveQueue',
 			'repairThreadIndexes',
 			'deleteChannelThreads',
 			'removeThreadMembershipsForGuildMember',
 			'syncThreadSearchDocument',
 			'backfillThreadSearch',
+			'backfillPasskeyTrait',
+			'backfillUserAclIndex',
 			'syncDiscoveryIndex',
 			'syncUrlBlocklists',
 			'syncFileShaBlocklists',
 			'flushUserActivityBuffer',
+			'operatorPassSaleBroadcast',
+			'operatorPassWaitlistCleanup',
+			'operatorPassRemovalExpiry',
+			'operatorPassOfferCompletion',
+			'operatorPassWallRetention',
 		] as const,
 		retiredTasks: [],
 		concurrency: 12,
@@ -139,6 +154,17 @@ interface WorkerLaneRuntimeConfig {
 	laneName?: APIWorkerLaneName;
 	taskName?: WorkerTaskName;
 	laneConcurrencyOverrides: Partial<Record<APIWorkerLaneName, number>>;
+	availableParallelism: number;
+}
+
+const FULL_CONCURRENCY_CORES = 4;
+
+function scaleLaneToCores(lane: WorkerLaneDefinition, cores: number): WorkerLaneDefinition {
+	const concurrency = Math.max(
+		1,
+		Math.min(lane.concurrency, Math.ceil((lane.concurrency * cores) / FULL_CONCURRENCY_CORES)),
+	);
+	return {...lane, concurrency};
 }
 
 function makeLane(name: APIWorkerLaneName): WorkerLaneDefinition {
@@ -242,11 +268,11 @@ function applyLaneConcurrencyOverride(
 
 function resolveWorkerLanes(config: WorkerLaneRuntimeConfig): Array<WorkerLaneDefinition> {
 	if (config.mode === 'single_task') {
-		return [resolveSingleTaskLane(config.taskName)];
+		return [scaleLaneToCores(resolveSingleTaskLane(config.taskName), config.availableParallelism)];
 	}
 	const laneNames = resolveLaneNames(config);
 	return laneNames.map((laneName) => {
-		const lane = resolveLaneByName(laneName);
+		const lane = scaleLaneToCores(resolveLaneByName(laneName), config.availableParallelism);
 		return applyLaneConcurrencyOverride(lane, config.laneConcurrencyOverrides);
 	});
 }

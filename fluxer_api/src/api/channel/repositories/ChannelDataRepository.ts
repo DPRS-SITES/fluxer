@@ -6,8 +6,8 @@ import {
 	privateChannelLastMessageIdPatch,
 	privateChannelMetadataPatch,
 } from '@app/api/channel/PrivateChannelSnapshot';
-import {type GuildChannelListMode, IChannelDataRepository} from '@app/api/channel/repositories/IChannelDataRepository';
 import {
+	advanceRow,
 	BatchBuilder,
 	executeConditional,
 	fetchMany,
@@ -20,12 +20,14 @@ import {buildPatchFromData, executeVersionedUpdate} from '@app/api/database/Cass
 import type {ChannelRow} from '@app/api/database/types/ChannelTypes';
 import {CHANNEL_COLUMNS} from '@app/api/database/types/ChannelTypes';
 import type {ThreadStatsRow} from '@app/api/database/types/ThreadTypes';
-import {guildActive, isTainted} from '@app/api/experiment/ChannelThreadsGate';
+import {isTainted} from '@app/api/experiment/ChannelThreadsGate';
 import {Logger} from '@app/api/Logger';
 import type {RequestCache} from '@app/api/middleware/RequestCacheMiddleware';
 import {Channel} from '@app/api/models/Channel';
 import {Channels, ChannelsByGuild, PrivateChannels, ThreadOnlyChannelsByGuild, ThreadStats} from '@app/api/Tables';
 import {THREAD_CHANNEL_TYPES, THREAD_ONLY_CHANNEL_TYPES} from '@fluxer/constants/src/ThreadConstants';
+
+export type GuildChannelListMode = 'enrolled' | 'maintenance' | 'complete';
 
 const FETCH_CHANNEL_BY_ID = Channels.select({
 	where: [Channels.where.eq('channel_id'), Channels.where.eq('soft_deleted')],
@@ -48,10 +50,8 @@ const FETCH_OPEN_PRIVATE_CHANNEL_TARGET = PrivateChannels.selectCql({
 	limit: 1,
 });
 
-export class ChannelDataRepository extends IChannelDataRepository {
-	constructor(private readonly requestCache?: RequestCache) {
-		super();
-	}
+export class ChannelDataRepository {
+	constructor(private readonly requestCache?: RequestCache) {}
 
 	async findUnique(channelId: ChannelID): Promise<Channel | null> {
 		const prefetched = this.requestCache?.takeChannel(channelId);
@@ -108,10 +108,22 @@ export class ChannelDataRepository extends IChannelDataRepository {
 		}
 		const prev = existing.last_message_id ?? null;
 		if (prev !== null && messageId <= prev) return;
-		await upsertOne(
-			Channels.patchByPk({channel_id: channelId, soft_deleted: false}, {last_message_id: Db.set(messageId)}),
+		const advanced = await advanceRow(
+			{
+				table: Channels,
+				pk: {channel_id: channelId, soft_deleted: false},
+				guard: {col: 'last_message_id', value: messageId},
+				set: {last_message_id: messageId},
+				insert: null,
+			},
+			async () => {
+				await upsertOne(
+					Channels.patchByPk({channel_id: channelId, soft_deleted: false}, {last_message_id: Db.set(messageId)}),
+				);
+				return true;
+			},
 		);
-		void this.fanOutPrivateChannelLastMessageId(existing, messageId);
+		if (advanced) void this.fanOutPrivateChannelLastMessageId(existing, messageId);
 	}
 
 	async adjustThreadStats(threadId: ChannelID, messageDelta: number, sentDelta: number): Promise<void> {
@@ -197,10 +209,7 @@ export class ChannelDataRepository extends IChannelDataRepository {
 				channelId: channelId.toString(),
 				kind,
 				failureCount: failures.length,
-				error:
-					failures[0].status === 'rejected' && failures[0].reason instanceof Error
-						? failures[0].reason.message
-						: String(failures[0].status === 'rejected' ? failures[0].reason : ''),
+				error: failures[0].reason instanceof Error ? failures[0].reason.message : String(failures[0].reason),
 			},
 			'Failed to write through private channel snapshot fan-out',
 		);
@@ -240,8 +249,7 @@ export class ChannelDataRepository extends IChannelDataRepository {
 	}
 
 	async listGuildChannels(guildId: GuildID, mode: GuildChannelListMode): Promise<Array<Channel>> {
-		const includeThreadOnly =
-			mode === 'enrolled' ? guildActive(guildId) : await isTainted(guildId, {fresh: mode === 'complete'});
+		const includeThreadOnly = mode === 'enrolled' ? true : await isTainted(guildId, {fresh: mode === 'complete'});
 		const [guildChannels, threadOnlyChannels] = await Promise.all([
 			fetchMany<{channel_id: bigint}>(FETCH_GUILD_CHANNELS_BY_GUILD_ID.bind({guild_id: guildId})),
 			includeThreadOnly
@@ -264,15 +272,5 @@ export class ChannelDataRepository extends IChannelDataRepository {
 			soft_deleted: false,
 		}));
 		return channels.map((channel) => new Channel(channel));
-	}
-
-	async countGuildChannels(guildId: GuildID): Promise<number> {
-		const [guildChannels, threadOnlyChannels] = await Promise.all([
-			fetchMany<{channel_id: bigint}>(FETCH_GUILD_CHANNELS_BY_GUILD_ID.bind({guild_id: guildId})),
-			guildActive(guildId)
-				? fetchMany<{channel_id: bigint}>(FETCH_THREAD_ONLY_CHANNELS_BY_GUILD_ID.bind({guild_id: guildId}))
-				: Promise.resolve([]),
-		]);
-		return guildChannels.length + threadOnlyChannels.length;
 	}
 }

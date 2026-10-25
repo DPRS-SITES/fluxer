@@ -22,8 +22,9 @@ import {initializeStore} from '@app/features/platform/utils/StoreInitialization'
 import MobileLayout from '@app/features/ui/state/MobileLayout';
 import {applyAppZoomToDocument} from '@app/features/ui/utils/AppZoomUtils';
 import {makeSyncedField} from '@app/features/user/state/SyncedField';
-import {decodeSyncedPreferencesLenient} from '@app/features/user/state/SyncedPreferencesEngine';
 import {StickerAnimationOptions} from '@fluxer/constants/src/UserConstants';
+import {isRecord} from '@fluxer/record_utils/src/RecordGuards';
+import {decodeSyncedPreferencesLenient} from '@fluxer/schema/src/domains/user/SyncedPreferencesCodec';
 import {
 	AccessibilitySettingsSchema,
 	ChannelTypingIndicatorMode as ProtoChannelTypingIndicatorMode,
@@ -38,8 +39,8 @@ const ZOOM_KEYBOARD_STEP_PCT = 10;
 export const ZOOM_LEVEL_MARKERS = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0] as const;
 const ACCESSIBILITY_STORE_STORAGE_KEY = 'Accessibility';
 const ACCESSIBILITY_ZOOM_STORAGE_KEY = 'Accessibility:zoomLevel';
-const ACCESSIBILITY_CUSTOM_THEME_STORAGE_KEY = 'Accessibility:customThemeCss';
-const ACCESSIBILITY_CUSTOM_THEME_SYNC_STORAGE_KEY = 'Accessibility:customThemeCssSyncAcrossDevices';
+export const ACCESSIBILITY_CUSTOM_THEME_STORAGE_KEY = 'Accessibility:customThemeCss';
+export const ACCESSIBILITY_CUSTOM_THEME_SYNC_STORAGE_KEY = 'Accessibility:customThemeCssSyncAcrossDevices';
 const ACCESSIBILITY_MOTION_STORAGE_KEY = 'Accessibility:motion';
 const ACCESSIBILITY_SHOW_NEKO_STORAGE_KEY = 'Accessibility:showNeko';
 const ACCESSIBILITY_KEEP_NEKO_STILL_STORAGE_KEY = 'Accessibility:keepNekoStill';
@@ -68,15 +69,11 @@ interface LegacyAccessibilityStartupSettings {
 	enableSmoothScrolling?: boolean;
 }
 
-interface AccessibilityStartupSettingsOptions {
-	preserveLegacyZoomLevel?: boolean;
-}
-
 interface StartupSettingsStorage {
 	getItem(key: string): string | null;
 }
 
-export interface LocalMotionSettings {
+interface LocalMotionSettings {
 	syncReducedMotionWithSystem: boolean;
 	reducedMotionOverride: boolean | null;
 	enableSmoothScrolling: boolean;
@@ -93,10 +90,6 @@ const DEFAULT_LOCAL_MOTION_SETTINGS: LocalMotionSettings = {
 	keepGifAutoPlayUnderReducedMotion: false,
 	keepStickerAnimationUnderReducedMotion: false,
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
 
 const FONT_SIZE_MIN = 8;
 const FONT_SIZE_MAX = 48;
@@ -382,7 +375,7 @@ function persistLocalVideoSeekPreviewThumbnails(value: boolean): void {
 	} catch {}
 }
 
-function readLocalCustomThemeCss(storage: StartupSettingsStorage = AppStorage): string | null {
+export function readLocalCustomThemeCss(storage: StartupSettingsStorage = AppStorage): string | null {
 	let raw: string | null;
 	try {
 		raw = storage.getItem(ACCESSIBILITY_CUSTOM_THEME_STORAGE_KEY);
@@ -474,7 +467,6 @@ function shouldPreserveLegacyZoomLevel(): boolean {
 
 function readAccessibilityStartupSettings(
 	storage: StartupSettingsStorage = AppStorage,
-	options: AccessibilityStartupSettingsOptions = {},
 ): AccessibilityStartupSettings | null {
 	const localZoomLevel = readPrebootZoomFactor() ?? readLocalZoomLevel(storage);
 	const localMotionSettings = readLocalMotionSettings(storage);
@@ -488,7 +480,7 @@ function readAccessibilityStartupSettings(
 	) {
 		return null;
 	}
-	const preserveLegacyZoomLevel = options.preserveLegacyZoomLevel ?? shouldPreserveLegacyZoomLevel();
+	const preserveLegacyZoomLevel = shouldPreserveLegacyZoomLevel();
 	return {
 		zoomLevel: localZoomLevel ?? (preserveLegacyZoomLevel ? (legacySettings?.zoomLevel ?? 1.0) : 1.0),
 		syncReducedMotionWithSystem:
@@ -558,7 +550,7 @@ function readLocalCustomThemeCssSyncAcrossDevices(): boolean {
 	}
 }
 
-function normalizeCustomThemeCss(css: string | null | undefined): string | null {
+export function normalizeCustomThemeCss(css: string | null | undefined): string | null {
 	if (typeof css !== 'string') {
 		return null;
 	}
@@ -570,12 +562,6 @@ function resolveStartupReducedMotion(
 	systemReducedMotion: boolean,
 ): boolean {
 	return settings.syncReducedMotionWithSystem ? systemReducedMotion : (settings.reducedMotionOverride ?? false);
-}
-
-export enum GuildChannelPresenceIndicatorMode {
-	AVATARS = 0,
-	INDICATOR_ONLY = 1,
-	HIDDEN = 2,
 }
 
 export enum DMMessagePreviewMode {
@@ -659,6 +645,7 @@ export interface AccessibilitySettings {
 	preserveEditDraft: boolean;
 	stayInteractiveWhenUnfocused: boolean;
 	scrollToBottomOnMessageSend: boolean;
+	messageDoubleClickActions: boolean;
 	sequentialFileSend: boolean;
 	showNeko: boolean;
 	keepNekoStill: boolean;
@@ -765,12 +752,12 @@ class Accessibility {
 	preserveEditDraft = false;
 	stayInteractiveWhenUnfocused = false;
 	scrollToBottomOnMessageSend = true;
+	messageDoubleClickActions = false;
 	sequentialFileSend = false;
 	showNeko = false;
 	keepNekoStill = false;
 	showVideoSeekPreviewThumbnails = false;
 	mediaQuery: MediaQueryList | null = null;
-	private _hydrated = false;
 	private unsubscribeZoomStorage: (() => void) | null = null;
 	private unsubscribeMotionStorage: (() => void) | null = null;
 	private unsubscribeShowNekoSession: (() => void) | null = null;
@@ -790,15 +777,15 @@ class Accessibility {
 			persistLocalZoomLevel(this.zoomLevel);
 			persistLocalMotionSettings(this.localMotionSettingsSnapshot);
 		}
-		this.customThemeCss = readLocalCustomThemeCss();
-		if (this.customThemeCss !== null) {
-			persistLocalCustomThemeCss(this.customThemeCss);
-		}
-		this.customThemeCssSyncAcrossDevices = readLocalCustomThemeCssSyncAcrossDevices();
 		this.showNeko = readAndMigrateLocalShowNeko();
 		this.keepNekoStill = readAndMigrateLocalKeepNekoStill();
 		this.showVideoSeekPreviewThumbnails = readLocalVideoSeekPreviewThumbnails();
 		makeAutoObservable(this, {mediaQuery: false}, {autoBind: true});
+		initializeStore(this, () => this.initPersistence());
+		runInAction(() => {
+			this.customThemeCss = readLocalCustomThemeCss();
+			this.customThemeCssSyncAcrossDevices = readLocalCustomThemeCssSyncAcrossDevices();
+		});
 		this.initializeMotionDetection();
 		this.initializeZoomStorageSync();
 		this.initializeMotionStorageSync();
@@ -806,11 +793,6 @@ class Accessibility {
 		this.initializeShowNekoStorageSync();
 		this.initializeVideoSeekPreviewThumbnailsStorageSync();
 		this.applyStartupPresentationSettings();
-		initializeStore(this, () => this.initPersistence());
-	}
-
-	get isHydrated(): boolean {
-		return this._hydrated;
 	}
 
 	private async initPersistence(): Promise<void> {
@@ -874,6 +856,7 @@ class Accessibility {
 				'preserveEditDraft',
 				'stayInteractiveWhenUnfocused',
 				'scrollToBottomOnMessageSend',
+				'messageDoubleClickActions',
 				'sequentialFileSend',
 			],
 			toMessage: (s) => ({
@@ -936,6 +919,7 @@ class Accessibility {
 				preserveEditDraft: s.preserveEditDraft,
 				stayInteractiveWhenUnfocused: s.stayInteractiveWhenUnfocused,
 				scrollToBottomOnMessageSend: s.scrollToBottomOnMessageSend,
+				messageDoubleClickActions: s.messageDoubleClickActions,
 				sequentialFileSend: s.sequentialFileSend,
 			}),
 			applyMessage: (s, m) => {
@@ -1003,7 +987,9 @@ class Accessibility {
 				if (m.showMemesInAutocomplete !== undefined) s.showMemesInExpressionAutocomplete = m.showMemesInAutocomplete;
 				if (m.voiceChannelJoinRequiresDoubleClick !== undefined)
 					s.voiceChannelJoinRequiresDoubleClick = m.voiceChannelJoinRequiresDoubleClick;
-				if (m.customThemeCss !== undefined) {
+				if (m.customThemeCss === undefined) {
+					s.serverCustomThemeCss = null;
+				} else {
 					const customThemeCss = normalizeCustomThemeCss(m.customThemeCss);
 					s.serverCustomThemeCss = customThemeCss;
 					if (s.customThemeCssSyncAcrossDevices) {
@@ -1028,14 +1014,11 @@ class Accessibility {
 				if (m.stayInteractiveWhenUnfocused !== undefined)
 					s.stayInteractiveWhenUnfocused = m.stayInteractiveWhenUnfocused;
 				if (m.scrollToBottomOnMessageSend !== undefined) s.scrollToBottomOnMessageSend = m.scrollToBottomOnMessageSend;
+				if (m.messageDoubleClickActions !== undefined) s.messageDoubleClickActions = m.messageDoubleClickActions;
 				if (m.sequentialFileSend !== undefined) s.sequentialFileSend = m.sequentialFileSend;
 			},
 		});
 		await this.applyStoredZoom();
-		this.applyStoredCustomThemeCss();
-		runInAction(() => {
-			this._hydrated = true;
-		});
 	}
 
 	private initializeMotionDetection() {
@@ -1073,8 +1056,8 @@ class Accessibility {
 	private initializeZoomStorageSync(): void {
 		this.unsubscribeZoomStorage = AppStorage.subscribe(
 			() => {
-				const zoomLevel = readLocalZoomLevel() ?? 1.0;
-				if (zoomLevel === this.zoomLevel) {
+				const zoomLevel = readLocalZoomLevel();
+				if (zoomLevel === null || zoomLevel === this.zoomLevel) {
 					return;
 				}
 				runInAction(() => {
@@ -1241,10 +1224,6 @@ class Accessibility {
 			: getMessageGroupSpacingForDisplayMode(this, messageDisplayCompact);
 	}
 
-	get messageGutterValue(): number {
-		return MobileLayout.isMobileLayout() ? 12 : this.messageGutter;
-	}
-
 	updateSettings(data: Readonly<Partial<AccessibilitySettings>>): void {
 		const validated = this.validateSettings(data);
 		const hasCustomThemeCssUpdate = Object.hasOwn(data, 'customThemeCss');
@@ -1359,6 +1338,8 @@ class Accessibility {
 			this.stayInteractiveWhenUnfocused = validated.stayInteractiveWhenUnfocused;
 		if (validated.scrollToBottomOnMessageSend !== undefined)
 			this.scrollToBottomOnMessageSend = validated.scrollToBottomOnMessageSend;
+		if (validated.messageDoubleClickActions !== undefined)
+			this.messageDoubleClickActions = validated.messageDoubleClickActions;
 		if (validated.sequentialFileSend !== undefined) this.sequentialFileSend = validated.sequentialFileSend;
 		if (validated.showNeko !== undefined && validated.showNeko !== this.showNeko) {
 			this.showNeko = validated.showNeko;
@@ -1462,6 +1443,7 @@ class Accessibility {
 			preserveEditDraft: data.preserveEditDraft ?? this.preserveEditDraft,
 			stayInteractiveWhenUnfocused: data.stayInteractiveWhenUnfocused ?? this.stayInteractiveWhenUnfocused,
 			scrollToBottomOnMessageSend: data.scrollToBottomOnMessageSend ?? this.scrollToBottomOnMessageSend,
+			messageDoubleClickActions: data.messageDoubleClickActions ?? this.messageDoubleClickActions,
 			sequentialFileSend: data.sequentialFileSend ?? this.sequentialFileSend,
 			showNeko: data.showNeko ?? this.showNeko,
 			keepNekoStill: data.keepNekoStill ?? this.keepNekoStill,
@@ -1516,12 +1498,9 @@ class Accessibility {
 		await this.applyZoom(zoomLevel);
 	}
 
-	applyStoredCustomThemeCss(): void {
-		const customThemeCss = readLocalCustomThemeCss();
-		if (customThemeCss !== null) {
-			this.customThemeCss = customThemeCss;
-			persistLocalCustomThemeCss(customThemeCss);
-		}
+	loadCustomThemeCssFromStorage(): void {
+		this.customThemeCss = readLocalCustomThemeCss();
+		this.customThemeCssSyncAcrossDevices = readLocalCustomThemeCssSyncAcrossDevices();
 	}
 
 	private applyStartupPresentationSettings(): void {

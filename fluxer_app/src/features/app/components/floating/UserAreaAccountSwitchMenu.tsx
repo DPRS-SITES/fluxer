@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import AccountEngine from '@app/features/account_engine/state/AccountEngine';
 import styles from '@app/features/app/components/floating/UserAreaAccountSwitchMenu.module.css';
 import {useAccountAvatarURL} from '@app/features/auth/AccountAvatarUtils';
 import {resolveAccountInstanceKey, resolveAccountInstanceLabel} from '@app/features/auth/AccountDisplayUtils';
-import {
-	AccountIdentityText,
-	useAccountDisplayIdentityView,
-} from '@app/features/auth/components/accounts/AccountIdentity';
-import {getAccountMentionCount} from '@app/features/auth/components/accounts/account_switcher_modal/AccountMentionCounts';
+import {useAccountDisplayIdentityView} from '@app/features/auth/components/accounts/AccountIdentity';
 import {SESSION_EXPIRED_DESCRIPTOR} from '@app/features/auth/components/accounts/account_switcher_modal/AccountPickerShared';
+import {InstanceBrandMark} from '@app/features/auth/components/InstanceBrandMark';
+import {resolveInstanceLabel} from '@app/features/auth/flow/instance_selector/InstanceDirectoryStorage';
+import {resolveInstanceBrandIconUrl, resolveInstanceProductName} from '@app/features/auth/InstanceBranding';
 import {getAccountKey} from '@app/features/auth/state/AccountStorageKey';
 import {ACTIVE_ACCOUNT_DESCRIPTOR} from '@app/features/i18n/utils/CommonMessageDescriptors';
 import type {Account} from '@app/features/platform/state/AuthSession';
@@ -18,6 +18,7 @@ import {MentionBadge} from '@app/features/ui/components/MentionBadge';
 import {MockAvatar} from '@app/features/ui/components/MockAvatar';
 import FocusRing from '@app/features/ui/focus_ring/FocusRing';
 import {flxElementClassName} from '@app/lib/react';
+import {isOfficialInstanceHost} from '@fluxer/instance_bootstrap/src/OfficialInstance';
 import {Trans, useLingui} from '@lingui/react/macro';
 import {CheckIcon, GearIcon} from '@phosphor-icons/react';
 import clsx from 'clsx';
@@ -30,6 +31,8 @@ const UNKNOWN_INSTANCE_GROUP_KEY = 'unknown';
 interface AccountInstanceGroup {
 	readonly groupKey: string;
 	readonly instanceLabel: string | null;
+	readonly isOfficial: boolean;
+	readonly iconUrl: string | null;
 	readonly accounts: Array<Account>;
 }
 
@@ -46,7 +49,13 @@ function createAccountInstanceGroups(accounts: ReadonlyArray<Account>): Array<Ac
 		const instanceKey = resolveAccountInstanceKey(account);
 		if (instanceKey == null) {
 			if (unknownGroup == null) {
-				unknownGroup = {groupKey: UNKNOWN_INSTANCE_GROUP_KEY, instanceLabel: null, accounts: []};
+				unknownGroup = {
+					groupKey: UNKNOWN_INSTANCE_GROUP_KEY,
+					instanceLabel: null,
+					isOfficial: false,
+					iconUrl: null,
+					accounts: [],
+				};
 			}
 			unknownGroup.accounts.push(account);
 			continue;
@@ -54,7 +63,16 @@ function createAccountInstanceGroups(accounts: ReadonlyArray<Account>): Array<Ac
 		const groupKey = `instance:${instanceKey}`;
 		let group = groupsByKey.get(groupKey);
 		if (group == null) {
-			group = {groupKey, instanceLabel: resolveAccountInstanceLabel(account), accounts: []};
+			const domain = resolveAccountInstanceLabel(account);
+			const isOfficial = isOfficialInstanceHost(instanceKey);
+			const productName = isOfficial ? null : resolveInstanceProductName(account.instance);
+			group = {
+				groupKey,
+				instanceLabel: domain == null ? null : resolveInstanceLabel(productName, domain),
+				isOfficial,
+				iconUrl: isOfficial ? null : resolveInstanceBrandIconUrl(account.instance),
+				accounts: [],
+			};
 			groupsByKey.set(groupKey, group);
 			groups.push(group);
 		}
@@ -86,7 +104,7 @@ const SwitchAccountMenuItem = observer(
 		const isExpired = account.isValid === false;
 		const avatarUrl = useAccountAvatarURL(account);
 		const identityView = useAccountDisplayIdentityView(account);
-		const mentionCount = getAccountMentionCount(accountKey);
+		const mentionCount = AccountEngine.getMentionCount(accountKey);
 		let metaLabel: string | null = null;
 		if (isExpired) {
 			metaLabel = i18n._(SESSION_EXPIRED_DESCRIPTOR);
@@ -128,13 +146,10 @@ const SwitchAccountMenuItem = observer(
 						>
 							<span
 								className={styles.accountMenuNameText}
+								dir="auto"
 								data-flx="app.floating.user-area-account-switch-menu.account-menu-name-text"
 							>
-								<AccountIdentityText
-									identityView={identityView}
-									discriminatorClassName={styles.accountMenuDiscriminator}
-									data-flx="app.floating.user-area-account-switch-menu.account-identity-text"
-								/>
+								{identityView.displayLabel}
 							</span>
 							<MentionBadge
 								mentionCount={mentionCount}
@@ -202,6 +217,17 @@ export const UserAreaAccountSwitchMenu = observer(
 						className={flxElementClassName(styles.instanceHeading)}
 						data-flx="app.floating.user-area-account-switch-menu.instance-heading"
 					>
+						<span
+							className={styles.instanceHeadingMark}
+							data-flx="app.floating.user-area-account-switch-menu.instance-heading-mark"
+						>
+							<InstanceBrandMark
+								isOfficial={group.isOfficial}
+								iconUrl={group.iconUrl}
+								size={12}
+								data-flx="app.floating.user-area-account-switch-menu.instance-brand-mark"
+							/>
+						</span>
 						<span
 							className={styles.instanceHeadingLabel}
 							data-flx="app.floating.user-area-account-switch-menu.instance-heading-label"

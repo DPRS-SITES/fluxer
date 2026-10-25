@@ -2,7 +2,7 @@
 
 import {findUrlSpans, isInsideSpan, type TextSpan} from '@app/features/messaging/utils/markdown/UrlSpanUtils';
 
-export const TYPED_EMOJI_SHORTCODE_PATTERN = /:([\p{L}\p{N}_+~.-]{2,}):/u;
+const TYPED_EMOJI_SHORTCODE_PATTERN = /:([\p{L}\p{N}_+~.-]{2,}):/u;
 
 export interface TypedEmojiMatch {
 	start: number;
@@ -12,7 +12,7 @@ export interface TypedEmojiMatch {
 
 const SHORTCODE_WORD_BOUNDARY_CHAR = /[\p{L}\p{N}_]/u;
 
-export function isTypedEmojiShortcodeBoundary(text: string, start: number, end: number): boolean {
+function isTypedEmojiShortcodeBoundary(text: string, start: number, end: number): boolean {
 	const previous = start > 0 ? text.charAt(start - 1) : '';
 	const next = end < text.length ? text.charAt(end) : '';
 	return !SHORTCODE_WORD_BOUNDARY_CHAR.test(previous) && !SHORTCODE_WORD_BOUNDARY_CHAR.test(next);

@@ -8,21 +8,23 @@ import {
 	setHighlightRanges,
 } from '@app/features/messaging/utils/CSSHighlightSearch';
 import {remFromPx} from '@app/features/theme/layout/RemFromPx';
-import {AccessibilityInlineContent} from '@app/features/user/components/modals/tabs/accessibility_tab/AccessibilityTabInline';
+import {ThemesInlineContent} from '@app/features/theme_settings/ThemesTab';
+import {CaretRightIcon} from '@app/features/ui/icons/DirectionalIcons';
+import {AccessibilityInlineContent} from '@app/features/user/components/modals/tabs/AccessibilityTab';
+import {AppearanceInlineContent} from '@app/features/user/components/modals/tabs/AppearanceTab';
 import {AccountSecurityInlineTab} from '@app/features/user/components/modals/tabs/account_security_tab/AccountSecurityTabInline';
-import {AppearanceInlineContent} from '@app/features/user/components/modals/tabs/appearance_tab/AppearanceTabInline';
 import ApplicationsTab from '@app/features/user/components/modals/tabs/applications_tab';
-import {ChatSettingsInlineContent} from '@app/features/user/components/modals/tabs/chat_settings_tab/ChatSettingsTabInline';
+import {ChatSettingsInlineContent} from '@app/features/user/components/modals/tabs/ChatSettingsTab';
 import DesktopSettingsTab from '@app/features/user/components/modals/tabs/DesktopSettingsTab';
 import GiftInventoryTab from '@app/features/user/components/modals/tabs/GiftInventoryTab';
 import KeybindsTab from '@app/features/user/components/modals/tabs/KeybindsTab';
 import LanguageTab from '@app/features/user/components/modals/tabs/LanguageTab';
 import LinkedAccountsTab from '@app/features/user/components/modals/tabs/LinkedAccountsTab';
 import MyProfileTab from '@app/features/user/components/modals/tabs/MyProfileTab';
-import {NotificationsInlineContent} from '@app/features/user/components/modals/tabs/notifications_tab/NotificationsTabInline';
+import {NotificationsInlineContent} from '@app/features/user/components/modals/tabs/NotificationsTab';
 import {PlutoniumInlineTab} from '@app/features/user/components/modals/tabs/PlutoniumTab';
 import {PrivacyDashboardContent} from '@app/features/user/components/modals/tabs/privacy_safety_tab/PrivacySafetyTabInline';
-import {VoiceVideoInlineContent} from '@app/features/user/components/modals/tabs/voice_video_tab/VoiceVideoTabInline';
+import {VoiceVideoInlineContent} from '@app/features/user/components/modals/tabs/VoiceVideoTab';
 import {getSettingsTabComponent} from '@app/features/user/components/settings_utils/DesktopSettingsTabs';
 import type {SettingsTab} from '@app/features/user/components/settings_utils/SettingsConstants';
 import {
@@ -38,7 +40,6 @@ import type {
 import {SettingsItemStatusBadges} from '@app/features/user/components/settings_utils/SettingsStatusBadge';
 import Users from '@app/features/user/state/Users';
 import {Plural, Trans} from '@lingui/react/macro';
-import {CaretRightIcon} from '@phosphor-icons/react';
 import {clsx} from 'clsx';
 import {observer} from 'mobx-react-lite';
 import React, {useCallback, useEffect, useRef, useState} from 'react';
@@ -69,6 +70,7 @@ const INLINE_TAB_COMPONENTS: Partial<Record<UserSettingsTabType, React.Component
 	blocked_users: AccountSecurityInlineTab,
 	devices: AccountSecurityInlineTab,
 	appearance: AppearanceInlineContent,
+	themes: ThemesInlineContent,
 	accessibility: AccessibilityInlineContent,
 	chat_settings: ChatSettingsInlineContent,
 	voice_video: VoiceVideoInlineContent,
@@ -265,8 +267,15 @@ export const AllSettingsRenderer: React.FC<AllSettingsRendererProps> = observer(
 			>
 				<div className={styles.resultsHeader} data-flx="app.all-settings-renderer.results-header">
 					<Trans>
-						Found <Plural value={resultCount} one="# result" other="# results" /> in{' '}
-						<Plural value={categoryCount} one="# category" other="# categories" />
+						Found{' '}
+						<Plural value={resultCount} one="# result" other="# results" data-flx="app.all-settings-renderer.plural" />{' '}
+						in{' '}
+						<Plural
+							value={categoryCount}
+							one="# category"
+							other="# categories"
+							data-flx="app.all-settings-renderer.plural--2"
+						/>
 					</Trans>
 				</div>
 				{searchResults.map((result) => (

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import {ResettableStates} from '@app/features/app/state/ResettableStates';
 import {Message as MessageRecord} from '@app/features/messaging/models/MessagingMessage';
 import Messages from '@app/features/messaging/state/MessagingMessages';
 import {MessageFlags, MessageReferenceTypes} from '@fluxer/constants/src/ChannelConstants';
@@ -15,7 +16,7 @@ export const MessageReferenceState = {
 
 export type MessageReferenceState = ValueOf<typeof MessageReferenceState>;
 
-export type MessageReferenceResolution =
+type MessageReferenceResolution =
 	| {readonly state: typeof MessageReferenceState.LOADED; readonly message: MessageRecord}
 	| {readonly state: typeof MessageReferenceState.NOT_LOADED}
 	| {readonly state: typeof MessageReferenceState.DELETED};
@@ -193,18 +194,6 @@ class MessageReferences {
 		}
 	}
 
-	handleChannelDelete(channelId: string): void {
-		this.cleanupChannelMessages(channelId);
-	}
-
-	handleGatewayReady(): void {
-		this.deletedMessageIds.clear();
-		this.cachedMessages.clear();
-		this.referenceVersions.clear();
-		this.referenceCount.clear();
-		this.referencingMessages.clear();
-	}
-
 	handleMessageUpdate(message: WireMessage): void {
 		this.handleReferencedMessageUpdate(message);
 		if (!('message_reference' in message) && !('referenced_message' in message)) {
@@ -225,35 +214,6 @@ class MessageReferences {
 		}
 	}
 
-	private cleanupChannelMessages(channelId: string): void {
-		const channelPrefix = `${channelId}:`;
-		for (const key of Array.from(this.deletedMessageIds)) {
-			if (key.startsWith(channelPrefix)) {
-				this.deletedMessageIds.delete(key);
-			}
-		}
-		for (const key of Array.from(this.cachedMessages.keys())) {
-			if (key.startsWith(channelPrefix)) {
-				this.cachedMessages.delete(key);
-			}
-		}
-		for (const key of Array.from(this.referenceVersions.keys())) {
-			if (key.startsWith(channelPrefix)) {
-				this.referenceVersions.delete(key);
-			}
-		}
-		for (const key of Array.from(this.referenceCount.keys())) {
-			if (key.startsWith(channelPrefix)) {
-				this.referenceCount.delete(key);
-			}
-		}
-		for (const [messageId, ref] of Array.from(this.referencingMessages.entries())) {
-			if (ref.channelId === channelId) {
-				this.referencingMessages.delete(messageId);
-			}
-		}
-	}
-
 	getMessageReference(channelId: string, messageId: string): MessageReferenceResolution {
 		const key = this.getKey(channelId, messageId);
 		this.readReferenceVersion(channelId, messageId);
@@ -270,6 +230,18 @@ class MessageReferences {
 		}
 		return NOT_LOADED_RESOLUTION;
 	}
+
+	reset(): void {
+		this.deletedMessageIds = new Set();
+		this.cachedMessages = new Map();
+		this.referenceVersions.clear();
+		this.referenceCount.clear();
+		this.referencingMessages.clear();
+	}
 }
 
-export default new MessageReferences();
+const messageReferences = new MessageReferences();
+
+ResettableStates.register(messageReferences, () => messageReferences.reset());
+
+export default messageReferences;

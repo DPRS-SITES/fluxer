@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import type {UserID} from '@app/api/BrandedTypes';
+import {LocalDate} from '@app/api/database/LocalDate';
 import type {UserRow} from '@app/api/database/types/UserTypes';
-import {getGlobalLimitConfigSnapshot} from '@app/api/limits/LimitConfigService';
-import {resolveLimitSafe} from '@app/api/limits/LimitConfigUtils';
-import {createLimitMatchContext} from '@app/api/limits/LimitMatchContextBuilder';
 import {checkIsPremium, getEffectivePremiumUntil} from '@app/api/user/UserHelpers';
 import {
 	extractPremiumFlagsFromLegacyUserFlags,
@@ -13,7 +11,6 @@ import {
 	type UserAuthenticatorType,
 	type UserPremiumType,
 } from '@fluxer/constants/src/UserConstants';
-import {types} from 'cassandra-driver';
 
 export class User {
 	readonly id: UserID;
@@ -68,10 +65,11 @@ export class User {
 	readonly deletionAuditLogReason: string | null;
 	readonly deletionScheduledBy: UserID | null;
 	readonly deletionScheduledAt: Date | null;
+	readonly enforcementDecisionId: bigint | null;
 	readonly contentHiddenSince: Date | null;
 	readonly acls: Set<string>;
 	private readonly _traits: Set<string>;
-	readonly firstRefundAt: Date | null;
+	readonly lastRefundAt: Date | null;
 	readonly giftInventoryServerSeq: number | null;
 	readonly giftInventoryClientSeq: number | null;
 	readonly premiumOnboardingDismissedAt: Date | null;
@@ -133,10 +131,11 @@ export class User {
 		this.deletionAuditLogReason = row.deletion_audit_log_reason ?? null;
 		this.deletionScheduledBy = row.deletion_scheduled_by ?? null;
 		this.deletionScheduledAt = row.deletion_scheduled_at ?? null;
+		this.enforcementDecisionId = row.enforcement_decision_id ?? null;
 		this.contentHiddenSince = row.content_hidden_since ?? null;
 		this.acls = row.acls ?? new Set();
 		this._traits = row.traits ?? new Set();
-		this.firstRefundAt = row.first_refund_at ?? null;
+		this.lastRefundAt = row.first_refund_at ?? null;
 		this.giftInventoryServerSeq = row.gift_inventory_server_seq ?? null;
 		this.giftInventoryClientSeq = row.gift_inventory_client_seq ?? null;
 		this.premiumOnboardingDismissedAt = row.premium_onboarding_dismissed_at ?? null;
@@ -155,20 +154,6 @@ export class User {
 
 	get effectivePremiumUntil(): Date | null {
 		return getEffectivePremiumUntil(this);
-	}
-
-	isUnclaimedAccount(): boolean {
-		return this.passwordHash === null && !this.isBot && !this._traits.has('sso');
-	}
-
-	canUseGlobalExpressions(): boolean {
-		if (this.isBot) {
-			return true;
-		}
-		const ctx = createLimitMatchContext({user: this});
-		const snapshot = getGlobalLimitConfigSnapshot();
-		const hasGlobalExpressions = resolveLimitSafe(snapshot, ctx, 'feature_global_expressions', 0);
-		return hasGlobalExpressions > 0;
 	}
 
 	toRow(): UserRow {
@@ -195,7 +180,7 @@ export class User {
 			accent_color: this.accentColor,
 			timezone: this.timezone,
 			timezone_privacy_flags: this.timezonePrivacyFlags,
-			date_of_birth: this.dateOfBirth ? types.LocalDate.fromString(this.dateOfBirth) : null,
+			date_of_birth: this.dateOfBirth ? LocalDate.fromString(this.dateOfBirth) : null,
 			locale: this.locale,
 			flags: this.flags,
 			premium_flags: this.premiumFlags,
@@ -225,10 +210,11 @@ export class User {
 			deletion_audit_log_reason: this.deletionAuditLogReason,
 			deletion_scheduled_by: this.deletionScheduledBy,
 			deletion_scheduled_at: this.deletionScheduledAt,
+			enforcement_decision_id: this.enforcementDecisionId,
 			content_hidden_since: this.contentHiddenSince,
 			acls: this.acls.size > 0 ? this.acls : null,
 			traits: this._traits.size > 0 ? this._traits : null,
-			first_refund_at: this.firstRefundAt,
+			first_refund_at: this.lastRefundAt,
 			gift_inventory_server_seq: this.giftInventoryServerSeq,
 			gift_inventory_client_seq: this.giftInventoryClientSeq,
 			premium_onboarding_dismissed_at: this.premiumOnboardingDismissedAt,

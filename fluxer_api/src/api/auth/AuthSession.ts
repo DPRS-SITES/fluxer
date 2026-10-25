@@ -2,7 +2,7 @@
 
 import type {ApiContext} from '@app/api/ApiContext';
 import {mapAuthSessionsToResponse} from '@app/api/auth/AuthModel';
-import {revokeAllAuthSessions, revokeAuthSessions} from '@app/api/auth/AuthSessionRevocation';
+import {revokeAuthSessions} from '@app/api/auth/AuthSessionRevocation';
 import * as AuthUtility from '@app/api/auth/AuthUtility';
 import type {UserID} from '@app/api/BrandedTypes';
 import {
@@ -13,15 +13,16 @@ import {Logger} from '@app/api/Logger';
 import {getKVAccountDeletionQueue} from '@app/api/middleware/ServiceSingletons';
 import type {AuthSession} from '@app/api/models/AuthSession';
 import type {User} from '@app/api/models/User';
+import {BELOW_MINIMUM_AGE_TRAIT} from '@app/api/user/UserTraits';
 import {lookupGeoip} from '@app/api/utils/IpUtils';
+import {requireConfiguredClientIp} from '@app/api/utils/RequestClientIp';
 import {isFluxerNativeUserAgent, parseReportedClientOs} from '@app/api/utils/SessionClientIdentity';
+import {AccountBelowMinimumAgeError} from '@fluxer/errors/src/domains/auth/AccountBelowMinimumAgeError';
 import {BotUserAuthSessionCreationDeniedError} from '@fluxer/errors/src/domains/auth/BotUserAuthSessionCreationDeniedError';
 import {RegistrationPendingApprovalError} from '@fluxer/errors/src/domains/auth/RegistrationPendingApprovalError';
 import {RegistrationRejectedError} from '@fluxer/errors/src/domains/auth/RegistrationRejectedError';
 import {SessionTokenMismatchError} from '@fluxer/errors/src/domains/auth/SessionTokenMismatchError';
 import {InvalidTokenError} from '@fluxer/errors/src/domains/core/InvalidTokenError';
-import {UnknownUserError} from '@fluxer/errors/src/domains/user/UnknownUserError';
-import {requireClientIp} from '@fluxer/ip_utils/src/ClientIp';
 import type {AuthSessionResponse} from '@fluxer/schema/src/domains/auth/AuthSchemas';
 
 export interface SessionOrigin {
@@ -54,8 +55,6 @@ interface ReplaceCurrentAuthSessionParams {
 
 interface ReplaceCurrentAuthSessionResult {
 	token: string;
-	authSession: AuthSession;
-	oldAuthSessionIdHash: string;
 	newAuthSessionIdHash: string;
 }
 
@@ -67,10 +66,7 @@ interface CreateAdditionalAuthSessionFromTokenParams {
 
 export function resolveSessionOrigin(ctx: ApiContext, request: Request): SessionOrigin {
 	const {config} = ctx.services;
-	const ip = requireClientIp(request, {
-		trustClientIpHeader: config.proxy.trust_client_ip_header,
-		clientIpHeaderName: config.proxy.client_ip_header,
-	});
+	const ip = requireConfiguredClientIp(request, config.proxy);
 	const userAgent = request.headers.get('user-agent')?.trim() || null;
 	const clientOs = isFluxerNativeUserAgent(userAgent)
 		? parseReportedClientOs(request.headers.get('x-fluxer-client-properties'))
@@ -84,12 +80,13 @@ export async function createAuthSession(
 ): Promise<[token: string, AuthSession]> {
 	const {users} = ctx.services;
 	if (user.isBot) throw new BotUserAuthSessionCreationDeniedError();
+	user = await AuthUtility.assertSignInAllowed(ctx, user);
 	if (user.traits.has(REGISTRATION_PENDING_APPROVAL_TRAIT)) throw new RegistrationPendingApprovalError();
 	if (user.traits.has(REGISTRATION_REJECTED_TRAIT)) throw new RegistrationRejectedError();
-	user = await AuthUtility.handleBanStatus(ctx, user);
+	if (user.traits.has(BELOW_MINIMUM_AGE_TRAIT)) throw new AccountBelowMinimumAgeError();
 	user = await AuthUtility.reactivateOnSignIn(ctx, user, getKVAccountDeletionQueue());
 	const now = new Date();
-	const token = await AuthUtility.generateAuthToken(ctx);
+	const token = await AuthUtility.generateAuthToken();
 	let clientCountry: string | null = null;
 	try {
 		const geoip = await lookupGeoip(origin.ip);
@@ -123,10 +120,7 @@ export async function createAdditionalAuthSessionFromToken(
 		throw new InvalidTokenError();
 	}
 	const {users} = ctx.services;
-	const user = await users.findUnique(existingSession.userId);
-	if (!user) {
-		throw new UnknownUserError();
-	}
+	const user = await users.findUniqueAssert(existingSession.userId);
 	if (expectedUserId && user.id.toString() !== expectedUserId) {
 		throw new SessionTokenMismatchError();
 	}
@@ -174,10 +168,6 @@ export async function logoutAuthSessions(
 	);
 }
 
-export async function terminateAllUserSessions(ctx: ApiContext, userId: UserID): Promise<number> {
-	return await revokeAllAuthSessions(ctx.services, userId);
-}
-
 export async function replaceCurrentAuthSession(
 	ctx: ApiContext,
 	{user, currentAuthSession, request}: ReplaceCurrentAuthSessionParams,
@@ -199,8 +189,6 @@ export async function replaceCurrentAuthSession(
 	});
 	return {
 		token: newToken,
-		authSession: newAuthSession,
-		oldAuthSessionIdHash,
 		newAuthSessionIdHash,
 	};
 }

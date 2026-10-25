@@ -95,6 +95,7 @@ const NAMED_FLUXER_ENV_OVERRIDES: Record<string, NamedEnvOverride> = {
 		parse: parseBoolean,
 	},
 	FLUXER_API_WORKER_METRICS_PORT: {path: ['services', 'api', 'worker', 'metrics_port'], parse: parseInteger},
+	FLUXER_API_EMBEDDED_WORKER: {path: ['services', 'api', 'worker', 'embedded'], parse: parseBoolean},
 	FLUXER_API_WORKER_LANE_CONCURRENCY_OVERRIDES: {
 		path: ['services', 'api', 'worker', 'lane_concurrency_overrides'],
 		parse: parseJsonObject,
@@ -154,6 +155,7 @@ const NAMED_FLUXER_ENV_OVERRIDES: Record<string, NamedEnvOverride> = {
 	FLUXER_AUTH_BLUESKY_KEYS: {path: ['auth', 'bluesky', 'keys'], parse: parseJsonArray},
 	FLUXER_EMAIL_ENABLED: {path: ['integrations', 'email', 'enabled'], parse: parseBoolean},
 	FLUXER_EMAIL_PROVIDER: {path: ['integrations', 'email', 'provider']},
+	FLUXER_EMAIL_DELIVERY: {path: ['integrations', 'email', 'delivery']},
 	FLUXER_EMAIL_FROM_EMAIL: {path: ['integrations', 'email', 'from_email']},
 	FLUXER_EMAIL_FROM_NAME: {path: ['integrations', 'email', 'from_name']},
 	FLUXER_EMAIL_REPLY_TO_EMAIL: {path: ['integrations', 'email', 'reply_to_email']},
@@ -163,13 +165,28 @@ const NAMED_FLUXER_ENV_OVERRIDES: Record<string, NamedEnvOverride> = {
 	FLUXER_EMAIL_SMTP_PORT: {path: ['integrations', 'email', 'smtp', 'port'], parse: parseInteger},
 	FLUXER_EMAIL_SMTP_USERNAME: {path: ['integrations', 'email', 'smtp', 'username']},
 	FLUXER_EMAIL_SMTP_PASSWORD: {path: ['integrations', 'email', 'smtp', 'password']},
+	FLUXER_EMAIL_SMTP_TLS_MODE: {path: ['integrations', 'email', 'smtp', 'tls_mode'], parse: parseSmtpTlsMode},
 	FLUXER_EMAIL_SMTP_SECURE: {path: ['integrations', 'email', 'smtp', 'secure'], parse: parseBoolean},
+	FLUXER_EMAIL_FALLBACK_DOMAINS: {path: ['integrations', 'email', 'fallback', 'domains'], parse: parseCsv},
+	FLUXER_EMAIL_FALLBACK_SMTP_HOST: {path: ['integrations', 'email', 'fallback', 'smtp', 'host']},
+	FLUXER_EMAIL_FALLBACK_SMTP_PORT: {path: ['integrations', 'email', 'fallback', 'smtp', 'port'], parse: parseInteger},
+	FLUXER_EMAIL_FALLBACK_SMTP_USERNAME: {path: ['integrations', 'email', 'fallback', 'smtp', 'username']},
+	FLUXER_EMAIL_FALLBACK_SMTP_PASSWORD: {path: ['integrations', 'email', 'fallback', 'smtp', 'password']},
+	FLUXER_EMAIL_FALLBACK_SMTP_TLS_MODE: {
+		path: ['integrations', 'email', 'fallback', 'smtp', 'tls_mode'],
+		parse: parseSmtpTlsMode,
+	},
+	FLUXER_EMAIL_FALLBACK_SMTP_HEADERS: {
+		path: ['integrations', 'email', 'fallback', 'smtp', 'headers'],
+		parse: parseJsonObject,
+	},
 	FLUXER_LIVEKIT_ENABLED: {path: ['integrations', 'voice', 'enabled'], parse: parseBoolean},
 	FLUXER_LIVEKIT_API_KEY: {path: ['integrations', 'voice', 'api_key']},
 	FLUXER_LIVEKIT_API_SECRET: {path: ['integrations', 'voice', 'api_secret']},
 	FLUXER_LIVEKIT_URL: {path: ['integrations', 'voice', 'url']},
 	FLUXER_LIVEKIT_INTERNAL_URL: {path: ['integrations', 'voice', 'internal_url']},
 	FLUXER_LIVEKIT_DEFAULT_REGION: {path: ['integrations', 'voice', 'default_region'], parse: parseJsonObject},
+	FLUXER_VOICE_P2P_STUN_URLS: {path: ['integrations', 'voice', 'p2p_stun_urls'], parse: parseCsv},
 	FLUXER_SEARCH_ENGINE: {path: ['integrations', 'search', 'engine']},
 	FLUXER_SEARCH_URL: {path: ['integrations', 'search', 'url']},
 	FLUXER_SEARCH_API_KEY: {path: ['integrations', 'search', 'api_key']},
@@ -189,6 +206,7 @@ const NAMED_FLUXER_ENV_OVERRIDES: Record<string, NamedEnvOverride> = {
 	FLUXER_STRIPE_PRICE_MONTHLY_BRL: {path: ['integrations', 'stripe', 'prices', 'monthly_brl']},
 	FLUXER_STRIPE_PRICE_MONTHLY_DKK: {path: ['integrations', 'stripe', 'prices', 'monthly_dkk']},
 	FLUXER_STRIPE_PRICE_MONTHLY_INR: {path: ['integrations', 'stripe', 'prices', 'monthly_inr']},
+	FLUXER_STRIPE_PRICE_MONTHLY_ISK: {path: ['integrations', 'stripe', 'prices', 'monthly_isk']},
 	FLUXER_STRIPE_PRICE_MONTHLY_NOK: {path: ['integrations', 'stripe', 'prices', 'monthly_nok']},
 	FLUXER_STRIPE_PRICE_MONTHLY_PLN: {path: ['integrations', 'stripe', 'prices', 'monthly_pln']},
 	FLUXER_STRIPE_PRICE_MONTHLY_SEK: {path: ['integrations', 'stripe', 'prices', 'monthly_sek']},
@@ -198,6 +216,7 @@ const NAMED_FLUXER_ENV_OVERRIDES: Record<string, NamedEnvOverride> = {
 	FLUXER_STRIPE_PRICE_YEARLY_BRL: {path: ['integrations', 'stripe', 'prices', 'yearly_brl']},
 	FLUXER_STRIPE_PRICE_YEARLY_DKK: {path: ['integrations', 'stripe', 'prices', 'yearly_dkk']},
 	FLUXER_STRIPE_PRICE_YEARLY_INR: {path: ['integrations', 'stripe', 'prices', 'yearly_inr']},
+	FLUXER_STRIPE_PRICE_YEARLY_ISK: {path: ['integrations', 'stripe', 'prices', 'yearly_isk']},
 	FLUXER_STRIPE_PRICE_YEARLY_NOK: {path: ['integrations', 'stripe', 'prices', 'yearly_nok']},
 	FLUXER_STRIPE_PRICE_YEARLY_PLN: {path: ['integrations', 'stripe', 'prices', 'yearly_pln']},
 	FLUXER_STRIPE_PRICE_YEARLY_SEK: {path: ['integrations', 'stripe', 'prices', 'yearly_sek']},
@@ -210,6 +229,8 @@ const NAMED_FLUXER_ENV_OVERRIDES: Record<string, NamedEnvOverride> = {
 	FLUXER_STRIPE_PRICE_GIFT_1_YEAR_DKK: {path: ['integrations', 'stripe', 'prices', 'gift_1_year_dkk']},
 	FLUXER_STRIPE_PRICE_GIFT_1_MONTH_NOK: {path: ['integrations', 'stripe', 'prices', 'gift_1_month_nok']},
 	FLUXER_STRIPE_PRICE_GIFT_1_YEAR_NOK: {path: ['integrations', 'stripe', 'prices', 'gift_1_year_nok']},
+	FLUXER_STRIPE_PRICE_GIFT_1_MONTH_ISK: {path: ['integrations', 'stripe', 'prices', 'gift_1_month_isk']},
+	FLUXER_STRIPE_PRICE_GIFT_1_YEAR_ISK: {path: ['integrations', 'stripe', 'prices', 'gift_1_year_isk']},
 	FLUXER_STRIPE_PRICE_GIFT_1_MONTH_BRL: {path: ['integrations', 'stripe', 'prices', 'gift_1_month_brl']},
 	FLUXER_STRIPE_PRICE_GIFT_1_MONTH_INR: {path: ['integrations', 'stripe', 'prices', 'gift_1_month_inr']},
 	FLUXER_STRIPE_PRICE_GIFT_1_MONTH_PLN: {path: ['integrations', 'stripe', 'prices', 'gift_1_month_pln']},
@@ -220,11 +241,6 @@ const NAMED_FLUXER_ENV_OVERRIDES: Record<string, NamedEnvOverride> = {
 	FLUXER_STRIPE_PRICE_GIFT_1_YEAR_INR: {path: ['integrations', 'stripe', 'prices', 'gift_1_year_inr']},
 	FLUXER_STRIPE_PRICE_GIFT_1_YEAR_PLN: {path: ['integrations', 'stripe', 'prices', 'gift_1_year_pln']},
 	FLUXER_STRIPE_PRICE_GIFT_1_YEAR_TRY: {path: ['integrations', 'stripe', 'prices', 'gift_1_year_try']},
-	FLUXER_NCMEC_ENABLED: {path: ['integrations', 'ncmec', 'enabled'], parse: parseBoolean},
-	FLUXER_NCMEC_BASE_URL: {path: ['integrations', 'ncmec', 'base_url']},
-	FLUXER_NCMEC_USERNAME: {path: ['integrations', 'ncmec', 'username']},
-	FLUXER_NCMEC_PASSWORD: {path: ['integrations', 'ncmec', 'password']},
-	FLUXER_NCMEC_REPORTER_EMAIL: {path: ['integrations', 'ncmec', 'reporter_email']},
 	FLUXER_CLAMAV_ENABLED: {path: ['integrations', 'clamav', 'enabled'], parse: parseBoolean},
 	FLUXER_CLAMAV_HOST: {path: ['integrations', 'clamav', 'host']},
 	FLUXER_CLAMAV_PORT: {path: ['integrations', 'clamav', 'port'], parse: parseInteger},
@@ -238,17 +254,17 @@ const NAMED_FLUXER_ENV_OVERRIDES: Record<string, NamedEnvOverride> = {
 		path: ['integrations', 'cache_purge', 'http', 'timeout_ms'],
 		parse: parseInteger,
 	},
+	FLUXER_CACHE_PURGE_CONTROLLER_ENDPOINT: {path: ['integrations', 'cache_purge', 'controller', 'endpoint']},
+	FLUXER_CACHE_PURGE_CONTROLLER_TOKEN: {path: ['integrations', 'cache_purge', 'controller', 'token']},
+	FLUXER_CACHE_PURGE_CONTROLLER_TIMEOUT_MS: {
+		path: ['integrations', 'cache_purge', 'controller', 'timeout_ms'],
+		parse: parseInteger,
+	},
 	FLUXER_BLOCKLIST_FEEDS_ENABLED: {path: ['integrations', 'blocklist_feeds', 'enabled'], parse: parseBoolean},
 	FLUXER_BREACHED_PASSWORD_CHECK_ENABLED: {
 		path: ['integrations', 'breached_password_check', 'enabled'],
 		parse: parseBoolean,
 	},
-	FLUXER_PUSH_APNS_ENABLED: {path: ['integrations', 'push', 'apns', 'enabled'], parse: parseBoolean},
-	FLUXER_PUSH_APNS_TEAM_ID: {path: ['integrations', 'push', 'apns', 'team_id']},
-	FLUXER_PUSH_APNS_KEY_ID: {path: ['integrations', 'push', 'apns', 'key_id']},
-	FLUXER_PUSH_APNS_PRIVATE_KEY: {path: ['integrations', 'push', 'apns', 'private_key']},
-	FLUXER_PUSH_APNS_PRIVATE_KEY_PATH: {path: ['integrations', 'push', 'apns', 'private_key_path']},
-	FLUXER_PUSH_APNS_APPS: {path: ['integrations', 'push', 'apns', 'apps'], parse: parseJsonArray},
 	FLUXER_APP_STORE_ENABLED: {path: ['integrations', 'app_store', 'enabled'], parse: parseBoolean},
 	FLUXER_APP_STORE_ISSUER_ID: {path: ['integrations', 'app_store', 'issuer_id']},
 	FLUXER_APP_STORE_KEY_ID: {path: ['integrations', 'app_store', 'key_id']},
@@ -268,6 +284,10 @@ const NAMED_FLUXER_ENV_OVERRIDES: Record<string, NamedEnvOverride> = {
 	FLUXER_GOOGLE_PLAY_PUSH_SERVICE_ACCOUNT_EMAIL: {
 		path: ['integrations', 'google_play', 'push_service_account_email'],
 	},
+	FLUXER_GOOGLE_PLAY_SELF_SERVICE_REFUNDS: {
+		path: ['integrations', 'google_play', 'self_service_refunds'],
+		parse: parseBoolean,
+	},
 	FLUXER_STORE_BILLING_SANDBOX_USER_IDS: {path: ['integrations', 'store_billing', 'sandbox_user_ids'], parse: parseCsv},
 	FLUXER_STORE_BILLING_SANDBOX_ENTITLES_ALL: {
 		path: ['integrations', 'store_billing', 'sandbox_entitles_all'],
@@ -277,21 +297,103 @@ const NAMED_FLUXER_ENV_OVERRIDES: Record<string, NamedEnvOverride> = {
 	FLUXER_AUTO_JOIN_INVITE_CODE: {path: ['instance', 'auto_join_invite_code']},
 	FLUXER_VISIONARIES_GUILD_ID: {path: ['instance', 'visionaries_guild_id']},
 	FLUXER_VISIONARIES_GUILD_VISIONARY_ROLE_ID: {path: ['instance', 'visionaries_guild_visionary_role_id']},
+	FLUXER_LABS_GUILD_ID: {path: ['operator_pass', 'labs_guild_id']},
+	FLUXER_LABS_OPERATOR_ROLE_ID: {path: ['operator_pass', 'labs_operator_role_id']},
+	FLUXER_PAYMENT_DISPUTE_CLOSURE_EFFECTIVE_AT: {path: ['payment_disputes', 'closure_effective_at']},
+	FLUXER_OPERATOR_PASS_SALE_OPENS_AT: {path: ['operator_pass', 'sale_opens_at']},
+	FLUXER_OPERATOR_PASS_PRICE_RISES_AT: {path: ['operator_pass', 'price_rises_at']},
+	FLUXER_OPERATOR_PASS_GRACE_MINUTES: {path: ['operator_pass', 'grace_minutes'], parse: parseInteger},
+	FLUXER_OPERATOR_PASS_NOW: {path: ['operator_pass', 'now_override']},
+	FLUXER_OPERATOR_PASS_STANDARD_PRICE_USD: {
+		path: ['operator_pass', 'standard_prices_minor', 'usd'],
+		parse: parseInteger,
+	},
+	FLUXER_OPERATOR_PASS_STANDARD_PRICE_EUR: {
+		path: ['operator_pass', 'standard_prices_minor', 'eur'],
+		parse: parseInteger,
+	},
+	FLUXER_OPERATOR_PASS_STANDARD_PRICE_BRL: {
+		path: ['operator_pass', 'standard_prices_minor', 'brl'],
+		parse: parseInteger,
+	},
+	FLUXER_OPERATOR_PASS_STANDARD_PRICE_DKK: {
+		path: ['operator_pass', 'standard_prices_minor', 'dkk'],
+		parse: parseInteger,
+	},
+	FLUXER_OPERATOR_PASS_STANDARD_PRICE_INR: {
+		path: ['operator_pass', 'standard_prices_minor', 'inr'],
+		parse: parseInteger,
+	},
+	FLUXER_OPERATOR_PASS_STANDARD_PRICE_NOK: {
+		path: ['operator_pass', 'standard_prices_minor', 'nok'],
+		parse: parseInteger,
+	},
+	FLUXER_OPERATOR_PASS_STANDARD_PRICE_PLN: {
+		path: ['operator_pass', 'standard_prices_minor', 'pln'],
+		parse: parseInteger,
+	},
+	FLUXER_OPERATOR_PASS_STANDARD_PRICE_SEK: {
+		path: ['operator_pass', 'standard_prices_minor', 'sek'],
+		parse: parseInteger,
+	},
+	FLUXER_OPERATOR_PASS_STANDARD_PRICE_TRY: {
+		path: ['operator_pass', 'standard_prices_minor', 'try'],
+		parse: parseInteger,
+	},
+	FLUXER_OPERATOR_PASS_RELEASE_LISTS: {path: ['operator_pass', 'release_lists']},
+	FLUXER_OPERATOR_PASS_TRANSFER_LOCK_HOURS: {path: ['operator_pass', 'transfer_lock_hours'], parse: parseInteger},
+	FLUXER_OPERATOR_PASS_WITHDRAWAL_COUNTRIES: {path: ['operator_pass', 'withdrawal_countries']},
+	FLUXER_OPERATOR_PASS_STOPPED_COUNTRIES: {path: ['operator_pass', 'stopped_countries']},
+	FLUXER_OPERATOR_PASS_WALL_TIERS: {path: ['operator_pass', 'wall_tiers']},
+	FLUXER_OPERATOR_PASS_MAX_QUANTITY: {path: ['operator_pass', 'max_quantity'], parse: parseInteger},
+	FLUXER_OPERATOR_PASS_PRICE_BRL_ENABLED: {
+		path: ['operator_pass', 'localized_prices_enabled', 'brl'],
+		parse: parseBoolean,
+	},
+	FLUXER_OPERATOR_PASS_PRICE_DKK_ENABLED: {
+		path: ['operator_pass', 'localized_prices_enabled', 'dkk'],
+		parse: parseBoolean,
+	},
+	FLUXER_OPERATOR_PASS_PRICE_INR_ENABLED: {
+		path: ['operator_pass', 'localized_prices_enabled', 'inr'],
+		parse: parseBoolean,
+	},
+	FLUXER_OPERATOR_PASS_PRICE_NOK_ENABLED: {
+		path: ['operator_pass', 'localized_prices_enabled', 'nok'],
+		parse: parseBoolean,
+	},
+	FLUXER_OPERATOR_PASS_PRICE_PLN_ENABLED: {
+		path: ['operator_pass', 'localized_prices_enabled', 'pln'],
+		parse: parseBoolean,
+	},
+	FLUXER_OPERATOR_PASS_PRICE_SEK_ENABLED: {
+		path: ['operator_pass', 'localized_prices_enabled', 'sek'],
+		parse: parseBoolean,
+	},
+	FLUXER_OPERATOR_PASS_PRICE_TRY_ENABLED: {
+		path: ['operator_pass', 'localized_prices_enabled', 'try'],
+		parse: parseBoolean,
+	},
 	FLUXER_APP_PRODUCT_NAME: {path: ['instance', 'branding', 'product_name']},
 	FLUXER_APP_ICON_URL: {path: ['instance', 'branding', 'icon_url']},
 	FLUXER_APP_SYMBOL_URL: {path: ['instance', 'branding', 'symbol_url']},
 	FLUXER_APP_LOGO_URL: {path: ['instance', 'branding', 'logo_url']},
 	FLUXER_APP_WORDMARK_URL: {path: ['instance', 'branding', 'wordmark_url']},
 	FLUXER_APP_FAVICON_URL: {path: ['instance', 'branding', 'favicon_url']},
+	FLUXER_APP_FAVICON_DARK_URL: {path: ['instance', 'branding', 'favicon_dark_url']},
+	FLUXER_APP_SIGN_IN_BACKDROP_URL: {path: ['instance', 'branding', 'sign_in_backdrop_url']},
 	FLUXER_APP_THEME_COLOR: {path: ['instance', 'branding', 'theme_color']},
 	FLUXER_APP_STATUS_PAGE_URL: {path: ['instance', 'branding', 'status_page_url']},
 	FLUXER_APP_STATUS_PAGE_INCIDENT_HISTORY_URL: {path: ['instance', 'branding', 'status_page_incident_history_url']},
 	FLUXER_INSTANCE_SETUP_CONFIGURED: {path: ['instance', 'setup', 'configured'], parse: parseBoolean},
+	FLUXER_SETUP_TOKEN: {path: ['instance', 'setup', 'token']},
 	FLUXER_ACCOUNT_IDENTITY: {path: ['instance', 'account_identity'], parse: parseAccountIdentity},
 	FLUXER_TAG_STYLE: {path: ['instance', 'tag_style'], parse: parseTagStyle},
 	FLUXER_DISCOVERY_ENABLED: {path: ['discovery', 'enabled'], parse: parseBoolean},
 	FLUXER_DISCOVERY_MIN_MEMBER_COUNT: {path: ['discovery', 'min_member_count'], parse: parseInteger},
 	FLUXER_DELETION_GRACE_PERIOD_HOURS: {path: ['deletion_grace_period_hours'], parse: parseInteger},
+	FLUXER_REPORT_RETENTION_DAYS: {path: ['report_retention', 'days'], parse: parseInteger},
+	FLUXER_REPORT_RETENTION_DRY_RUN: {path: ['report_retention', 'dry_run'], parse: parseBoolean},
 	FLUXER_RELAX_REGISTRATION_RATE_LIMITS: {path: ['dev', 'relax_registration_rate_limits'], parse: parseBoolean},
 	FLUXER_DISABLE_RATE_LIMITS: {path: ['dev', 'disable_rate_limits'], parse: parseBoolean},
 	FLUXER_TEST_MODE_ENABLED: {path: ['dev', 'test_mode_enabled'], parse: parseBoolean},
@@ -347,6 +449,12 @@ function parseTagStyle(raw: string): string {
 	throw new Error('must be none or random');
 }
 
+function parseSmtpTlsMode(raw: string): string {
+	const value = raw.trim().toLowerCase();
+	if (value === 'implicit' || value === 'starttls' || value === 'opportunistic' || value === 'none') return value;
+	throw new Error('must be implicit, starttls, opportunistic or none');
+}
+
 function parseJson(raw: string): unknown {
 	try {
 		return JSON.parse(raw);
@@ -395,7 +503,7 @@ function parsePasskeyOrigins(raw: string): Array<string> {
 	return parseCsv(raw);
 }
 
-export function setNestedValue(target: ConfigContainer, keys: Array<ConfigPathKey>, value: unknown): void {
+function setNestedValue(target: ConfigContainer, keys: Array<ConfigPathKey>, value: unknown): void {
 	if (keys.length === 0) {
 		return;
 	}

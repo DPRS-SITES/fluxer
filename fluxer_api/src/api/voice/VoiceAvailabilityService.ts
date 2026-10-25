@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import type {GuildID, UserID} from '@app/api/BrandedTypes';
-import type {
-	VoiceRegionAvailability,
-	VoiceRegionMetadata,
-	VoiceRegionRecord,
-	VoiceServerRecord,
-} from '@app/api/voice/VoiceModel';
+import type {VoiceRegionAvailability, VoiceRegionRecord, VoiceServerRecord} from '@app/api/voice/VoiceModel';
 import {preferServersUnderSoftLimit} from '@app/api/voice/VoiceRegionSelection';
 import type {VoiceServerLoadSource} from '@app/api/voice/VoiceServerLoad';
 import type {VoiceTopology} from '@app/api/voice/VoiceTopology';
@@ -20,6 +15,43 @@ export interface VoiceAccessContext {
 
 const EMPTY_CONNECTION_COUNTS: ReadonlyMap<string, number> = new Map();
 
+function meetsVoiceRestrictions(restrictions: VoiceRegionRecord['restrictions'], context: VoiceAccessContext): boolean {
+	if (restrictions.allowedUserIds.size > 0 && !restrictions.allowedUserIds.has(context.requestingUserId)) {
+		return false;
+	}
+	const hasAllowedGuildIds = restrictions.allowedGuildIds.size > 0;
+	const hasRequiredGuildFeatures = restrictions.requiredGuildFeatures.size > 0;
+	const hasVipOnly = restrictions.vipOnly;
+	if (!hasAllowedGuildIds && !hasRequiredGuildFeatures && !hasVipOnly) {
+		return true;
+	}
+	if (!context.guildId) {
+		return false;
+	}
+	const isGuildAllowed = hasAllowedGuildIds && restrictions.allowedGuildIds.has(context.guildId);
+	if (isGuildAllowed) {
+		return true;
+	}
+	if (!hasRequiredGuildFeatures && !hasVipOnly) {
+		return !hasAllowedGuildIds;
+	}
+	if (!context.guildFeatures) {
+		return false;
+	}
+	if (hasVipOnly && !context.guildFeatures.has(GuildFeatures.VIP_VOICE)) {
+		return false;
+	}
+	if (hasRequiredGuildFeatures) {
+		for (const feature of restrictions.requiredGuildFeatures) {
+			if (context.guildFeatures.has(feature)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	return true;
+}
+
 export class VoiceAvailabilityService {
 	private rotationIndex: Map<string, number> = new Map();
 
@@ -32,87 +64,12 @@ export class VoiceAvailabilityService {
 		return this.loadSource?.getConnectionCounts() ?? EMPTY_CONNECTION_COUNTS;
 	}
 
-	getRegionMetadata(): Array<VoiceRegionMetadata> {
-		return this.topology.getRegionMetadataList();
-	}
-
-	isRegionAccessible(region: VoiceRegionRecord, context: VoiceAccessContext): boolean {
-		const {restrictions} = region;
-		if (restrictions.allowedUserIds.size > 0 && !restrictions.allowedUserIds.has(context.requestingUserId)) {
-			return false;
-		}
-		const hasAllowedGuildIds = restrictions.allowedGuildIds.size > 0;
-		const hasRequiredGuildFeatures = restrictions.requiredGuildFeatures.size > 0;
-		const hasVipOnly = restrictions.vipOnly;
-		if (!hasAllowedGuildIds && !hasRequiredGuildFeatures && !hasVipOnly) {
-			return true;
-		}
-		if (!context.guildId) {
-			return false;
-		}
-		const isGuildAllowed = hasAllowedGuildIds && restrictions.allowedGuildIds.has(context.guildId);
-		if (isGuildAllowed) {
-			return true;
-		}
-		if (!hasRequiredGuildFeatures && !hasVipOnly) {
-			return !hasAllowedGuildIds;
-		}
-		if (!context.guildFeatures) {
-			return false;
-		}
-		if (hasVipOnly && !context.guildFeatures.has(GuildFeatures.VIP_VOICE)) {
-			return false;
-		}
-		if (hasRequiredGuildFeatures) {
-			for (const feature of restrictions.requiredGuildFeatures) {
-				if (context.guildFeatures.has(feature)) {
-					return true;
-				}
-			}
-			return false;
-		}
-		return true;
-	}
-
 	isServerAccessible(server: VoiceServerRecord, context: VoiceAccessContext): boolean {
 		const {restrictions} = server;
 		if (!server.isActive) {
 			return false;
 		}
-		if (restrictions.allowedUserIds.size > 0 && !restrictions.allowedUserIds.has(context.requestingUserId)) {
-			return false;
-		}
-		const hasAllowedGuildIds = restrictions.allowedGuildIds.size > 0;
-		const hasRequiredGuildFeatures = restrictions.requiredGuildFeatures.size > 0;
-		const hasVipOnly = restrictions.vipOnly;
-		if (!hasAllowedGuildIds && !hasRequiredGuildFeatures && !hasVipOnly) {
-			return true;
-		}
-		if (!context.guildId) {
-			return false;
-		}
-		const isGuildAllowed = hasAllowedGuildIds && restrictions.allowedGuildIds.has(context.guildId);
-		if (isGuildAllowed) {
-			return true;
-		}
-		if (!hasRequiredGuildFeatures && !hasVipOnly) {
-			return !hasAllowedGuildIds;
-		}
-		if (!context.guildFeatures) {
-			return false;
-		}
-		if (hasVipOnly && !context.guildFeatures.has(GuildFeatures.VIP_VOICE)) {
-			return false;
-		}
-		if (hasRequiredGuildFeatures) {
-			for (const feature of restrictions.requiredGuildFeatures) {
-				if (context.guildFeatures.has(feature)) {
-					return true;
-				}
-			}
-			return false;
-		}
-		return true;
+		return meetsVoiceRestrictions(restrictions, context);
 	}
 
 	getAvailableRegions(context: VoiceAccessContext): Array<VoiceRegionAvailability> {
@@ -120,7 +77,7 @@ export class VoiceAvailabilityService {
 		return regions.map<VoiceRegionAvailability>((region) => {
 			const servers = this.topology.getServersForRegion(region.id);
 			const accessibleServers = servers.filter((server) => this.isServerAccessible(server, context));
-			const regionAccessible = this.isRegionAccessible(region, context);
+			const regionAccessible = meetsVoiceRestrictions(region.restrictions, context);
 			return {
 				id: region.id,
 				name: region.name,
@@ -161,9 +118,5 @@ export class VoiceAvailabilityService {
 		const server = candidateServers[index % candidateServers.length];
 		this.rotationIndex.set(regionId, (index + 1) % candidateServers.length);
 		return server;
-	}
-
-	resetRotation(regionId: string): void {
-		this.rotationIndex.delete(regionId);
 	}
 }

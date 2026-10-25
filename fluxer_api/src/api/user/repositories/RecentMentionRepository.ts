@@ -14,6 +14,7 @@ const FETCH_RECENT_MENTION_CQL = RecentMentions.selectCql({
 const createFetchRecentMentionsQuery = (limit: number) =>
 	RecentMentions.select({
 		where: [RecentMentions.where.eq('user_id'), RecentMentions.where.lt('message_id', 'before_message_id')],
+		orderBy: {col: 'message_id', direction: 'DESC'},
 		limit,
 	});
 const BULK_RECENT_MENTION_BATCH_QUERY_LIMIT = 50;
@@ -66,23 +67,6 @@ export class RecentMentionRepository {
 		if (!includeRole && mention.is_role) return false;
 		if (!includeGuilds && mention.guild_id != null) return false;
 		return true;
-	}
-
-	async createRecentMention(mention: RecentMentionRow): Promise<RecentMention> {
-		const batch = new BatchBuilder();
-		batch.addPrepared(RecentMentions.upsertAll(mention));
-		batch.addPrepared(
-			RecentMentionsByGuild.insert({
-				user_id: mention.user_id,
-				guild_id: mention.guild_id,
-				message_id: mention.message_id,
-				channel_id: mention.channel_id,
-				is_everyone: mention.is_everyone,
-				is_role: mention.is_role,
-			}),
-		);
-		await batch.execute();
-		return new RecentMention(mention);
 	}
 
 	async createRecentMentions(mentions: Array<RecentMentionRow>): Promise<void> {

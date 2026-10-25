@@ -26,25 +26,36 @@ import {
 	usesUniqueUsernames,
 	usesUsernameSignIn,
 } from '@app/features/app/utils/AccountIdentityFeatures';
+import {discoveryEnabledOf, isDiscoveryAvailable} from '@app/features/app/utils/DiscoveryFeatures';
 import DeveloperOptions from '@app/features/devtools/state/DeveloperOptions';
 import {Logger} from '@app/features/platform/utils/AppLogger';
 import {getElectronAPI} from '@app/features/ui/utils/NativeUtils';
+import {
+	type EffectiveVerificationBasis,
+	type EmailCodeAvailability,
+	type EmailDeliveryState,
+	EmailDeliveryStates,
+	type GuildJoinGate,
+	GuildJoinGates,
+	type InteractionTierMode,
+	InteractionTierModes,
+	VerificationBases,
+} from '@fluxer/constants/src/AccountConfigConstants';
 import {
 	type AccountIdentityMode,
 	AccountIdentityModes,
 	type TagStyle,
 } from '@fluxer/constants/src/AccountIdentityConstants';
+import {resolveEffectiveVerificationBasis, resolveEmailCodeAvailability} from '@fluxer/constants/src/AccountTierRules';
 import {API_CODE_VERSION} from '@fluxer/constants/src/AppConstants';
 import {InstanceDiscoveryUnreachableError} from '@fluxer/instance_bootstrap/src/Discovery';
 import {InstanceEndpointKind, normalizeInstanceEndpoint} from '@fluxer/instance_bootstrap/src/EndpointNormalization';
 import {isOfficialInstanceHost, OFFICIAL_INSTANCE_DISPLAY_HOST} from '@fluxer/instance_bootstrap/src/OfficialInstance';
 import type {
-	InstanceAgePolicy,
 	InstanceAppPublic,
 	InstanceCommunity,
-	InstanceDiscoveryResponse,
 	InstanceFeatures,
-	InstanceRegistration,
+	InstanceNotice,
 	InstanceServices,
 	InstanceSso as InstanceSsoConfig,
 } from '@fluxer/instance_bootstrap/src/Types';
@@ -54,25 +65,39 @@ import {makeAutoObservable, observableRef} from 'mobx';
 
 const logger = new Logger('RuntimeConfig');
 
+function emailFeaturesForIdentity(
+	mode: AccountIdentityMode,
+	features: InstanceFeatures,
+): Pick<
+	InstanceFeatures,
+	'emails_enabled' | 'email_delivery_state' | 'verification_basis' | 'identifier_first' | 'email_codes'
+> {
+	if (mode !== AccountIdentityModes.USERNAME) {
+		const wasUsernameMode = features.email_delivery_state === EmailDeliveryStates.OFF_USERNAME_MODE;
+		return {
+			emails_enabled: features.emails_enabled,
+			email_delivery_state: wasUsernameMode ? undefined : features.email_delivery_state,
+			verification_basis: wasUsernameMode ? undefined : features.verification_basis,
+			...(features.identifier_first === undefined ? {} : {identifier_first: features.identifier_first}),
+			...(features.email_codes === undefined ? {} : {email_codes: features.email_codes}),
+		};
+	}
+	return {
+		identifier_first: false,
+		email_codes: false,
+		emails_enabled: false,
+		email_delivery_state: EmailDeliveryStates.OFF_USERNAME_MODE,
+		verification_basis: VerificationBases.LOCAL_CREDENTIAL,
+	};
+}
+
 export {
 	runtimeConfigSnapshotsAreSameInstance,
 	runtimeInstanceKey,
 } from '@app/features/app/state/InstanceSnapshotStore';
-export type {
-	GifProvider,
-	GifProviderInfo,
-	InstanceCommunity,
-	InstanceDiscoveryResponse,
-	InstanceFeatures,
-	InstanceRegistration,
-	InstanceServices,
-	InstanceSnapshotResolution,
-	InstanceSnapshotResolveRequest,
-	InstanceSsoConfig,
-	RuntimeConfigSnapshot,
-};
+export type {InstanceSsoConfig, RuntimeConfigSnapshot};
 
-export interface ApplyRuntimeConfigSnapshotRequest {
+interface ApplyRuntimeConfigSnapshotRequest {
 	snapshot: RuntimeConfigSnapshot;
 	signal: AbortSignal | null;
 }
@@ -109,8 +134,6 @@ type RuntimeConfigPublicationPhase = 'committed' | 'published' | 'renderer-rolle
 interface RuntimeConfigPublication {
 	phase: RuntimeConfigPublicationPhase;
 }
-
-const DEFAULT_PREMIUM_PRODUCT_NAME = 'Plutonium';
 
 class RuntimeActivationSupersededError extends Error {
 	constructor() {
@@ -161,6 +184,10 @@ export function describeAPIEndpoint(endpoint: string): string {
 	}
 	return withoutScheme;
 }
+
+const DISCOVERY_REVALIDATION_TIMEOUT_MS = 5000;
+
+let pendingDiscoveryRevalidation: Promise<void> | null = null;
 
 class RuntimeConfig {
 	private lifecycleGeneration = 0;
@@ -279,14 +306,6 @@ class RuntimeConfig {
 		return this.readableSnapshot().features;
 	}
 
-	get sso(): InstanceSsoConfig | null {
-		return this.readableSnapshot().sso;
-	}
-
-	get registration(): InstanceRegistration {
-		return this.readableSnapshot().registration;
-	}
-
 	get community(): InstanceCommunity {
 		return this.readableSnapshot().community;
 	}
@@ -295,20 +314,12 @@ class RuntimeConfig {
 		return this.readableSnapshot().services;
 	}
 
-	get publicPushVapidKey(): string | null {
-		return this.readableSnapshot().publicPushVapidKey;
-	}
-
 	get limits(): LimitConfigSnapshot {
 		return this.readableSnapshot().limits;
 	}
 
 	get appPublic(): InstanceAppPublic {
 		return this.readableSnapshot().appPublic;
-	}
-
-	get agePolicy(): InstanceAgePolicy | null {
-		return this.readableSnapshot().agePolicy ?? null;
 	}
 
 	private requireActiveSnapshot(): RuntimeConfigSnapshot {
@@ -653,19 +664,36 @@ class RuntimeConfig {
 		const current = this.requireActiveSnapshot();
 		this.replaceActiveFeatures({
 			...current.features,
+			...emailFeaturesForIdentity(mode, current.features),
 			account_identity: mode,
 			tag_style: tagStyle,
-			emails_enabled: mode === AccountIdentityModes.USERNAME ? false : current.features.emails_enabled,
 		});
 	}
 
-	async refreshDiscovery(): Promise<void> {
+	async refreshDiscovery(signal?: AbortSignal): Promise<void> {
 		const current = this.requireActiveSnapshot();
-		const resolution = await InstanceSnapshotStore.refresh({input: current.apiEndpoint, signal: null});
+		const resolution = await InstanceSnapshotStore.refresh({input: current.apiEndpoint, signal: signal ?? null});
 		if (runtimeInstanceKey(resolution.snapshot) !== runtimeInstanceKey(this.requireActiveSnapshot())) {
 			return;
 		}
-		this.replaceActiveFeatures(resolution.snapshot.features);
+		const runtime = this.requireActiveRuntime();
+		const usable = this.requireUsableSnapshot({
+			...runtime.snapshot,
+			features: resolution.snapshot.features,
+			appPublic: resolution.snapshot.appPublic,
+			notice: resolution.snapshot.notice,
+		});
+		this.activeRuntime = {...runtime, snapshot: usable};
+		this.lifecycleGeneration = nextLifecycleGeneration(this.lifecycleGeneration);
+	}
+
+	revalidateDiscovery(): Promise<void> {
+		if (pendingDiscoveryRevalidation !== null) return pendingDiscoveryRevalidation;
+		const request = this.refreshDiscovery(AbortSignal.timeout(DISCOVERY_REVALIDATION_TIMEOUT_MS)).finally(() => {
+			if (pendingDiscoveryRevalidation === request) pendingDiscoveryRevalidation = null;
+		});
+		pendingDiscoveryRevalidation = request;
+		return request;
 	}
 
 	private replaceActiveFeatures(features: InstanceFeatures): void {
@@ -694,10 +722,9 @@ class RuntimeConfig {
 				premium_enabled: !config.self_hosted || config.policy.premium_mode === 'mirror',
 				stripe_enabled: config.billing.billing_active,
 				stripe_serviceable: config.billing.stripe_serviceable,
+				...emailFeaturesForIdentity(config.account_identity.mode, current.features),
 				account_identity: config.account_identity.mode,
 				tag_style: config.account_identity.tag_style,
-				emails_enabled:
-					config.account_identity.mode === AccountIdentityModes.USERNAME ? false : current.features.emails_enabled,
 			},
 			registration: {
 				mode: config.registration.mode,
@@ -709,6 +736,7 @@ class RuntimeConfig {
 					? config.policy.single_community_guild_id
 					: null,
 				direct_messages_disabled: config.policy.direct_messages_disabled,
+				friends_disabled: config.policy.friends_disabled,
 				guild_create_access: config.policy.guild_create_access,
 			},
 			services: {
@@ -717,6 +745,7 @@ class RuntimeConfig {
 				bluesky_enabled: config.policy.services_resolved.bluesky_enabled,
 			},
 			appPublic,
+			notice: config.notice,
 		};
 		const usable = this.requireUsableSnapshot(snapshot);
 		const runtime = this.requireActiveRuntime();
@@ -743,10 +772,6 @@ class RuntimeConfig {
 		return this.activeRuntime?.snapshot.appPublic.branding.status_page_url ?? '';
 	}
 
-	get statusPageIncidentHistoryUrl(): string {
-		return this.activeRuntime?.snapshot.appPublic.branding.status_page_incident_history_url ?? '';
-	}
-
 	isSelfHosted(): boolean {
 		return DeveloperOptions.selfHostedModeOverride || this.features.self_hosted;
 	}
@@ -763,20 +788,54 @@ class RuntimeConfig {
 		return this.features.stripe_serviceable;
 	}
 
-	get premiumProductName(): string {
-		return this.appPublic.branding.premium_product_name?.trim() || DEFAULT_PREMIUM_PRODUCT_NAME;
-	}
-
-	get premiumInfoUrl(): string | null {
-		return this.appPublic.branding.premium_info_url ?? null;
-	}
-
 	get emailsEnabled(): boolean {
 		return this.features.emails_enabled;
 	}
 
+	get discoveryEnabled(): boolean {
+		return discoveryEnabledOf(this.features);
+	}
+
+	get discoveryAvailable(): boolean {
+		return isDiscoveryAvailable(this);
+	}
+
 	get accountIdentity(): AccountIdentityMode {
 		return accountIdentityOf(this.features);
+	}
+
+	get emailDeliveryState(): EmailDeliveryState {
+		if (this.features.email_delivery_state !== undefined) return this.features.email_delivery_state;
+		if (this.usesUsernameSignIn) return EmailDeliveryStates.OFF_USERNAME_MODE;
+		return this.emailsEnabled ? EmailDeliveryStates.ON : EmailDeliveryStates.OFF_DISABLED;
+	}
+
+	get verificationBasis(): EffectiveVerificationBasis {
+		return (
+			this.features.verification_basis ??
+			resolveEffectiveVerificationBasis({
+				identityMode: this.accountIdentity,
+				basis: VerificationBases.AUTO,
+				deliveryState: this.emailDeliveryState,
+			})
+		);
+	}
+
+	get interactionTier(): InteractionTierMode {
+		return this.features.interaction_tier ?? InteractionTierModes.LEGACY;
+	}
+
+	get guildJoinGate(): GuildJoinGate {
+		return this.features.guild_join_gate ?? GuildJoinGates.ALWAYS;
+	}
+
+	emailCodeAvailabilityFor(account: {hasEmail: boolean; emailVerified: boolean}): EmailCodeAvailability {
+		return resolveEmailCodeAvailability({
+			identityMode: this.accountIdentity,
+			deliveryState: this.emailDeliveryState,
+			hasEmail: account.hasEmail,
+			emailVerified: account.emailVerified,
+		});
 	}
 
 	get usesUsernameSignIn(): boolean {
@@ -795,30 +854,6 @@ class RuntimeConfig {
 		return this.appPublic.branding.product_name;
 	}
 
-	get iconUrl(): string | null {
-		return this.appPublic.branding.icon_url;
-	}
-
-	get symbolUrl(): string | null {
-		return this.appPublic.branding.symbol_url;
-	}
-
-	get logoUrl(): string | null {
-		return this.appPublic.branding.logo_url;
-	}
-
-	get wordmarkUrl(): string | null {
-		return this.appPublic.branding.wordmark_url;
-	}
-
-	get faviconUrl(): string | null {
-		return this.appPublic.branding.favicon_url;
-	}
-
-	get themeColor(): string | null {
-		return this.appPublic.branding.theme_color;
-	}
-
 	get termsUrl(): string | null {
 		return this.appPublic.legal.terms_url;
 	}
@@ -827,12 +862,8 @@ class RuntimeConfig {
 		return this.appPublic.legal.privacy_url;
 	}
 
-	get collectDateOfBirthOnRegistration(): boolean {
-		return this.appPublic.registration.collect_date_of_birth;
-	}
-
-	get setupAdminUrl(): string | null {
-		return this.appPublic.setup.admin_url;
+	get guidelinesUrl(): string | null {
+		return this.appPublic.legal.guidelines_url;
 	}
 
 	requiresSelfHostedSetup(): boolean {
@@ -857,6 +888,18 @@ class RuntimeConfig {
 		return this.community.direct_messages_disabled;
 	}
 
+	get friendsDisabled(): boolean {
+		return this.community.friends_disabled ?? this.community.direct_messages_disabled;
+	}
+
+	get dmPickerAvailable(): boolean {
+		return !this.directMessagesDisabled && !this.friendsDisabled;
+	}
+
+	get instanceNotice(): InstanceNotice | null {
+		return this.activeRuntime?.snapshot.notice ?? null;
+	}
+
 	get gifEnabled(): boolean {
 		return this.services.gif_enabled;
 	}
@@ -867,14 +910,6 @@ class RuntimeConfig {
 
 	get marketingHost(): string {
 		return new URL(this.marketingEndpoint).host;
-	}
-
-	get inviteHost(): string {
-		return new URL(this.inviteEndpoint).host;
-	}
-
-	get giftHost(): string {
-		return new URL(this.giftEndpoint).host;
 	}
 
 	get inviteUrlBase(): string {

@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import {DESKTOP_APP_SCHEME} from '@electron/common/Constants';
+import {getLaunchProductName} from '@electron/common/DesktopConfig';
 import {createChildLogger} from '@electron/common/Logger';
 import {getDesktopOutboundHTTP} from '@electron/main/DesktopOutboundHTTP';
+import {restoreRememberedRuntimePlan} from '@electron/main/DesktopRuntimeDiscovery';
 import {recordGatewayOriginAnchor} from '@electron/main/GatewayOriginRegistry';
 import {readStagedHarvestLocalStorageSync} from '@electron/main/LegacyOriginHarvestStore';
 import type {LocalAppIndexContext} from '@electron/main/LocalAppFileRequestHandler';
 import {DesktopLocalAppFiles} from '@electron/main/LocalAppFileResolver';
 import {getDesktopLocalAppAuthorization} from '@electron/main/LocalAppProtocolAuthorization';
-import {DesktopLocalAppProxyClient} from '@electron/main/LocalAppProxyClient';
+import {DesktopLocalAppProxyClient, LocalAppProxyTraffic} from '@electron/main/LocalAppProxyClient';
 import {DesktopLocalAppRequestHandler} from '@electron/main/LocalAppRequestHandler';
 import {
 	DesktopLocalAppRuntimePlans,
@@ -22,28 +24,28 @@ const log = createChildLogger('LocalAppProtocol');
 
 const THEME_STORAGE_KEY = 'theme';
 
-export class LocalAppProtocolSchemeRegistrationOrderError extends Error {
+class LocalAppProtocolSchemeRegistrationOrderError extends Error {
 	public constructor() {
 		super('Local app protocol scheme privileges must be registered before Electron app ready');
 		this.name = 'LocalAppProtocolSchemeRegistrationOrderError';
 	}
 }
 
-export class LocalAppProtocolHandlerRegistrationOrderError extends Error {
+class LocalAppProtocolHandlerRegistrationOrderError extends Error {
 	public constructor() {
 		super('Local app protocol handler must be registered after Electron app ready');
 		this.name = 'LocalAppProtocolHandlerRegistrationOrderError';
 	}
 }
 
-export class LocalAppProtocolHandlerOwnershipError extends Error {
+class LocalAppProtocolHandlerOwnershipError extends Error {
 	public constructor() {
 		super('Local app protocol already has a handler owned outside this runtime');
 		this.name = 'LocalAppProtocolHandlerOwnershipError';
 	}
 }
 
-export class LocalAppProtocolShutdownAdmissionError extends Error {
+class LocalAppProtocolShutdownAdmissionError extends Error {
 	public constructor() {
 		super('Local app protocol is shutting down');
 		this.name = 'LocalAppProtocolShutdownAdmissionError';
@@ -57,6 +59,7 @@ export class DesktopLocalAppProtocol {
 	private readonly shutdownController = new AbortController();
 	private readonly activeOperations = new Set<Promise<unknown>>();
 	private readonly runtimePlans = new DesktopLocalAppRuntimePlans();
+	private readonly planRestorations = new Map<string, Promise<LocalAppRuntimePlan | null>>();
 	private readonly files = new DesktopLocalAppFiles();
 	private readonly requestHandler: DesktopLocalAppRequestHandler;
 	private readonly stopObservingCommittedModuleFiles: () => void;
@@ -69,8 +72,15 @@ export class DesktopLocalAppProtocol {
 			authorization: getDesktopLocalAppAuthorization(),
 			files: this.files,
 			indexContext: () => this.getIndexContext(),
-			proxyClient: new DesktopLocalAppProxyClient({outboundHTTP: getDesktopOutboundHTTP()}),
-			runtimePlans: this.runtimePlans,
+			apiProxyClient: new DesktopLocalAppProxyClient({
+				outboundHTTP: getDesktopOutboundHTTP(),
+				traffic: LocalAppProxyTraffic.API,
+			}),
+			resourceProxyClient: new DesktopLocalAppProxyClient({
+				outboundHTTP: getDesktopOutboundHTTP(),
+				traffic: LocalAppProxyTraffic.REMOTE_RESOURCE,
+			}),
+			runtimePlans: {planForRoute: (runtimeKey) => this.planForRoute(runtimeKey)},
 			shutdownSignal: this.shutdownController.signal,
 		});
 	}
@@ -126,6 +136,40 @@ export class DesktopLocalAppProtocol {
 		return this.runtimePlans.findPlanForRoute(runtimeKey);
 	}
 
+	private planForRoute(runtimeKey: string): Promise<LocalAppRuntimePlan | null> {
+		const known = this.runtimePlans.findPlanForRoute(runtimeKey);
+		if (known != null) {
+			return Promise.resolve(known);
+		}
+		let restoration = this.planRestorations.get(runtimeKey);
+		if (restoration == null) {
+			restoration = this.restoreRuntimePlan(runtimeKey).finally(() => {
+				this.planRestorations.delete(runtimeKey);
+			});
+			this.planRestorations.set(runtimeKey, restoration);
+		}
+		return restoration;
+	}
+
+	private async restoreRuntimePlan(runtimeKey: string): Promise<LocalAppRuntimePlan | null> {
+		let plan: LocalAppRuntimePlan | null;
+		try {
+			plan = await restoreRememberedRuntimePlan(runtimeKey);
+		} catch (error) {
+			log.warn('Failed to restore a remembered local app runtime plan', {instanceKey: runtimeKey, error});
+			return null;
+		}
+		if (plan == null || !this.acceptingRequests) {
+			return null;
+		}
+		const known = this.runtimePlans.findPlanForRoute(runtimeKey);
+		if (known != null) {
+			return known;
+		}
+		this.cacheRuntimePlan(plan);
+		return plan;
+	}
+
 	public cacheRuntimePlan(plan: LocalAppRuntimePlan): void {
 		this.requireAdmission();
 		this.requireRuntimeOriginsRegistered(plan);
@@ -147,9 +191,10 @@ export class DesktopLocalAppProtocol {
 		log.info('Deactivated the local app runtime plan');
 	}
 
-	public getIndexContext(): LocalAppIndexContext {
+	private getIndexContext(): LocalAppIndexContext {
 		return {
 			prebootTheme: readPrebootTheme(),
+			productName: getLaunchProductName(),
 			cleartextInstanceOrigins: getDesktopOutboundHTTP().registeredCleartextOrigins(),
 		};
 	}

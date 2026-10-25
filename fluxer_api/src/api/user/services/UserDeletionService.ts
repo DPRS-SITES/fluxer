@@ -1,31 +1,40 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import {randomInt} from 'node:crypto';
+import type {AdminRepository} from '@app/api/admin/AdminRepository';
 import {deleteRecoveryKit} from '@app/api/auth/AuthRecoveryKit';
 import {revokeAllAuthSessions} from '@app/api/auth/AuthSessionRevocation';
+import {SsoIdentityRepository} from '@app/api/auth/services/SsoIdentityRepository';
 import {createMessageID, createUserID, type MessageID, type UserID} from '@app/api/BrandedTypes';
 import {Config} from '@app/api/Config';
 import {mapChannelToResponse} from '@app/api/channel/ChannelMappers';
 import type {ChannelRepository} from '@app/api/channel/ChannelRepository';
 import {UserMessageDeletionService} from '@app/api/channel/services/message/UserMessageDeletionService';
-import type {IConnectionRepository} from '@app/api/connection/IConnectionRepository';
+import type {ConnectionRepository} from '@app/api/connection/ConnectionRepository';
+import {IP_BAN_REFRESH_CHANNEL} from '@app/api/constants/IpBan';
 import type {FavoriteMemeRepository} from '@app/api/favorite_meme/FavoriteMemeRepository';
 import type {GuildRepository} from '@app/api/guild/repositories/GuildRepository';
+import {guildVisitRepository} from '@app/api/guild/visits/GuildVisitorAccess';
 import {emitActivity} from '@app/api/infrastructure/activity/ActivityEvents';
 import type {IPurgeQueue} from '@app/api/infrastructure/CachePurgeQueue';
-import type {DiscriminatorService} from '@app/api/infrastructure/DiscriminatorService';
 import type {IGatewayService} from '@app/api/infrastructure/IGatewayService';
 import type {ISnowflakeService} from '@app/api/infrastructure/ISnowflakeService';
 import type {IStorageService} from '@app/api/infrastructure/IStorageService';
 import type {UserCacheService} from '@app/api/infrastructure/UserCacheService';
+import {REGISTRATION_PENDING_APPROVAL_TRAIT} from '@app/api/instance/InstanceConfigRepository';
 import {Logger} from '@app/api/Logger';
+import type {OperatorPassServices} from '@app/api/middleware/OperatorPassServiceFactory';
 import {createRequestCache} from '@app/api/middleware/RequestCacheMiddleware';
 import {getBillingRepository} from '@app/api/middleware/ServiceRegistry';
+import {getEnforcementDecisionRepository, getInstanceConfigRepository} from '@app/api/middleware/ServiceSingletons';
+import type {User} from '@app/api/models/User';
 import type {ApplicationRepository} from '@app/api/oauth/repositories/ApplicationRepository';
 import type {OAuth2TokenRepository} from '@app/api/oauth/repositories/OAuth2TokenRepository';
+import {endOperatorPassesForDeletion} from '@app/api/operator_pass/OperatorPassHoldingService';
 import type {StoreEntitlementService} from '@app/api/store_billing/StoreEntitlementService';
 import type {UserRepository} from '@app/api/user/repositories/UserRepository';
 import {isPendingDeletionBlocked} from '@app/api/user/services/PendingDeletionCoordinator';
+import {isEnforcementDeletion, isSsoLinkedUser} from '@app/api/user/UserHelpers';
 import type {WorkerTaskName} from '@app/api/worker/WorkerLaneConfig';
 import {ChannelTypes, MessageTypes} from '@fluxer/constants/src/ChannelConstants';
 import {
@@ -36,13 +45,16 @@ import {
 	UserFlags,
 } from '@fluxer/constants/src/UserConstants';
 import * as BucketUtils from '@fluxer/snowflake/src/SnowflakeBuckets';
+import type {ICacheService} from '@pkgs/cache/src/ICacheService';
 import type {IWorkerService} from '@pkgs/worker/src/contracts/IWorkerService';
 import {ms} from 'itty-time';
 import type Stripe from 'stripe';
 
 const CHUNK_SIZE = 100;
+const ssoIdentityRepository = new SsoIdentityRepository();
 
 interface UserDeletionDependencies {
+	operatorPassServices: Pick<OperatorPassServices, 'repository' | 'wallService'>;
 	userRepository: UserRepository;
 	guildRepository: GuildRepository;
 	channelRepository: ChannelRepository;
@@ -53,12 +65,37 @@ interface UserDeletionDependencies {
 	userCacheService: UserCacheService;
 	gatewayService: IGatewayService;
 	snowflakeService: ISnowflakeService;
-	discriminatorService: DiscriminatorService;
+
 	stripe: Stripe | null;
 	applicationRepository: ApplicationRepository;
 	workerService: IWorkerService<WorkerTaskName>;
-	connectionRepository: IConnectionRepository;
+	connectionRepository: ConnectionRepository;
 	storeEntitlementService: StoreEntitlementService;
+	adminRepository: AdminRepository;
+	cacheService: ICacheService;
+}
+
+async function releaseSsoIdentitiesOf(user: User, deletionReasonCode: number): Promise<void> {
+	if (!isSsoLinkedUser(user)) return;
+	if (isEnforcementDeletion({enforcementDecisionId: user.enforcementDecisionId, deletionReasonCode})) return;
+	const released = await ssoIdentityRepository.releaseIdentitiesForUser(user.id);
+	if (released > 0) {
+		Logger.debug({userId: user.id, released}, 'Released SSO identities');
+	}
+}
+
+async function withdrawPendingRegistrationOf(user: User): Promise<void> {
+	if (!user.traits.has(REGISTRATION_PENDING_APPROVAL_TRAIT)) return;
+	await getInstanceConfigRepository().removePendingRegistration(user.id.toString());
+}
+
+async function removeNetworkBlocksOf(userId: UserID, deps: UserDeletionDependencies): Promise<void> {
+	const decisions = await getEnforcementDecisionRepository().listBySubject('user', userId);
+	if (decisions.length === 0) return;
+	const removed = await deps.adminRepository.removeDecisionIpBans(decisions.map((decision) => decision.decision_id));
+	if (removed.length > 0) {
+		await deps.cacheService.publish(IP_BAN_REFRESH_CHANNEL, 'refresh');
+	}
 }
 
 export async function processUserDeletion(
@@ -160,6 +197,9 @@ export async function processUserDeletion(
 		Logger.info({userId, pendingDeletionAt}, 'Account deletion schedule is no longer eligible');
 		return;
 	}
+	await removeNetworkBlocksOf(userId, deps);
+	await releaseSsoIdentitiesOf(user, deletionReasonCode);
+	await withdrawPendingRegistrationOf(user);
 	await storeEntitlementService.stopBillingForDeletedUser(userId);
 	await connectionRepository.sealAndDeleteForUser(userId);
 	const deletedUserId = createUserID(await snowflakeService.generate());
@@ -293,7 +333,7 @@ export async function processUserDeletion(
 				newOwnerId = Array.from(updatedRecipientIds)[0];
 			}
 			if (updatedRecipientIds.size === 0) {
-				await channelRepository.delete(channel.id);
+				await channelRepository.channelData.delete(channel.id);
 				await userRepository.closeDmForUser(userId, channel.id);
 				const channelResponse = await mapChannelToResponse({
 					channel,
@@ -311,7 +351,7 @@ export async function processUserDeletion(
 			}
 			const updatedNicknames = new Map(channel.nicknames);
 			updatedNicknames.delete(userId.toString());
-			await channelRepository.upsert({
+			await channelRepository.channelData.upsert({
 				...channel.toRow(),
 				owner_id: newOwnerId,
 				recipient_ids: updatedRecipientIds,
@@ -319,7 +359,7 @@ export async function processUserDeletion(
 			});
 			await userRepository.closeDmForUser(userId, channel.id);
 			const messageId = createMessageID(await snowflakeService.generateForChannel(channel.id));
-			await channelRepository.upsertMessage({
+			await channelRepository.messages.upsertMessage({
 				channel_id: channel.id,
 				bucket: BucketUtils.makeBucket(messageId),
 				message_id: messageId,
@@ -395,12 +435,16 @@ export async function processUserDeletion(
 	let lastMessageId: MessageID | undefined;
 	let processedCount = 0;
 	while (true) {
-		const messagesToAnonymize = await channelRepository.listMessagesByAuthor(userId, CHUNK_SIZE, lastMessageId);
+		const messagesToAnonymize = await channelRepository.messages.listMessagesByAuthor(
+			userId,
+			CHUNK_SIZE,
+			lastMessageId,
+		);
 		if (messagesToAnonymize.length === 0) {
 			break;
 		}
 		for (const {channelId, messageId} of messagesToAnonymize) {
-			await channelRepository.anonymizeMessage(channelId, messageId, deletedUserId);
+			await channelRepository.messages.anonymizeMessage(channelId, messageId, deletedUserId);
 		}
 		processedCount += messagesToAnonymize.length;
 		lastMessageId = messagesToAnonymize[messagesToAnonymize.length - 1].messageId;
@@ -457,8 +501,10 @@ export async function processUserDeletion(
 		Logger.error({error, userId}, 'Failed to schedule application deletions');
 	}
 	Logger.debug({userId}, 'Deleting user data');
+	const operatorPassRepository = deps.operatorPassServices.repository;
 	await Promise.all([
 		guildRepository.deleteAllBansForUser(userId),
+		guildVisitRepository().deleteAllForUser(userId),
 		userRepository.deleteUserSettings(userId),
 		userRepository.deleteAllUserGuildSettings(userId),
 		userRepository.deleteAllRelationships(userId),
@@ -473,6 +519,10 @@ export async function processUserDeletion(
 		userRepository.deleteAllRecentMentions(userId),
 		userRepository.deleteAllAuthorizedIps(userId),
 		userRepository.deletePinnedDmsByUserId(userId),
+		endOperatorPassesForDeletion(operatorPassRepository, userId).then(() =>
+			operatorPassRepository.deleteOperatorPass(userId),
+		),
+		deps.operatorPassServices.wallService.forgetForDeletion(userId),
 	]);
 	await userRepository.deleteUserSecondaryIndices(userId);
 	const userForAnonymization = await userRepository.findUniqueAssert(userId);
@@ -502,7 +552,7 @@ export async function processUserDeletion(
 		stripe_subscription_id: null,
 		authenticator_types: new Set(),
 	});
-	await userRepository.removePendingDeletion(userId, pendingDeletionAt);
+
 	await userCacheService.setUserPartialResponseFromUser(anonymisedUser);
 	await userRepository.completeDeletion(anonymisedUser);
 	await emitActivity('account_deleted', userId.toString(), {user_id: userId.toString()}, null, userId.toString());

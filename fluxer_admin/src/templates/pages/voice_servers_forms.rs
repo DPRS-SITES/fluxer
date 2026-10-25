@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use crate::templates::components::form::form_field_with_id;
+
 use crate::{
     api::types::VoiceServer,
     config::AdminConfig,
     templates::components::{
-        form::{checkbox, csrf_input},
+        form::{Checkbox, csrf_input},
         page_container::card,
         voice::voice_restriction_fields,
     },
@@ -88,7 +90,13 @@ pub fn edit_server_form(
                     "LiveKit API secret (leave blank to keep unchanged)",
                 ))
                 div class="space-y-2" {
-                    (checkbox("is_active", "true", "Server is active", is_active, true))
+                    (Checkbox {
+                        name: "is_active",
+                        value: "true",
+                        label: "Server is active",
+                        checked: is_active,
+                        enabled: true,
+                    }.render())
                 }
                 (voice_restriction_fields(&id_prefix, vip_only, &features_csv, &guild_ids_csv))
                 button type="submit"
@@ -128,7 +136,13 @@ pub fn create_server_form(config: &AdminConfig, region_id: &str, csrf_token: &st
                 ))
             }
             div class="space-y-3" {
-                (checkbox("is_active", "true", "Server is active", true, true))
+                (Checkbox {
+                    name: "is_active",
+                    value: "true",
+                    label: "Server is active",
+                    checked: true,
+                    enabled: true,
+                }.render())
             }
             (voice_restriction_fields("create", false, "", ""))
             button type="submit"
@@ -140,31 +154,6 @@ pub fn create_server_form(config: &AdminConfig, region_id: &str, csrf_token: &st
             }
         }
     })
-}
-
-fn form_field_with_id(
-    label: &str,
-    id: &str,
-    name: &str,
-    input_type: &str,
-    value: &str,
-    placeholder: &str,
-    required: bool,
-) -> Markup {
-    html! {
-        div class="space-y-1" {
-            label for=(id) class="block text-sm font-medium text-neutral-700" {
-                (label)
-            }
-            input type=(input_type) id=(id) name=(name) value=(value)
-                placeholder=(placeholder) required[required]
-                step=[if input_type == "number" { Some("any") } else { None }]
-                class="block w-full rounded-md border border-neutral-300 \
-                       px-3 py-2 text-sm shadow-sm \
-                       focus:border-brand-primary focus:outline-none \
-                       focus:ring-1 focus:ring-brand-primary";
-        }
-    }
 }
 
 fn form_field_with_helper(

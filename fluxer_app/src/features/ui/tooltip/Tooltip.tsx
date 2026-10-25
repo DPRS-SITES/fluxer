@@ -26,6 +26,7 @@ import {
 	transitionTooltipSnapshot,
 } from '@app/features/ui/tooltip/TooltipStateMachine';
 import {appZoomCssPx, appZoomLayoutPx} from '@app/features/ui/utils/AppZoomUtils';
+import {toDocumentPlacement} from '@app/features/ui/utils/DocumentPlacement';
 import {getReducedMotionProps, TOOLTIP_MOTION} from '@app/features/ui/utils/ReducedMotionAnimation';
 import {
 	canUseWindowFocusedHoverControls,
@@ -43,7 +44,7 @@ import React, {useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, 
 const logger = new Logger('Tooltip');
 
 export type TooltipPosition = 'top' | 'left' | 'right' | 'bottom';
-export type TooltipType = 'normal' | 'error';
+type TooltipType = 'normal' | 'error';
 
 const TOOLTIP_AUTO_UPDATE_OPTIONS = {
 	ancestorScroll: false,
@@ -417,7 +418,7 @@ export const Tooltip = observer(
 					...(arrowRef.current ? [arrow({element: arrowRef.current})] : []),
 				];
 				const {x, y, placement, middlewareData} = await computePosition(target, tooltip, {
-					placement: position,
+					placement: toDocumentPlacement(position, target),
 					strategy: 'fixed',
 					middleware,
 				});

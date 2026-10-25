@@ -1,11 +1,26 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import type {APIConfig, BlueskyOAuthConfig, TrustedCallerConfig} from '@app/api/config/APIConfig';
+import type {APIConfig, BlueskyOAuthConfig, OperatorPassConfig, TrustedCallerConfig} from '@app/api/config/APIConfig';
+import {
+	parseOperatorPassMaxQuantity,
+	parseOperatorPassReleaseLists,
+	parseOperatorPassStandardPrices,
+	parseOperatorPassStoppedCountries,
+	parseOperatorPassTransferLockHours,
+	parseOperatorPassWallTiers,
+	parseOperatorPassWithdrawalCountries,
+	resolveOperatorPassDisabledCurrencies,
+} from '@app/api/operator_pass/OperatorPassPrices';
 import {DonationRateLimitConfigs} from '@app/api/rate_limit_configs/DonationRateLimitConfig';
+import {OperatorPassRateLimitConfigs} from '@app/api/rate_limit_configs/OperatorPassRateLimitConfig';
 import {parseIpBanEntry} from '@app/api/utils/IpRangeUtils';
+import {trimTrailingSlash} from '@app/api/utils/UrlUtils';
 import type {WorkerTaskName} from '@app/api/worker/WorkerLaneConfig';
 import type {MasterConfig} from '@fluxer/config/src/MasterConfig';
+import {EmailDeliveryModes} from '@fluxer/constants/src/AccountConfigConstants';
+import {smtpTlsModeFromSecure} from '@fluxer/constants/src/SmtpConstants';
 import {parseIpAddress} from '@fluxer/ip_utils/src/IpAddress';
+import {normalizeString} from '@fluxer/schema/src/primitives/SchemaPrimitives';
 import {parseGeoipSourceConfig, resolveGeoipRuntimeSourceConfig} from '@pkgs/geoip/src/GeoipStartup';
 
 function extractHostname(url: string): string {
@@ -14,10 +29,6 @@ function extractHostname(url: string): string {
 	} catch {
 		throw new Error(`Invalid URL: ${url}`);
 	}
-}
-
-function trimTrailingSlash(url: string): string {
-	return url.replace(/\/+$/u, '');
 }
 
 function resolveEmailAppBaseUrl(master: MasterConfig): string {
@@ -37,6 +48,31 @@ function resolveEmailAppBaseUrl(master: MasterConfig): string {
 		return trimTrailingSlash(appBaseUrl.toString());
 	} catch {
 		throw new Error(`Invalid email app base URL: ${configuredAppBaseUrl}`);
+	}
+}
+
+function toSmtpConfig(
+	smtp: NonNullable<MasterConfig['integrations']['email']['smtp']>,
+): NonNullable<APIConfig['email']['smtp']> {
+	return {
+		host: smtp.host,
+		port: smtp.port,
+		username: smtp.username,
+		password: smtp.password,
+		tlsMode: smtp.tls_mode ?? smtpTlsModeFromSecure(smtp.secure, smtp.port),
+	};
+}
+
+function resolveEnvEmailSwitch(
+	email: MasterConfig['integrations']['email'],
+): Pick<APIConfig['email'], 'enabled' | 'provider'> {
+	switch (email.delivery) {
+		case undefined:
+			return {enabled: email.enabled, provider: email.provider};
+		case EmailDeliveryModes.SMTP:
+			return {enabled: true, provider: 'smtp'};
+		case EmailDeliveryModes.OFF:
+			return {enabled: false, provider: email.provider};
 	}
 }
 
@@ -79,27 +115,6 @@ function normalizeIpBanExemptIps(values: Array<string>): Array<string> {
 	return Array.from(normalized);
 }
 
-function mapApnsApps(
-	apps:
-		| Array<{
-				app_id?: string;
-				topic?: string;
-				environment?: 'production' | 'development';
-		  }>
-		| undefined,
-): APIConfig['push']['apns']['apps'] {
-	return (apps ?? []).map((app) => {
-		if (!app.app_id) {
-			throw new Error('FLUXER_PUSH_APNS_APPS contains an entry with no app_id');
-		}
-		return {
-			appId: app.app_id,
-			topic: app.topic,
-			environment: app.environment,
-		};
-	});
-}
-
 const TRUSTED_CALLER_MIN_KEY_LENGTH = 32;
 
 function parseTrustedCaller(entry: unknown, index: number): TrustedCallerConfig {
@@ -140,10 +155,131 @@ function buildTrustedCallers(master: MasterConfig): Array<TrustedCallerConfig> {
 		trustedCallers.push({
 			name: 'donation',
 			key: donationProxyKey,
-			buckets: Object.values(DonationRateLimitConfigs).map((routeConfig) => routeConfig.bucket),
+			buckets: [
+				...Object.values(DonationRateLimitConfigs).map((routeConfig) => routeConfig.bucket),
+				...Object.values(OperatorPassRateLimitConfigs)
+					.filter((routeConfig) => routeConfig.trustForwardedClientIp === true)
+					.map((routeConfig) => routeConfig.bucket),
+			],
 		});
 	}
 	return trustedCallers;
+}
+
+const SETUP_TOKEN_MIN_LENGTH = 32;
+const SETUP_TOKEN_MAX_LENGTH = 256;
+
+function resolveSetupToken(master: MasterConfig): string | null {
+	const token = master.instance.setup.token?.trim();
+	if (!token) return null;
+	if (
+		token.length < SETUP_TOKEN_MIN_LENGTH ||
+		token.length > SETUP_TOKEN_MAX_LENGTH ||
+		normalizeString(token) !== token
+	) {
+		throw new Error(
+			`FLUXER_SETUP_TOKEN must be ${SETUP_TOKEN_MIN_LENGTH} to ${SETUP_TOKEN_MAX_LENGTH} printable characters`,
+		);
+	}
+	return token;
+}
+
+const ISO_INSTANT_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/u;
+const OPERATOR_PASS_MAX_GRACE_MINUTES = 24 * 60;
+
+function parseIsoInstant(value: string | undefined, envName: string): Date {
+	const trimmed = (value ?? '').trim();
+	const parsed = ISO_INSTANT_PATTERN.test(trimmed) ? Date.parse(trimmed) : Number.NaN;
+	if (!Number.isFinite(parsed)) {
+		throw new Error(`${envName} must be an ISO-8601 instant such as 2026-11-01T16:00:00Z`);
+	}
+	return new Date(parsed);
+}
+
+function parseOptionalIsoInstant(value: string | undefined, envName: string): Date | null {
+	return (value ?? '').trim().length === 0 ? null : parseIsoInstant(value, envName);
+}
+
+function parseOptionalSnowflake(value: string | undefined, envName: string): bigint | null {
+	const trimmed = (value ?? '').trim();
+	if (trimmed.length === 0) {
+		return null;
+	}
+	if (!/^[1-9]\d{0,19}$/u.test(trimmed)) {
+		throw new Error(`${envName} must be a snowflake ID`);
+	}
+	return BigInt(trimmed);
+}
+
+function resolveOperatorPassClockOffsetMs(master: MasterConfig): number {
+	const override = (master.operator_pass.now_override ?? '').trim();
+	if (override.length === 0) {
+		return 0;
+	}
+	const overrideAt = parseIsoInstant(override, 'FLUXER_OPERATOR_PASS_NOW');
+	if (master.env === 'production' && !master.dev.test_mode_enabled) {
+		console.warn('FLUXER_OPERATOR_PASS_NOW is ignored in production');
+		return 0;
+	}
+	return overrideAt.getTime() - Date.now();
+}
+
+function buildOperatorPassConfig(master: MasterConfig): OperatorPassConfig {
+	const source = master.operator_pass;
+	const saleOpensAt = parseOptionalIsoInstant(source.sale_opens_at, 'FLUXER_OPERATOR_PASS_SALE_OPENS_AT');
+	const priceRisesAt = parseOptionalIsoInstant(source.price_rises_at, 'FLUXER_OPERATOR_PASS_PRICE_RISES_AT');
+	if ((saleOpensAt === null) !== (priceRisesAt === null)) {
+		throw new Error('FLUXER_OPERATOR_PASS_SALE_OPENS_AT and FLUXER_OPERATOR_PASS_PRICE_RISES_AT must be set together');
+	}
+	if (saleOpensAt && priceRisesAt && priceRisesAt.getTime() <= saleOpensAt.getTime()) {
+		throw new Error('FLUXER_OPERATOR_PASS_PRICE_RISES_AT must be later than FLUXER_OPERATOR_PASS_SALE_OPENS_AT');
+	}
+	if (saleOpensAt === null && master.env === 'production' && !master.instance.self_hosted) {
+		console.warn(
+			'FLUXER_OPERATOR_PASS_SALE_OPENS_AT and FLUXER_OPERATOR_PASS_PRICE_RISES_AT are not set, the Operator Pass sale stays closed',
+		);
+	}
+	const graceMinutes = source.grace_minutes;
+	if (
+		typeof graceMinutes !== 'number' ||
+		!Number.isInteger(graceMinutes) ||
+		graceMinutes < 0 ||
+		graceMinutes > OPERATOR_PASS_MAX_GRACE_MINUTES
+	) {
+		throw new Error(
+			`FLUXER_OPERATOR_PASS_GRACE_MINUTES must be an integer between 0 and ${OPERATOR_PASS_MAX_GRACE_MINUTES}`,
+		);
+	}
+	const labsGuildId = parseOptionalSnowflake(source.labs_guild_id, 'FLUXER_LABS_GUILD_ID');
+	const labsOperatorRoleId = parseOptionalSnowflake(source.labs_operator_role_id, 'FLUXER_LABS_OPERATOR_ROLE_ID');
+	if ((labsGuildId === null) !== (labsOperatorRoleId === null)) {
+		throw new Error('FLUXER_LABS_GUILD_ID and FLUXER_LABS_OPERATOR_ROLE_ID must be set together');
+	}
+	const standardPricesMinor = parseOperatorPassStandardPrices(source.standard_prices_minor);
+	if (standardPricesMinor === null && master.env === 'production' && !master.instance.self_hosted) {
+		console.warn(
+			'FLUXER_OPERATOR_PASS_STANDARD_PRICE_* is not set, Operator Pass checkout keeps the early bird price after the price rise',
+		);
+	}
+	return {
+		saleOpensAt,
+		priceRisesAt,
+		graceMs: graceMinutes * 60 * 1000,
+		clockOffsetMs: resolveOperatorPassClockOffsetMs(master),
+		labsGuildId,
+		labsOperatorRoleId,
+		standardPricesMinor,
+		releaseLists: parseOperatorPassReleaseLists(source.release_lists),
+		transferLockMs: parseOperatorPassTransferLockHours(source.transfer_lock_hours) * 60 * 60 * 1000,
+		withdrawalCountries: parseOperatorPassWithdrawalCountries(source.withdrawal_countries),
+		stoppedCountries: parseOperatorPassStoppedCountries(source.stopped_countries),
+		wallTierMinimums: parseOperatorPassWallTiers(source.wall_tiers),
+		maxQuantity: parseOperatorPassMaxQuantity(source.max_quantity),
+		disabledCurrencies: resolveOperatorPassDisabledCurrencies(
+			source.localized_prices_enabled,
+			parseOperatorPassStoppedCountries(source.stopped_countries),
+		),
+	};
 }
 
 export function buildAPIConfigFromMaster(master: MasterConfig): APIConfig {
@@ -288,20 +424,20 @@ export function buildAPIConfigFromMaster(master: MasterConfig): APIConfig {
 			buckets: s3Buckets,
 		},
 		email: {
-			enabled: master.integrations.email.enabled,
-			provider: master.integrations.email.provider,
+			...resolveEnvEmailSwitch(master.integrations.email),
 			webhookSecret: master.integrations.email.webhook_secret ?? undefined,
 			fromEmail: master.integrations.email.from_email,
 			fromName: master.integrations.email.from_name,
 			replyToEmail: master.integrations.email.reply_to_email,
 			appBaseUrl: resolveEmailAppBaseUrl(master),
-			smtp: master.integrations.email.smtp
+			smtp: master.integrations.email.smtp ? toSmtpConfig(master.integrations.email.smtp) : undefined,
+			fallback: master.integrations.email.fallback
 				? {
-						host: master.integrations.email.smtp.host,
-						port: master.integrations.email.smtp.port,
-						username: master.integrations.email.smtp.username,
-						password: master.integrations.email.smtp.password,
-						secure: master.integrations.email.smtp.secure ?? true,
+						domains: master.integrations.email.fallback.domains,
+						smtp: {
+							...toSmtpConfig(master.integrations.email.fallback.smtp),
+							headers: master.integrations.email.fallback.smtp.headers,
+						},
 					}
 				: undefined,
 		},
@@ -318,6 +454,7 @@ export function buildAPIConfigFromMaster(master: MasterConfig): APIConfig {
 			url: master.integrations.voice.url,
 			internalUrl: master.integrations.voice.internal_url,
 			defaultRegion: master.integrations.voice.default_region,
+			p2pStunUrls: master.integrations.voice.p2p_stun_urls,
 		},
 		stripe: {
 			enabled: master.integrations.stripe.enabled,
@@ -330,6 +467,7 @@ export function buildAPIConfigFromMaster(master: MasterConfig): APIConfig {
 						monthlyBrl: master.integrations.stripe.prices.monthly_brl,
 						monthlyDkk: master.integrations.stripe.prices.monthly_dkk,
 						monthlyInr: master.integrations.stripe.prices.monthly_inr,
+						monthlyIsk: master.integrations.stripe.prices.monthly_isk,
 						monthlyNok: master.integrations.stripe.prices.monthly_nok,
 						monthlyPln: master.integrations.stripe.prices.monthly_pln,
 						monthlySek: master.integrations.stripe.prices.monthly_sek,
@@ -339,6 +477,7 @@ export function buildAPIConfigFromMaster(master: MasterConfig): APIConfig {
 						yearlyBrl: master.integrations.stripe.prices.yearly_brl,
 						yearlyDkk: master.integrations.stripe.prices.yearly_dkk,
 						yearlyInr: master.integrations.stripe.prices.yearly_inr,
+						yearlyIsk: master.integrations.stripe.prices.yearly_isk,
 						yearlyNok: master.integrations.stripe.prices.yearly_nok,
 						yearlyPln: master.integrations.stripe.prices.yearly_pln,
 						yearlySek: master.integrations.stripe.prices.yearly_sek,
@@ -351,6 +490,8 @@ export function buildAPIConfigFromMaster(master: MasterConfig): APIConfig {
 						gift1YearDkk: master.integrations.stripe.prices.gift_1_year_dkk,
 						gift1MonthNok: master.integrations.stripe.prices.gift_1_month_nok,
 						gift1YearNok: master.integrations.stripe.prices.gift_1_year_nok,
+						gift1MonthIsk: master.integrations.stripe.prices.gift_1_month_isk,
+						gift1YearIsk: master.integrations.stripe.prices.gift_1_year_isk,
 						gift1MonthBrl: master.integrations.stripe.prices.gift_1_month_brl,
 						gift1MonthInr: master.integrations.stripe.prices.gift_1_month_inr,
 						gift1MonthPln: master.integrations.stripe.prices.gift_1_month_pln,
@@ -372,19 +513,17 @@ export function buildAPIConfigFromMaster(master: MasterConfig): APIConfig {
 				token: master.integrations.cache_purge.http.token,
 				timeoutMs: master.integrations.cache_purge.http.timeout_ms,
 			},
+			controller: {
+				endpoint: master.integrations.cache_purge.controller.endpoint,
+				token: master.integrations.cache_purge.controller.token,
+				timeoutMs: master.integrations.cache_purge.controller.timeout_ms,
+			},
 		},
 		clamav: {
 			enabled: master.integrations.clamav.enabled,
 			host: master.integrations.clamav.host,
 			port: master.integrations.clamav.port,
 			failOpen: master.integrations.clamav.fail_open,
-		},
-		ncmec: {
-			enabled: master.integrations.ncmec.enabled,
-			baseUrl: master.integrations.ncmec.base_url,
-			username: master.integrations.ncmec.username,
-			password: master.integrations.ncmec.password,
-			reporterEmail: master.integrations.ncmec.reporter_email ?? '',
 		},
 		admin: {
 			oauthClientSecret: master.services.admin.oauth_client_secret,
@@ -398,11 +537,6 @@ export function buildAPIConfigFromMaster(master: MasterConfig): APIConfig {
 				rpName: master.auth.passkeys.rp_name,
 				rpId: master.auth.passkeys.rp_id,
 				allowedOrigins: master.auth.passkeys.additional_allowed_origins,
-			},
-			vapid: {
-				publicKey: master.auth.vapid.public_key,
-				privateKey: master.auth.vapid.private_key,
-				email: master.auth.vapid.email,
 			},
 			bluesky: master.auth.bluesky as BlueskyOAuthConfig,
 		},
@@ -425,12 +559,15 @@ export function buildAPIConfigFromMaster(master: MasterConfig): APIConfig {
 				logoUrl: master.instance.branding.logo_url,
 				wordmarkUrl: master.instance.branding.wordmark_url,
 				faviconUrl: master.instance.branding.favicon_url,
+				faviconDarkUrl: master.instance.branding.favicon_dark_url,
+				signInBackdropUrl: master.instance.branding.sign_in_backdrop_url,
 				themeColor: master.instance.branding.theme_color,
 				statusPageUrl: master.instance.branding.status_page_url,
 				statusPageIncidentHistoryUrl: master.instance.branding.status_page_incident_history_url,
 			},
 			setup: {
 				configured: master.instance.setup.configured,
+				token: resolveSetupToken(master),
 			},
 			accountIdentity: master.instance.account_identity,
 			tagStyle: master.instance.tag_style,
@@ -438,6 +575,13 @@ export function buildAPIConfigFromMaster(master: MasterConfig): APIConfig {
 		discovery: {
 			enabled: master.discovery.enabled,
 			minMemberCount: master.discovery.min_member_count,
+		},
+		operatorPass: buildOperatorPassConfig(master),
+		paymentDisputes: {
+			closureEffectiveAt: parseOptionalIsoInstant(
+				master.payment_disputes.closure_effective_at,
+				'FLUXER_PAYMENT_DISPUTE_CLOSURE_EFFECTIVE_AT',
+			),
 		},
 		dev: {
 			relaxRegistrationRateLimits: master.dev.relax_registration_rate_limits,
@@ -451,16 +595,12 @@ export function buildAPIConfigFromMaster(master: MasterConfig): APIConfig {
 		attachmentDecayEnabled: master.attachment_decay_enabled,
 		deletionGracePeriodHours: master.dev.test_mode_enabled ? 0.01 : master.deletion_grace_period_hours,
 		inactivityDeletionThresholdDays: master.inactivity_deletion_threshold_days,
+		reportRetention: {
+			days: master.report_retention.days,
+			dryRun: master.report_retention.dry_run,
+		},
 		push: {
 			publicVapidKey: master.auth.vapid.public_key,
-			apns: {
-				enabled: master.integrations.push.apns.enabled,
-				teamId: master.integrations.push.apns.team_id,
-				keyId: master.integrations.push.apns.key_id,
-				privateKey: master.integrations.push.apns.private_key,
-				privateKeyPath: master.integrations.push.apns.private_key_path,
-				apps: mapApnsApps(master.integrations.push.apns.apps),
-			},
 		},
 		appStore: {
 			enabled: master.integrations.app_store.enabled,
@@ -485,6 +625,7 @@ export function buildAPIConfigFromMaster(master: MasterConfig): APIConfig {
 			products: master.integrations.google_play.products ?? {},
 			pushAudience: master.integrations.google_play.push_audience,
 			pushServiceAccountEmail: master.integrations.google_play.push_service_account_email,
+			selfServiceRefunds: master.integrations.google_play.self_service_refunds,
 		},
 		storeBilling: {
 			sandboxUserIds: master.integrations.store_billing.sandbox_user_ids ?? [],
@@ -496,6 +637,7 @@ export function buildAPIConfigFromMaster(master: MasterConfig): APIConfig {
 			taskName: apiWorkerConfig?.task as WorkerTaskName | undefined,
 			enableCronScheduler: apiWorkerConfig?.enable_cron_scheduler,
 			metricsPort: apiWorkerConfig?.metrics_port,
+			embedded: apiWorkerConfig?.embedded ?? false,
 			laneConcurrencyOverrides: {
 				realtime: apiWorkerConfig?.lane_concurrency_overrides?.realtime,
 				unfurl: apiWorkerConfig?.lane_concurrency_overrides?.unfurl,

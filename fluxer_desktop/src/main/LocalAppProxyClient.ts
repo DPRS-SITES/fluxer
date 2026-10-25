@@ -19,107 +19,30 @@ const LOCAL_APP_PROXY_DEADLINE_MS = 5 * 60 * 1000;
 const LOCAL_APP_PROXY_REQUEST_BODY_MAX_BYTES = 100 * 1024 * 1024;
 export const LOCAL_APP_PROXY_ACCEPT_ENCODING = 'gzip, br';
 
-const LOCAL_APP_PROXY_SERVICE_NAME = 'desktop_local_app_proxy';
-const LOCAL_APP_PROXY_MAX_CONCURRENT_REQUESTS = 32;
-const LOCAL_APP_PROXY_MAX_QUEUED_REQUESTS = 4096;
+const LOCAL_APP_PROXY_RESOURCE_RESPONSE_HEADERS_DEADLINE_MS = 30_000;
 const UPLOAD_PROGRESS_MIN_BYTES = 64 * 1024;
 const UPLOAD_PROGRESS_MIN_INTERVAL_MS = 100;
 const MINIMUM_RESPONSE_STATUS = 200;
 const MAXIMUM_RESPONSE_STATUS = 599;
 const NULL_BODY_STATUSES: ReadonlySet<number> = new Set([204, 205, 304]);
 
-class LocalAppProxyQueueOverflowError extends Error {
-	public constructor() {
-		super('Local app proxy has too many queued requests');
-		this.name = 'LocalAppProxyQueueOverflowError';
-	}
-}
+export const LocalAppProxyTraffic = Object.freeze({
+	API: 'desktop_local_app_proxy',
+	REMOTE_RESOURCE: 'desktop_local_app_resource_proxy',
+} as const);
 
-class LocalAppProxyConcurrencyPermit {
-	private releasePermit: (() => void) | null;
+export type LocalAppProxyTraffic = (typeof LocalAppProxyTraffic)[keyof typeof LocalAppProxyTraffic];
 
-	public constructor(releasePermit: () => void) {
-		this.releasePermit = releasePermit;
-	}
-
-	public release(): void {
-		const releasePermit = this.releasePermit;
-		if (releasePermit == null) {
-			return;
-		}
-		this.releasePermit = null;
-		releasePermit();
-	}
-}
-
-class LocalAppProxyResponseBodyLease {
-	public readonly reader: ReadableStreamDefaultReader<Uint8Array>;
-	private readonly permit: LocalAppProxyConcurrencyPermit;
-	private settled = false;
-
-	public constructor(body: ReadableStream<Uint8Array>, permit: LocalAppProxyConcurrencyPermit) {
-		this.reader = body.getReader();
-		this.permit = permit;
-	}
-
-	public release(): void {
-		if (this.settled) {
-			return;
-		}
-		this.settled = true;
-		try {
-			this.reader.releaseLock();
-		} finally {
-			this.permit.release();
-		}
-	}
-}
-
-class LocalAppProxyConcurrencyGate {
-	private active = 0;
-	private readonly waiting: Array<{readonly admit: () => void}> = [];
-
-	public acquire(signal: AbortSignal): Promise<LocalAppProxyConcurrencyPermit> {
-		signal.throwIfAborted();
-		if (this.active < LOCAL_APP_PROXY_MAX_CONCURRENT_REQUESTS) {
-			this.active += 1;
-			return Promise.resolve(new LocalAppProxyConcurrencyPermit(() => this.release()));
-		}
-		if (this.waiting.length >= LOCAL_APP_PROXY_MAX_QUEUED_REQUESTS) {
-			throw new LocalAppProxyQueueOverflowError();
-		}
-		return new Promise<LocalAppProxyConcurrencyPermit>((resolve, reject) => {
-			let waiter: (typeof this.waiting)[number];
-			const onAbort = () => {
-				const index = this.waiting.indexOf(waiter);
-				if (index === -1) {
-					return;
-				}
-				this.waiting.splice(index, 1);
-				reject(signal.reason);
-			};
-			const admit = () => {
-				signal.removeEventListener('abort', onAbort);
-				resolve(new LocalAppProxyConcurrencyPermit(() => this.release()));
-			};
-			waiter = {admit};
-			this.waiting.push(waiter);
-			signal.addEventListener('abort', onAbort, {once: true});
-		});
-	}
-
-	private release(): void {
-		const next = this.waiting.shift();
-		if (next != null) {
-			next.admit();
-			return;
-		}
-		this.active -= 1;
+class LocalAppProxyResponseHeadersDeadlineError extends Error {
+	public constructor(timeoutMs: number) {
+		super(`Local app proxy upstream sent no response headers within ${timeoutMs} ms`);
+		this.name = 'LocalAppProxyResponseHeadersDeadlineError';
 	}
 }
 
 interface DesktopLocalAppProxyClientDependencies {
 	readonly outboundHTTP: DesktopOutboundHTTP;
+	readonly traffic: LocalAppProxyTraffic;
 }
 
 interface LocalAppProxyFetchRequest {
@@ -206,27 +129,35 @@ function emitLocalAppUploadProgress(progress: DesktopLocalAppUploadProgress): vo
 
 export class DesktopLocalAppProxyClient {
 	private readonly outboundHTTP: DesktopOutboundHTTP;
+	private readonly responseHeadersDeadlineMs: number | null;
 
 	public constructor(dependencies: DesktopLocalAppProxyClientDependencies) {
 		this.outboundHTTP = dependencies.outboundHTTP;
+		this.responseHeadersDeadlineMs =
+			dependencies.traffic === LocalAppProxyTraffic.REMOTE_RESOURCE
+				? LOCAL_APP_PROXY_RESOURCE_RESPONSE_HEADERS_DEADLINE_MS
+				: null;
 	}
 
-	private readonly concurrency = new LocalAppProxyConcurrencyGate();
-
 	public async fetch(request: LocalAppProxyFetchRequest): Promise<Response> {
-		const permit = await this.concurrency.acquire(request.signal);
+		const deadlineMs = this.responseHeadersDeadlineMs;
+		if (deadlineMs == null || requestHasBody(request.method)) {
+			return await this.runFetch(request);
+		}
+		const deadline = new AbortController();
+		const timer = setTimeout(
+			() => deadline.abort(new LocalAppProxyResponseHeadersDeadlineError(deadlineMs)),
+			deadlineMs,
+		);
+		timer.unref();
 		try {
-			return await this.runFetch(request, permit);
-		} catch (error) {
-			permit.release();
-			throw error;
+			return await this.runFetch({...request, signal: AbortSignal.any([request.signal, deadline.signal])});
+		} finally {
+			clearTimeout(timer);
 		}
 	}
 
-	private async runFetch(
-		request: LocalAppProxyFetchRequest,
-		permit: LocalAppProxyConcurrencyPermit,
-	): Promise<Response> {
+	private async runFetch(request: LocalAppProxyFetchRequest): Promise<Response> {
 		const target = new URL(request.targetURL);
 		const body = requestHasBody(request.method) ? request.body : null;
 		const outboundRequest: DesktopOutboundHTTPRequest = {
@@ -236,12 +167,11 @@ export class DesktopLocalAppProxyClient {
 			maximumRequestBodyBytes: LOCAL_APP_PROXY_REQUEST_BODY_MAX_BYTES,
 			method: request.method,
 			originTrust: DesktopOriginTrust.REGISTERED,
-			serviceName: LOCAL_APP_PROXY_SERVICE_NAME,
 			signal: request.signal,
 			timeoutMs: LOCAL_APP_PROXY_DEADLINE_MS,
 			url: target.href,
 		};
-		return buildProxyResponse(await this.outboundHTTP.request(outboundRequest), request.method, permit);
+		return buildProxyResponse(await this.outboundHTTP.request(outboundRequest), request.method);
 	}
 
 	public async settleFailure({
@@ -322,11 +252,7 @@ function instrumentedRequestBody(
 	);
 }
 
-function buildProxyResponse(
-	message: DesktopOutboundHTTPMessage,
-	method: string,
-	permit: LocalAppProxyConcurrencyPermit,
-): Response {
+function buildProxyResponse(message: DesktopOutboundHTTPMessage, method: string): Response {
 	try {
 		const status = message.status;
 		if (status < MINIMUM_RESPONSE_STATUS || status > MAXIMUM_RESPONSE_STATUS) {
@@ -335,57 +261,18 @@ function buildProxyResponse(
 		const headers = responseHeaders(message.headers);
 		if (method === LOCAL_APP_PROXY_HEAD_METHOD || NULL_BODY_STATUSES.has(status)) {
 			message.message.resume();
-			permit.release();
 			return new Response(null, {status, statusText: message.statusText, headers});
 		}
 		const decoded = decodedMessageStream(message.message, contentEncoding(message.headers));
-		const body = holdPermitForResponseBody(Readable.toWeb(decoded) as ReadableStream<Uint8Array>, permit);
-		return new Response(body, {
+		return new Response(Readable.toWeb(decoded) as ReadableStream<Uint8Array>, {
 			status,
 			statusText: message.statusText,
 			headers,
 		});
 	} catch (error) {
 		message.message.destroy();
-		permit.release();
 		throw error;
 	}
-}
-
-function holdPermitForResponseBody(
-	body: ReadableStream<Uint8Array>,
-	permit: LocalAppProxyConcurrencyPermit,
-): ReadableStream<Uint8Array> {
-	const lease = new LocalAppProxyResponseBodyLease(body, permit);
-	return new ReadableStream<Uint8Array>({
-		async pull(controller) {
-			try {
-				const chunk = await lease.reader.read();
-				if (chunk.done) {
-					try {
-						controller.close();
-					} finally {
-						lease.release();
-					}
-					return;
-				}
-				controller.enqueue(chunk.value);
-			} catch (error) {
-				try {
-					controller.error(error);
-				} finally {
-					lease.release();
-				}
-			}
-		},
-		async cancel(reason) {
-			try {
-				await lease.reader.cancel(reason);
-			} finally {
-				lease.release();
-			}
-		},
-	});
 }
 
 function responseHeaders(incoming: http.IncomingHttpHeaders): Headers {
@@ -414,7 +301,7 @@ function contentEncoding(incoming: http.IncomingHttpHeaders): string | null {
 	return normalized.length === 0 ? null : normalized;
 }
 
-function decodedMessageStream(message: http.IncomingMessage, encoding: string | null): Readable {
+function decodedMessageStream(message: Readable, encoding: string | null): Readable {
 	if (encoding == null || encoding === 'identity') {
 		return message;
 	}

@@ -21,6 +21,8 @@ import {
 
 let cachedConfig: MasterConfig | null = null;
 
+const MAX_REPORT_RETENTION_DAYS = 36_500;
+
 const DEFAULT_PASSKEY_ORIGINS = [
 	'https://fluxer.app',
 	'https://web.fluxer.app',
@@ -171,7 +173,7 @@ function defaultConfig(): MasterConfig {
 				enabled: false,
 				provider: 'none',
 				from_email: '',
-				from_name: 'Fluxer',
+				from_name: '',
 				reply_to_email: '',
 				app_base_url: '',
 			},
@@ -197,12 +199,6 @@ function defaultConfig(): MasterConfig {
 				prices: {},
 				legacy_prices: {},
 			},
-			ncmec: {
-				enabled: false,
-				base_url: '',
-				username: '',
-				password: '',
-			},
 			clamav: {
 				enabled: false,
 				host: '127.0.0.1',
@@ -222,15 +218,14 @@ function defaultConfig(): MasterConfig {
 					token: '',
 					timeout_ms: 10_000,
 				},
+				controller: {
+					endpoint: '',
+					token: '',
+					timeout_ms: 10_000,
+				},
 			},
 			blocklist_feeds: {},
 			breached_password_check: {},
-			push: {
-				apns: {
-					enabled: false,
-					apps: [],
-				},
-			},
 			app_store: {
 				enabled: false,
 				apps: [],
@@ -241,6 +236,7 @@ function defaultConfig(): MasterConfig {
 				packages: [],
 				token_uri: 'https://oauth2.googleapis.com/token',
 				products: {},
+				self_service_refunds: false,
 			},
 			store_billing: {
 				sandbox_user_ids: [],
@@ -257,6 +253,10 @@ function defaultConfig(): MasterConfig {
 			},
 			account_identity: null,
 			tag_style: null,
+		},
+		payment_disputes: {},
+		operator_pass: {
+			grace_minutes: 30,
 		},
 		dev: {
 			relax_registration_rate_limits: false,
@@ -276,7 +276,10 @@ function defaultConfig(): MasterConfig {
 		},
 		attachment_decay_enabled: true,
 		deletion_grace_period_hours: 336,
-		inactivity_deletion_threshold_days: 365,
+		report_retention: {
+			days: 365,
+			dry_run: false,
+		},
 	};
 }
 
@@ -298,9 +301,17 @@ function assertOneOf<T extends string>(value: string, allowed: ReadonlyArray<T>,
 	}
 }
 
+function missingSetting(envName: string): Error {
+	const version = process.env.BUILD_VERSION?.trim();
+	const image = version ? `image ${version}` : 'this image';
+	return new Error(
+		`${envName} is required. If .env or the Helm values set it, the stack files or the Helm chart in use are older than ${image} and don't pass it on. Run rexctl upgrade, or upgrade the Helm chart to the same release as the image.`,
+	);
+}
+
 function requireString(value: string | undefined, envName: string): void {
 	if (!value || value.trim().length === 0) {
-		throw new Error(`${envName} is required`);
+		throw missingSetting(envName);
 	}
 }
 
@@ -311,7 +322,7 @@ function applyProfilePseudonymSecret(config: MasterConfig): void {
 		return;
 	}
 	if (config.env === 'production') {
-		throw new Error('FLUXER_PROFILE_PSEUDONYM_SECRET is required');
+		throw missingSetting('FLUXER_PROFILE_PSEUDONYM_SECRET');
 	}
 	config.auth.profile_pseudonym_secret = DEVELOPMENT_PROFILE_PSEUDONYM_SECRET;
 }
@@ -322,10 +333,75 @@ function validateReplyToEmail(value: string): void {
 	}
 }
 
+const EMAIL_DOMAIN_PATTERN =
+	/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
+const DEFAULT_SMTP_PORT = 587;
+const SMTP_HEADER_NAME_PATTERN = /^[\x21-\x39\x3b-\x7e]+$/u;
+const SMTP_HEADER_VALUE_PATTERN = /^[\x20-\x7e\t]*$/u;
+const SMTP_HEADER_MAX_LINE_LENGTH = 998;
+const CORE_SMTP_HEADER_NAMES = new Set([
+	'from',
+	'to',
+	'cc',
+	'bcc',
+	'subject',
+	'reply-to',
+	'message-id',
+	'date',
+	'content-type',
+	'mime-version',
+]);
+
+function validateSmtpHeaders(headers: unknown, envName: string): void {
+	if (headers === undefined) return;
+	if (!isConfigObject(headers)) throw new Error(`${envName} must be a JSON object of header names to strings`);
+	for (const [name, value] of Object.entries(headers)) {
+		if (!SMTP_HEADER_NAME_PATTERN.test(name)) {
+			throw new Error(`${envName} header name ${JSON.stringify(name)} is not a valid header field name`);
+		}
+		if (CORE_SMTP_HEADER_NAMES.has(name.toLowerCase())) {
+			throw new Error(`${envName} must not set the ${name} header`);
+		}
+		if (typeof value !== 'string') throw new Error(`${envName} value of ${name} must be a string`);
+		if (!SMTP_HEADER_VALUE_PATTERN.test(value)) {
+			throw new Error(`${envName} value of ${name} must be printable ASCII without line breaks`);
+		}
+		if (name.length + 2 + value.length > SMTP_HEADER_MAX_LINE_LENGTH) {
+			throw new Error(`${envName} header ${name} must fit on one ${SMTP_HEADER_MAX_LINE_LENGTH} character line`);
+		}
+	}
+}
+
+function normalizeEmailFallbackConfig(config: MasterConfig): void {
+	const email = config.integrations.email;
+	if (!email.fallback) return;
+	const {domains, smtp}: Partial<NonNullable<typeof email.fallback>> = email.fallback;
+	const missing = (envName: string) => new Error(`${envName} is required when an email fallback provider is set`);
+	if (!domains?.length) throw missing('FLUXER_EMAIL_FALLBACK_DOMAINS');
+	if (!smtp?.host?.trim()) throw missing('FLUXER_EMAIL_FALLBACK_SMTP_HOST');
+	if (!smtp.username?.trim()) throw missing('FLUXER_EMAIL_FALLBACK_SMTP_USERNAME');
+	if (!smtp.password?.trim()) throw missing('FLUXER_EMAIL_FALLBACK_SMTP_PASSWORD');
+	const port: unknown = smtp.port ?? DEFAULT_SMTP_PORT;
+	assertIntegerInRange(port, 'FLUXER_EMAIL_FALLBACK_SMTP_PORT', 1, 65_535);
+	validateSmtpHeaders(smtp.headers, 'FLUXER_EMAIL_FALLBACK_SMTP_HEADERS');
+	const normalizedDomains = domains.map((domain) => domain.trim().toLowerCase());
+	if (normalizedDomains.includes('*') && new Set(normalizedDomains).size > 1) {
+		throw new Error('FLUXER_EMAIL_FALLBACK_DOMAINS must be either * or a list of domains');
+	}
+	for (const domain of normalizedDomains) {
+		if (domain !== '*' && !EMAIL_DOMAIN_PATTERN.test(domain)) {
+			throw new Error(
+				`FLUXER_EMAIL_FALLBACK_DOMAINS entry ${JSON.stringify(domain)} must be a domain such as gmail.com`,
+			);
+		}
+	}
+	email.fallback = {domains: [...new Set(normalizedDomains)], smtp: {...smtp, port}};
+}
+
 function validateUploadRelaySecret(value: string): void {
 	const trimmed = value.trim();
 	if (trimmed.length === 0) {
-		throw new Error('FLUXER_MEDIA_PROXY_UPLOAD_RELAY_SECRET_BASE64 is required');
+		throw missingSetting('FLUXER_MEDIA_PROXY_UPLOAD_RELAY_SECRET_BASE64');
 	}
 	if (!/^[A-Za-z0-9+/]+={0,2}$/u.test(trimmed)) {
 		throw new Error('FLUXER_MEDIA_PROXY_UPLOAD_RELAY_SECRET_BASE64 must be base64');
@@ -375,16 +451,23 @@ function assertIdentifier(value: string, envName: string): void {
 	}
 }
 
+const VAPID_REMEDY =
+	'Run rexctl doctor --fix to make a new pair. Browsers that have notifications on subscribe again on their next visit.';
+
+function vapidMismatch(): Error {
+	return new Error(`FLUXER_VAPID_PRIVATE_KEY does not match FLUXER_VAPID_PUBLIC_KEY. ${VAPID_REMEDY}`);
+}
+
 function validateVapidConfig(config: MasterConfig): void {
 	requireString(config.auth.vapid.public_key, 'FLUXER_VAPID_PUBLIC_KEY');
 	requireString(config.auth.vapid.private_key, 'FLUXER_VAPID_PRIVATE_KEY');
 	const pub = Buffer.from(config.auth.vapid.public_key, 'base64url');
 	const priv = Buffer.from(config.auth.vapid.private_key, 'base64url');
 	if (pub.length !== 65 || pub[0] !== 0x04) {
-		throw new Error('FLUXER_VAPID_PUBLIC_KEY must be the base64url 65-byte uncompressed P-256 point');
+		throw new Error(`FLUXER_VAPID_PUBLIC_KEY must be the base64url 65-byte uncompressed P-256 point. ${VAPID_REMEDY}`);
 	}
 	if (priv.length !== 32) {
-		throw new Error('FLUXER_VAPID_PRIVATE_KEY must be the base64url 32-byte P-256 scalar');
+		throw new Error(`FLUXER_VAPID_PRIVATE_KEY must be the base64url 32-byte P-256 scalar. ${VAPID_REMEDY}`);
 	}
 	let derived: Buffer;
 	try {
@@ -392,10 +475,10 @@ function validateVapidConfig(config: MasterConfig): void {
 		curve.setPrivateKey(priv);
 		derived = curve.getPublicKey();
 	} catch {
-		throw new Error('FLUXER_VAPID_PRIVATE_KEY does not match FLUXER_VAPID_PUBLIC_KEY');
+		throw vapidMismatch();
 	}
 	if (!derived.equals(pub)) {
-		throw new Error('FLUXER_VAPID_PRIVATE_KEY does not match FLUXER_VAPID_PUBLIC_KEY');
+		throw vapidMismatch();
 	}
 }
 
@@ -442,6 +525,12 @@ function validateApiWorkerConfig(config: MasterConfig): void {
 	}
 }
 
+function validateReportRetentionConfig(config: MasterConfig): void {
+	const retention = config.report_retention;
+	assertIntegerInRange(retention.days, 'FLUXER_REPORT_RETENTION_DAYS', 1, MAX_REPORT_RETENTION_DAYS);
+	assertBoolean(retention.dry_run, 'FLUXER_REPORT_RETENTION_DRY_RUN');
+}
+
 function validateStorageChangeFeedConfig(config: MasterConfig): void {
 	const feed = config.services.api?.storage_change_feed;
 	if (!feed?.enabled) {
@@ -469,26 +558,37 @@ function normalizeAppOriginAliases(config: MasterConfig): void {
 	];
 }
 
-function validateCachePurgeConfig(config: MasterConfig): void {
-	const cachePurge = config.integrations.cache_purge;
-	if (cachePurge.adapter !== 'http') {
-		return;
-	}
-	requireString(cachePurge.http.endpoint, 'FLUXER_CACHE_PURGE_HTTP_ENDPOINT');
-	const endpoint = URL.parse(cachePurge.http.endpoint);
+function validateCachePurgeTarget(
+	target: {endpoint: string; token: string; timeout_ms: number},
+	envPrefix: string,
+	protocols: ReadonlyArray<string>,
+): void {
+	requireString(target.endpoint, `${envPrefix}_ENDPOINT`);
+	const endpoint = URL.parse(target.endpoint);
 	if (
 		endpoint === null ||
-		(endpoint.protocol !== 'http:' && endpoint.protocol !== 'https:') ||
+		!protocols.includes(endpoint.protocol) ||
 		endpoint.username !== '' ||
 		endpoint.password !== ''
 	) {
-		throw new Error('FLUXER_CACHE_PURGE_HTTP_ENDPOINT must be an absolute http or https URL without credentials');
+		const schemes = protocols.map((protocol) => protocol.slice(0, -1)).join(' or ');
+		throw new Error(`${envPrefix}_ENDPOINT must be an absolute ${schemes} URL without credentials`);
 	}
-	requireString(cachePurge.http.token, 'FLUXER_CACHE_PURGE_HTTP_TOKEN');
-	if (!/^[\x21-\x7e]+$/u.test(cachePurge.http.token)) {
-		throw new Error('FLUXER_CACHE_PURGE_HTTP_TOKEN must contain only visible ASCII characters');
+	requireString(target.token, `${envPrefix}_TOKEN`);
+	if (!/^[\x21-\x7e]+$/u.test(target.token)) {
+		throw new Error(`${envPrefix}_TOKEN must contain only visible ASCII characters`);
 	}
-	assertIntegerInRange(cachePurge.http.timeout_ms, 'FLUXER_CACHE_PURGE_HTTP_TIMEOUT_MS', 1_000, 10_000);
+	assertIntegerInRange(target.timeout_ms, `${envPrefix}_TIMEOUT_MS`, 1_000, 10_000);
+}
+
+function validateCachePurgeConfig(config: MasterConfig): void {
+	const cachePurge = config.integrations.cache_purge;
+	if (cachePurge.adapter === 'http') {
+		validateCachePurgeTarget(cachePurge.http, 'FLUXER_CACHE_PURGE_HTTP', ['http:', 'https:']);
+	}
+	if (cachePurge.adapter === 'controller') {
+		validateCachePurgeTarget(cachePurge.controller, 'FLUXER_CACHE_PURGE_CONTROLLER', ['https:']);
+	}
 }
 
 function validateStoreProductSlots(
@@ -589,7 +689,10 @@ function normalizeConfig(config: MasterConfig): MasterConfig {
 	assertOneOf(config.database.backend, ['postgres', 'cassandra'], 'FLUXER_DATABASE_BACKEND');
 	assertOneOf(config.internal.kv_mode, ['standalone', 'cluster'], 'FLUXER_KV_MODE');
 	assertOneOf(config.integrations.email.provider, ['smtp', 'none'], 'FLUXER_EMAIL_PROVIDER');
-	assertOneOf(config.integrations.search.engine, ['elasticsearch', 'meilisearch'], 'FLUXER_SEARCH_ENGINE');
+	if (config.integrations.email.delivery !== undefined) {
+		assertOneOf(config.integrations.email.delivery, ['off', 'smtp'], 'FLUXER_EMAIL_DELIVERY');
+	}
+	assertOneOf(config.integrations.search.engine, ['elasticsearch', 'meilisearch', 'none'], 'FLUXER_SEARCH_ENGINE');
 	assertOneOf(config.integrations.cache_purge.adapter, CACHE_PURGE_ADAPTER_NAMES, 'FLUXER_CACHE_PURGE_ADAPTER');
 	if (config.instance.tag_style !== null) {
 		assertOneOf(config.instance.tag_style, TAG_STYLE_NAMES, 'FLUXER_TAG_STYLE');
@@ -600,9 +703,11 @@ function normalizeConfig(config: MasterConfig): MasterConfig {
 	validatePostgresConfig(config);
 	validateApiWorkerConfig(config);
 	validateStorageChangeFeedConfig(config);
+	validateReportRetentionConfig(config);
 	validateCachePurgeConfig(config);
 	validateStoreBillingConfig(config);
 	validateReplyToEmail(config.integrations.email.reply_to_email);
+	normalizeEmailFallbackConfig(config);
 	normalizeAppOriginAliases(config);
 	assertIntegerInRange(config.services.api.max_inflight_requests, 'FLUXER_API_MAX_INFLIGHT_REQUESTS', 1, 100_000);
 	assertIntegerInRange(
@@ -631,6 +736,13 @@ function normalizeConfig(config: MasterConfig): MasterConfig {
 	requireString(config.services.admin.oauth_client_secret, 'FLUXER_ADMIN_OAUTH_CLIENT_SECRET');
 	requireString(config.services.gateway.rpc_auth_token, 'FLUXER_GATEWAY_RPC_AUTH_TOKEN');
 	return config;
+}
+
+function applySelfHostedEnvDefault(config: MasterConfig, explicitEnv: string | undefined): MasterConfig {
+	if (explicitEnv !== undefined || !config.instance.self_hosted) {
+		return config;
+	}
+	return {...config, env: 'production'};
 }
 
 function applyPublicOrigin(config: MasterConfig): MasterConfig {
@@ -713,6 +825,8 @@ function applyPublicPort(config: MasterConfig, endpoints: DerivedEndpoints): Mas
 				logo_url: normalizeOptional(branding.logo_url),
 				wordmark_url: normalizeOptional(branding.wordmark_url),
 				favicon_url: normalizeOptional(branding.favicon_url),
+				favicon_dark_url: normalizeOptional(branding.favicon_dark_url),
+				sign_in_backdrop_url: normalizeOptional(branding.sign_in_backdrop_url),
 				status_page_url: normalizeOptional(branding.status_page_url),
 				status_page_incident_history_url: normalizeOptional(branding.status_page_incident_history_url),
 			},
@@ -755,7 +869,10 @@ export async function loadConfig(): Promise<MasterConfig> {
 		return cachedConfig;
 	}
 	const overrides = buildNamedFluxerEnvOverrides(process.env);
-	const merged = applyPublicOrigin(mergeConfig(defaultConfig(), overrides));
+	const merged = applySelfHostedEnvDefault(
+		applyPublicOrigin(mergeConfig(defaultConfig(), overrides)),
+		readEnvValue(process.env, 'FLUXER_ENV'),
+	);
 	const normalized = normalizeConfig(merged);
 	const derived = deriveEndpointsFromDomain(normalized.domain);
 	const endpoints = {...derived, ...(normalized.endpoint_overrides ?? {})};
@@ -766,13 +883,6 @@ export async function loadConfig(): Promise<MasterConfig> {
 		readEnvValue(process.env, 'FLUXER_PASSKEY_ADDITIONAL_ALLOWED_ORIGINS') === undefined,
 	);
 	cachedConfig = withPublicPort;
-	return cachedConfig;
-}
-
-export function getConfig(): MasterConfig {
-	if (!cachedConfig) {
-		throw new Error('Config not loaded. Call loadConfig() first.');
-	}
 	return cachedConfig;
 }
 

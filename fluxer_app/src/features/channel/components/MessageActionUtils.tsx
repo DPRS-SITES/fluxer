@@ -121,6 +121,9 @@ export function canReportMessage(message: Message): boolean {
 	if (message.author.system) {
 		return false;
 	}
+	if (message.isCrosspostSourceDeleted) {
+		return false;
+	}
 	return message.type === MessageTypes.DEFAULT || message.type === MessageTypes.REPLY;
 }
 
@@ -130,10 +133,6 @@ export function canDeleteAttachmentUtil(message: Message | undefined): boolean {
 	const guild = channel?.guildId ? Guilds.getGuild(channel.guildId) : null;
 	const sendMessageDisabled = guild ? (guild.disabledOperations & GuildOperations.SEND_MESSAGE) !== 0 : false;
 	return !sendMessageDisabled;
-}
-
-export function requestOpenReactionPicker(messageId: string): void {
-	ComponentBus.dispatch('EMOJI_PICKER_OPEN', {messageId});
 }
 
 function messageElementSelector(messageId: string): string {
@@ -178,6 +177,7 @@ export interface MessagePermissions {
 	canSuppressEmbeds: boolean;
 	shouldRenderSuppressEmbeds: boolean;
 	canCreateThread: boolean;
+	isPreviewing: boolean;
 }
 
 function canCreateThreadFromMessage(message: Message, channel: Channel): boolean {
@@ -240,7 +240,10 @@ function getMessagePermissionsForChannel(message: Message, channel: Channel): Me
 		!sendMessageDisabled &&
 		(isDM ? true : Permission.can(Permissions.PIN_MESSAGES, {channelId: message.channelId}));
 	const canForwardMessage =
-		!interactionsBlocked && !sendMessageDisabled && canForwardMessageFromChannel(message, channel, isDM);
+		!interactionsBlocked &&
+		!sendMessageDisabled &&
+		guild?.visiting !== true &&
+		canForwardMessageFromChannel(message, channel, isDM);
 	const canCrosspostMessage =
 		!interactionsBlocked &&
 		!sendMessageDisabled &&
@@ -275,6 +278,7 @@ function getMessagePermissionsForChannel(message: Message, channel: Channel): Me
 		canSuppressEmbeds,
 		shouldRenderSuppressEmbeds,
 		canCreateThread: canCreateThreadFromMessage(message, channel),
+		isPreviewing: guild?.visiting === true,
 	};
 }
 
@@ -296,13 +300,6 @@ export function getMessagePermissions(message: Message, sourceChannel?: Channel 
 export function useMessagePermissions(message: Message, sourceChannel?: Channel | null): MessagePermissions | null {
 	const context = useMaybeMessageViewContext();
 	const channel = sourceChannel ?? context?.channel;
-	if (context?.previewPermissions) {
-		return {
-			channel: channel ?? context.channel,
-			canCreateThread: false,
-			...context.previewPermissions,
-		};
-	}
 	if (channel) {
 		return getMessagePermissionsForChannel(message, channel);
 	}
@@ -530,7 +527,7 @@ export function requestMessageCrosspost(message: Message, i18n: I18n, options: {
 	);
 }
 
-export function requestRemoveAllReactions(message: Message, i18n: I18n): void {
+function requestRemoveAllReactions(message: Message, i18n: I18n): void {
 	ModalCommands.push(
 		modal(() => (
 			<ConfirmModal

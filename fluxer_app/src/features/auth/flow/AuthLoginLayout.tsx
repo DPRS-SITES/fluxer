@@ -1,19 +1,27 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import {Routes} from '@app/app/Routes';
-import {PRODUCT_NAME} from '@app/features/app/config/I18nDisplayConstants';
 import {detectDomainMigrationInstallKind} from '@app/features/app/domain_migration/DomainMigrationBrowser';
 import type {RuntimeConfigSnapshot} from '@app/features/app/state/InstanceSnapshotStore';
-import {describeAPIEndpoint, type InstanceSsoConfig} from '@app/features/app/state/RuntimeConfig';
+import RuntimeConfig, {describeAPIEndpoint, type InstanceSsoConfig} from '@app/features/app/state/RuntimeConfig';
+import {getAccountDisplayLabels} from '@app/features/auth/AccountDisplayUtils';
 import {
 	FORGOT_YOUR_PASSWORD_DESCRIPTOR,
 	SIGN_IN_WITH_BROWSER_DESCRIPTOR,
 } from '@app/features/auth/AuthMessageDescriptors';
 import * as AuthenticationCommands from '@app/features/auth/commands/AuthenticationCommands';
+import {AgeBlockedRemovalGate} from '@app/features/auth/components/AgeBlockedRemovalGate';
+import {SIGN_IN_AGAIN_AS_DESCRIPTOR} from '@app/features/auth/components/accounts/AccountList';
 import {AccountSelector} from '@app/features/auth/components/accounts/AccountSelector';
 import styles from '@app/features/auth/components/pages/LoginPage.module.css';
 import {AuthRouterLink} from '@app/features/auth/flow/AuthRouterLink';
-import {AuthSsoPanel, CONTINUE_WITH_SSO_DESCRIPTOR, resolveAuthPanelSso} from '@app/features/auth/flow/AuthSsoPanel';
+import {
+	AuthSsoPanel,
+	isInstanceSsoAvailable,
+	isSsoLoginEnforced,
+	resolveAuthPanelSso,
+	SsoButtonLabel,
+} from '@app/features/auth/flow/AuthSsoPanel';
 import {
 	AuthLoginBrowserStep,
 	resolveShouldOfferBrowserStep,
@@ -33,7 +41,7 @@ import {
 	DesktopHandoffMode,
 	selectAuthLoginStep,
 } from '@app/features/auth/flow/auth_login_core/AuthLoginStepTypes';
-import {useAuthLoginFlow} from '@app/features/auth/flow/auth_login_core/useAuthLoginFlow';
+import {hasInitialIdentifier, useAuthLoginFlow} from '@app/features/auth/flow/auth_login_core/useAuthLoginFlow';
 import {useDesktopHandoffFlow} from '@app/features/auth/flow/auth_login_core/useDesktopHandoffFlow';
 import {
 	SIGN_IN_WITH_OLD_APP_DESCRIPTOR,
@@ -44,16 +52,18 @@ import {AuthClientPreferencesStep} from '@app/features/auth/flow/client_intro/Au
 import {AuthClientWelcomeStep} from '@app/features/auth/flow/client_intro/AuthClientWelcomeStep';
 import {useDesktopClientIntroFlow} from '@app/features/auth/flow/client_intro/useDesktopClientIntroFlow';
 import DesktopHandoffAccountSelector from '@app/features/auth/flow/DesktopHandoffAccountSelector';
-import {ConnectedHandoffApprovalFlow} from '@app/features/auth/flow/HandoffApprovalFlow';
+import {HandoffApprovalFlow} from '@app/features/auth/flow/HandoffApprovalFlow';
 import IpAuthorizationScreen from '@app/features/auth/flow/IpAuthorizationScreen';
+import {AuthIdentifierFirstStep} from '@app/features/auth/flow/identifier_first/AuthIdentifierFirstStep';
+import {markSsoAutoStartSpent, useSsoAutoStart, withoutSsoStartRequest} from '@app/features/auth/flow/SsoAutoStart';
 import {useAuthPresentation} from '@app/features/auth/flow/useAuthPresentation';
+import {type StepTitleChangeHandler, useReportStepTitle} from '@app/features/auth/flow/useReportStepTitle';
 import {getAuthErrorMessage} from '@app/features/auth/hooks/useAuthForm';
 import {
 	PasskeyLoginCapability,
 	resolveInitialPasskeyLoginCapability,
 	resolvePasskeyLoginCapability,
 	type StoredAccountLoginPayload,
-	sessionExpiredMessage,
 	useAccountSwitchController,
 	useLoginFormController,
 } from '@app/features/auth/hooks/useLoginFlow';
@@ -69,7 +79,9 @@ import {
 import {AuthCardVariant, AuthLayoutContentMode, useAuthLayoutContext} from '@app/features/auth/state/AuthLayoutContext';
 import type {AuthRuntimeTarget} from '@app/features/auth/state/AuthRuntimeTarget';
 import {accountLoginIdentifierField, accountSignInIdentifier} from '@app/features/auth/utils/AccountSignInIdentifier';
+import {logoutStoredAccountFromSwitcher} from '@app/features/auth/utils/AccountSwitcherModalUtils';
 import {shouldOfferOldAppSignIn} from '@app/features/auth/utils/OldAppSignIn';
+import {describePasskeyPromptEnded} from '@app/features/auth/utils/PasskeyErrorMessages';
 import {
 	BACK_DESCRIPTOR,
 	COULDN_T_VERIFY_WITH_PASSKEY_DESCRIPTOR,
@@ -79,8 +91,11 @@ import * as RouterUtils from '@app/features/navigation/utils/RouterUtils';
 import {useLocation} from '@app/features/platform/components/router/RouterReact';
 import type {Account} from '@app/features/platform/state/AuthSession';
 import {Button, ButtonVariant} from '@app/features/ui/button/Button';
+import * as ToastCommands from '@app/features/ui/commands/ToastCommands';
 import {SteppedCarousel} from '@app/features/ui/stepped_carousel/SteppedCarousel';
 import {isDesktop, navigateToExternalURL} from '@app/features/ui/utils/NativeUtils';
+import type {GuildEntryResult} from '@fluxer/schema/src/domains/user/AccountSchemas';
+import type {MessageDescriptor} from '@lingui/core';
 import {msg} from '@lingui/core/macro';
 import {useLingui} from '@lingui/react/macro';
 import {observer} from 'mobx-react-lite';
@@ -116,14 +131,15 @@ export interface AuthLoginLayoutProps {
 	readonly registerLink: ReactElement<Record<string, unknown>>;
 	readonly onLoginComplete?: ((payload: LoginSuccessPayload) => Promise<void> | void) | null;
 	readonly onBackActionChange?: ((action: (() => void) | null) => void) | null;
-	readonly completeLoginRedirectPath?: string | null;
+	readonly onStepTitleChange?: StepTitleChangeHandler | null;
+	readonly completeLoginRedirectPath: string | null;
 	readonly forceCredentials?: boolean;
 	readonly startWithAddAccount?: boolean;
 	readonly runtimeTarget: AuthRuntimeTarget;
-	readonly showInstanceSelector?: boolean | null;
 	readonly ssoRedirectPath?: string | null;
 	readonly suppressInlineBackButtons?: boolean;
 	readonly initialIdentifier?: string | null;
+	readonly allowSsoAutoStart?: boolean;
 }
 
 interface HandoffAccountsRequest {
@@ -160,6 +176,7 @@ interface AuthBackActionRequest {
 	readonly accountListBackAction: (() => void) | null;
 	readonly authLoginStep: AuthLoginStep;
 	readonly browserBackAction: (() => void) | null;
+	readonly forceCredentials: boolean;
 	readonly handleBackFromBrowser: () => void;
 	readonly handleBackFromCredentials: () => void;
 	readonly handleBackFromIpAuthorization: () => void;
@@ -175,15 +192,8 @@ function getInitialInstanceUrl(snapshot: RuntimeConfigSnapshot | null): string |
 	return describeAPIEndpoint(snapshot.apiEndpoint);
 }
 
-function isInstanceSsoAvailable(ssoConfig: InstanceSsoConfig | null): boolean {
-	return ssoConfig?.enabled === true;
-}
-
-function isSsoLoginEnforced(ssoConfig: InstanceSsoConfig | null): boolean {
-	if (!isInstanceSsoAvailable(ssoConfig)) {
-		return false;
-	}
-	return ssoConfig?.enforced === true;
+function usesIdentifierFirst(snapshot: RuntimeConfigSnapshot | null): boolean {
+	return snapshot?.features.identifier_first === true;
 }
 
 function resolveEmailsEnabled(snapshot: RuntimeConfigSnapshot | null): boolean {
@@ -237,13 +247,6 @@ function resolveSsoRedirectPath({
 	return redirectPath;
 }
 
-function hasInitialIdentifier(initialIdentifier: string | null): boolean {
-	if (initialIdentifier == null) {
-		return false;
-	}
-	return initialIdentifier !== '';
-}
-
 function resolveShouldUseDesktopClientSetup({
 	desktopHandoff,
 	forceCredentials,
@@ -287,6 +290,13 @@ function resolveEffectiveHandoffMode(handoffMode: DesktopHandoffMode, hasHandoff
 	return handoffMode;
 }
 
+function isSsoAutoStartStep(step: AuthLoginStep, startRequested: boolean): boolean {
+	if (step === AuthLoginStep.SSO || step === AuthLoginStep.METHOD || step === AuthLoginStep.CREDENTIALS) {
+		return true;
+	}
+	return startRequested && step === AuthLoginStep.ACCOUNT;
+}
+
 function resolveAuthCardVariant(step: AuthLoginStep): AuthCardVariant {
 	if (step === AuthLoginStep.DESKTOP_HANDOFF_APPROVAL) {
 		return AuthCardVariant.COMPACT;
@@ -297,16 +307,6 @@ function resolveAuthCardVariant(step: AuthLoginStep): AuthCardVariant {
 	return AuthCardVariant.STANDARD;
 }
 
-function shouldUseFullscreenAuthPresentation(showClientWelcome: boolean, step: AuthLoginStep): boolean {
-	if (showClientWelcome) {
-		return true;
-	}
-	if (step === AuthLoginStep.ACCOUNT) {
-		return true;
-	}
-	return step === AuthLoginStep.DESKTOP_HANDOFF_ACCOUNT;
-}
-
 function resolveStepError(showAccountSelector: boolean, switchError: string | null): string | null {
 	if (showAccountSelector) {
 		return null;
@@ -314,11 +314,33 @@ function resolveStepError(showAccountSelector: boolean, switchError: string | nu
 	return switchError;
 }
 
+function resolveStepTitleDescriptor(step: AuthLoginStep): MessageDescriptor | null {
+	switch (step) {
+		case AuthLoginStep.INSTANCE:
+			return CHOOSE_INSTANCE_DESCRIPTOR;
+		case AuthLoginStep.BROWSER:
+			return SIGN_IN_WITH_BROWSER_DESCRIPTOR;
+		default:
+			return null;
+	}
+}
+
 function resolveAuthStepTitle(title: ReactNode, fallbackTitle: ReactNode): ReactNode {
 	if (title == null) {
 		return fallbackTitle;
 	}
 	return title;
+}
+
+function resolveReloginTitle(account: Account | null, format: (accountLabel: string) => string): string | null {
+	if (account == null) {
+		return null;
+	}
+	const labels = getAccountDisplayLabels(account);
+	if (!labels.available || labels.displayLabel === '') {
+		return null;
+	}
+	return format(labels.displayLabel);
 }
 
 function resolveBrowserPrefillIdentifier(prefillIdentifier: string | null, formEmail: string): string | null {
@@ -357,19 +379,11 @@ function resolveMethodSsoAction({
 	return {isStarting, label, onStart};
 }
 
-function resolveCompleteLoginOptions(
-	completeLoginRedirectPath: string | null,
-): AuthenticationCommands.CompleteLoginOptions {
-	if (completeLoginRedirectPath == null) {
-		return {};
-	}
-	return {redirectPath: completeLoginRedirectPath};
-}
-
 function resolveAuthBackAction({
 	accountListBackAction,
 	authLoginStep,
 	browserBackAction,
+	forceCredentials,
 	handleBackFromBrowser,
 	handleBackFromCredentials,
 	handleBackFromIpAuthorization,
@@ -384,7 +398,7 @@ function resolveAuthBackAction({
 			}
 			return handleBackFromBrowser;
 		case AuthLoginStep.CREDENTIALS:
-			return handleBackFromCredentials;
+			return forceCredentials ? null : handleBackFromCredentials;
 		case AuthLoginStep.IP_AUTHORIZATION:
 			return handleBackFromIpAuthorization;
 		case AuthLoginStep.METHOD:
@@ -414,14 +428,15 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 	registerLink,
 	onLoginComplete = null,
 	onBackActionChange = null,
-	completeLoginRedirectPath = null,
+	onStepTitleChange = null,
+	completeLoginRedirectPath,
 	forceCredentials = false,
 	startWithAddAccount = false,
 	runtimeTarget,
-	showInstanceSelector = null,
 	ssoRedirectPath: explicitSsoRedirectPath = null,
 	suppressInlineBackButtons = false,
 	initialIdentifier = null,
+	allowSsoAutoStart = true,
 }: AuthLoginLayoutProps) {
 	const {i18n} = useLingui();
 	const {setContentMode} = useAuthLayoutContext();
@@ -429,8 +444,9 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 	const currentAccountKey = Accounts.currentAccountKey;
 	const accounts = switcherAccounts();
 	const hasStoredAccounts = accounts.length > 0;
-	const shouldShowInstanceSelector = shouldRenderInstanceStep(showInstanceSelector);
+	const shouldShowInstanceSelector = shouldRenderInstanceStep() && runtimeTarget.canChangeInstance;
 	const [isStartingSso, setIsStartingSso] = useState(false);
+	const [browserStepStartsSso, setBrowserStepStartsSso] = useState(false);
 	const resolvedAuthRuntimeSnapshot = runtimeTarget.snapshot;
 	const initialInstanceSelected = runtimeTarget.initialSnapshot != null;
 	const ssoConfig = resolvedAuthRuntimeSnapshot == null ? null : resolveAuthPanelSso(resolvedAuthRuntimeSnapshot);
@@ -480,10 +496,11 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 	} = flow;
 	const [instanceBackAction, setInstanceBackAction] = useState<(() => void) | null>(null);
 	const [browserBackAction, setBrowserBackAction] = useState<(() => void) | null>(null);
+	const [childStepTitle, setChildStepTitle] = useState<string | null>(null);
 	const ssoRedirectPath = resolveSsoRedirectPath({
 		explicitSsoRedirectPath,
 		desktopHandoff,
-		handoffLocationPath: `${location.pathname}${location.search}`,
+		handoffLocationPath: withoutSsoStartRequest(`${location.pathname}${location.search}`),
 		redirectPath,
 	});
 	const shouldUseDesktopClientSetup = resolveShouldUseDesktopClientSetup({
@@ -524,7 +541,7 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 			}
 			await AuthenticationCommands.completeLogin(
 				{...payload, runtimeSnapshot: requireAuthInstanceSnapshot(resolvedAuthRuntimeSnapshot)},
-				resolveCompleteLoginOptions(completeLoginRedirectPath),
+				{redirectPath: completeLoginRedirectPath},
 			);
 			if (onLoginComplete != null) {
 				await onLoginComplete(payload);
@@ -533,6 +550,11 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 		[completeLoginRedirectPath, desktopHandoff, handoff, onLoginComplete, resolvedAuthRuntimeSnapshot],
 	);
 	const handleShowBrowserStep = useCallback(() => {
+		setBrowserStepStartsSso(false);
+		enterBrowserStep();
+	}, [enterBrowserStep]);
+	const handleShowSsoBrowserStep = useCallback(() => {
+		setBrowserStepStartsSso(true);
 		enterBrowserStep();
 	}, [enterBrowserStep]);
 	const {form, identifierField, isLoading, fieldErrors, handlePasskeyLogin, isPasskeyLoading, connectingMessage} =
@@ -561,6 +583,9 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 				runtimeSnapshot: requireAuthInstanceSnapshot(resolvedAuthRuntimeSnapshot),
 			});
 		},
+		onCancelled: () => {
+			ToastCommands.error(describePasskeyPromptEnded(i18n));
+		},
 		onFailure: () => {
 			setSwitchError(i18n._(COULDN_T_VERIFY_WITH_PASSKEY_DESCRIPTOR));
 		},
@@ -570,8 +595,9 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 		form.setValue('login', '');
 		form.setValue('password', '');
 	}, [form.setValue]);
+	const [reloginAccount, setReloginAccount] = useState<Account | null>(null);
 	const showLoginFormForAccount = useCallback(
-		(account: Account, message: string | null) => {
+		(account: Account) => {
 			const identifier = accountSignInIdentifier(account);
 			const runtimeSnapshot = resolveAccountInstance(account);
 			clearCredentials();
@@ -581,13 +607,14 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 			} else {
 				runtimeTarget.select(runtimeSnapshot);
 			}
-			showFormForAccount(identifier, message, runtimeSnapshot != null);
+			setReloginAccount(account);
+			showFormForAccount(identifier, null, runtimeSnapshot != null);
 		},
 		[clearCredentials, form.setValue, runtimeTarget, showFormForAccount],
 	);
 	const handleStoredAccountLogin = useCallback(
 		async (payload: StoredAccountLoginPayload) => {
-			await AuthenticationCommands.completeLogin(payload, resolveCompleteLoginOptions(completeLoginRedirectPath));
+			await AuthenticationCommands.completeLogin(payload, {redirectPath: completeLoginRedirectPath});
 			if (onLoginComplete != null) {
 				await onLoginComplete(payload);
 			}
@@ -597,7 +624,15 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 		},
 		[completeLoginRedirectPath, onLoginComplete, redirectPath],
 	);
+	const handleSignOutStoredAccount = useCallback(
+		async (account: Account) => {
+			setSwitchError(null);
+			await logoutStoredAccountFromSwitcher(account, setSwitchError);
+		},
+		[setSwitchError],
+	);
 	const {isSwitching, switchToAccount} = useAccountSwitchController({
+		redirectPath,
 		onError: setSwitchError,
 		onSessionExpired: showLoginFormForAccount,
 		onLoginWithStoredAccount: handleStoredAccountLogin,
@@ -638,10 +673,12 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 		hasStoredAccounts && !desktopHandoff && !forceCredentials && !hasInitialIdentifier(initialIdentifier);
 	const handleBackFromCredentials = useCallback(() => {
 		clearCredentials();
+		setReloginAccount(null);
 		backFromCredentials(canReturnToAccountList);
 	}, [backFromCredentials, canReturnToAccountList, clearCredentials]);
 	const handleBackToAccountList = useCallback(() => {
 		clearCredentials();
+		setReloginAccount(null);
 		backToAccountList();
 	}, [backToAccountList, clearCredentials]);
 	const handleBackFromBrowser = useCallback(() => {
@@ -726,18 +763,20 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 	}, [form.setValue, identifierField, prefillIdentifier]);
 	const handleAddAnotherAccount = useCallback(() => {
 		clearCredentials();
+		setReloginAccount(null);
 		runtimeTarget.reset();
 		addAnotherAccount();
 	}, [addAnotherAccount, clearCredentials, runtimeTarget]);
 	const handleHandoffReLogin = useCallback(
 		(account: Account) => {
-			showLoginFormForAccount(account, sessionExpiredMessage(i18n, account));
+			showLoginFormForAccount(account);
 			handoff.switchToLogin();
 		},
-		[handoff, i18n, showLoginFormForAccount],
+		[handoff, showLoginFormForAccount],
 	);
 	const handleChooseHandoffAccount = useCallback(() => {
 		clearCredentials();
+		setReloginAccount(null);
 		runtimeTarget.reset();
 		addAnotherAccount();
 		handoff.retry();
@@ -747,11 +786,12 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 			return;
 		}
 		if (isDesktop()) {
-			enterBrowserStep();
+			handleShowSsoBrowserStep();
 			return;
 		}
 		try {
 			setIsStartingSso(true);
+			markSsoAutoStartSpent();
 			const runtimeSnapshot = requireAuthInstanceSnapshot(resolvedAuthRuntimeSnapshot);
 			const {authorizationUrl} = await startSsoLogin({
 				redirectTo: ssoRedirectPath,
@@ -763,7 +803,7 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 		} finally {
 			setIsStartingSso(false);
 		}
-	}, [enterBrowserStep, i18n, resolvedAuthRuntimeSnapshot, setSwitchError, ssoConfig, ssoRedirectPath]);
+	}, [handleShowSsoBrowserStep, i18n, resolvedAuthRuntimeSnapshot, setSwitchError, ssoConfig, ssoRedirectPath]);
 	const authLoginStep: AuthLoginStep = useMemo(() => {
 		return selectAuthLoginStep({
 			desktopHandoff,
@@ -792,6 +832,21 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 		showAccountSelector,
 		showBrowserStep,
 	]);
+	const isOnSsoAutoStartStep = useCallback(
+		(startRequested: boolean) => isSsoAutoStartStep(authLoginStep, startRequested),
+		[authLoginStep],
+	);
+	useSsoAutoStart({
+		allowed: allowSsoAutoStart,
+		desktopApp: isDesktop(),
+		desktopHandoff,
+		onSignInStep: isOnSsoAutoStartStep,
+		ssoAvailable: isInstanceSsoAvailable(ssoConfig),
+		ssoEnforced: isSsoEnforced,
+		pathname: location.pathname,
+		search: location.search,
+		start: handleStartSso,
+	});
 	const cardVariant = useMemo<AuthCardVariant>(() => resolveAuthCardVariant(authLoginStep), [authLoginStep]);
 	const accountListBackAction = useMemo<(() => void) | null>(() => {
 		if (desktopHandoff) {
@@ -815,6 +870,7 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 				accountListBackAction,
 				authLoginStep,
 				browserBackAction,
+				forceCredentials,
 				handleBackFromBrowser,
 				handleBackFromCredentials,
 				handleBackFromIpAuthorization,
@@ -826,6 +882,7 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 			accountListBackAction,
 			authLoginStep,
 			browserBackAction,
+			forceCredentials,
 			handleBackFromBrowser,
 			handleBackFromCredentials,
 			handleBackFromIpAuthorization,
@@ -842,12 +899,20 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 		notifyBackActionChange(backAction);
 		return () => notifyBackActionChange(null);
 	}, [backAction, onBackActionChange]);
-	const shouldUseFullscreenPresentation = shouldUseFullscreenAuthPresentation(showClientWelcome, authLoginStep);
+	const childStepTitleChange = onStepTitleChange == null ? null : setChildStepTitle;
+	const stepTitleDescriptor = resolveStepTitleDescriptor(authLoginStep);
+	let stepTitle: string | null = stepTitleDescriptor == null ? null : i18n._(stepTitleDescriptor);
+	if (authLoginStep === AuthLoginStep.IP_AUTHORIZATION || authLoginStep === AuthLoginStep.SSO) {
+		stepTitle = childStepTitle;
+	}
+	useReportStepTitle(onStepTitleChange, stepTitle);
 	useAuthPresentation(
-		shouldUseFullscreenPresentation
+		showClientWelcome
 			? {contentMode: AuthLayoutContentMode.FULL, variant: AuthCardVariant.STANDARD}
 			: {contentMode: AuthLayoutContentMode.CARD, variant: cardVariant},
 	);
+	const formTitle =
+		title ?? resolveReloginTitle(reloginAccount, (accountLabel) => i18n._(SIGN_IN_AGAIN_AS_DESCRIPTOR, {accountLabel}));
 	const renderOldAppSignIn = (): ReactNode => {
 		if (!offerOldAppSignIn) {
 			return null;
@@ -860,10 +925,10 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 					type="button"
 					data-flx="auth.flow.auth-login-layout.button.old-app-sign-in"
 				>
-					{i18n._(SIGN_IN_WITH_OLD_APP_DESCRIPTOR, {productName: PRODUCT_NAME})}
+					{i18n._(SIGN_IN_WITH_OLD_APP_DESCRIPTOR, {productName: RuntimeConfig.productName})}
 				</Button>
 				<div className={styles.ssoSubtitle} data-flx="auth.flow.auth-login-layout.old-app-subtitle">
-					{i18n._(OLD_APP_SIGN_IN_HINT_DESCRIPTOR, {productName: PRODUCT_NAME})}
+					{i18n._(OLD_APP_SIGN_IN_HINT_DESCRIPTOR, {productName: RuntimeConfig.productName})}
 				</div>
 			</div>
 		);
@@ -878,7 +943,7 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 				extraTopContent={extraTopContent}
 				identifierField={identifierField}
 				showTitle={showTitle}
-				title={resolveAuthStepTitle(title, i18n._(WELCOME_BACK_DESCRIPTOR))}
+				title={resolveAuthStepTitle(formTitle, i18n._(WELCOME_BACK_DESCRIPTOR))}
 				switchError={resolveStepError(showAccountSelector, switchError)}
 				leadingAction={renderOldAppSignIn()}
 				disabled={passkeyControlsDisabled || isStartingSso}
@@ -892,7 +957,12 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 				onBackToInstance={inlineInstanceBackAction}
 				ssoAction={resolveMethodSsoAction({
 					ssoConfig,
-					label: i18n._(CONTINUE_WITH_SSO_DESCRIPTOR),
+					label: (
+						<SsoButtonLabel
+							ssoConfig={ssoConfig}
+							data-flx="auth.flow.auth-login-layout.render-method-step.sso-button-label"
+						/>
+					),
 					isStarting: isStartingSso,
 					onStart: handleStartSso,
 				})}
@@ -900,6 +970,83 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 			/>
 		);
 	};
+	const handleIdentifierFirstSignedIn = async (payload: LoginSuccessPayload, entry: GuildEntryResult | null) => {
+		await handleLoginSuccess(payload);
+		if (desktopHandoff) {
+			return;
+		}
+		if (entry !== null) {
+			RouterUtils.replaceWith(Routes.guildChannel(entry.guild_id));
+			return;
+		}
+		if (redirectPath != null && redirectPath !== '') {
+			RouterUtils.replaceWith(redirectPath);
+		}
+	};
+	const renderIdentifierFirstAlternatives = (): ReactNode => {
+		const actions: Array<ReactNode> = [];
+		const oldAppSignIn = renderOldAppSignIn();
+		if (oldAppSignIn !== null) {
+			actions.push(oldAppSignIn);
+		}
+		if (isInstanceSsoAvailable(ssoConfig)) {
+			actions.push(
+				<Button
+					key="sso"
+					fitContainer
+					variant={ButtonVariant.SECONDARY}
+					submitting={isStartingSso}
+					disabled={passkeyControlsDisabled}
+					onClick={handleStartSso}
+					data-flx="auth.flow.auth-login-layout.identifier-first.button.sso"
+				>
+					<SsoButtonLabel
+						ssoConfig={ssoConfig}
+						data-flx="auth.flow.auth-login-layout.render-identifier-first-alternatives.sso-button-label"
+					/>
+				</Button>,
+			);
+		}
+		if (resolveShouldOfferBrowserStep() && resolvedAuthRuntimeSnapshot != null) {
+			actions.push(
+				<Button
+					key="browser"
+					fitContainer
+					variant={ButtonVariant.SECONDARY}
+					disabled={passkeyControlsDisabled}
+					onClick={handleShowBrowserStep}
+					data-flx="auth.flow.auth-login-layout.identifier-first.button.browser"
+				>
+					{i18n._(SIGN_IN_WITH_BROWSER_DESCRIPTOR)}
+				</Button>,
+			);
+		}
+		return actions.length === 0 ? null : actions;
+	};
+	const renderIdentifierFirstStep = (): ReactNode => (
+		<AuthIdentifierFirstStep
+			runtimeSnapshot={requireAuthInstanceSnapshot(resolvedAuthRuntimeSnapshot)}
+			title={formTitle}
+			showTitle={showTitle}
+			extraTopContent={extraTopContent}
+			notice={resolveStepError(showAccountSelector, switchError)}
+			initialEmail={prefillIdentifier ?? initialIdentifier}
+			inviteCode={inviteCode}
+			passkeyAvailable={showPasskeyOption && isPasskeyAvailableForCurrentClient(resolvedAuthRuntimeSnapshot)}
+			passkeyDisabled={passkeyControlsDisabled}
+			onPasskeyLogin={handlePasskeyLogin}
+			alternativeActions={renderIdentifierFirstAlternatives()}
+			onSignedIn={handleIdentifierFirstSignedIn}
+			onRequireMfa={(challenge) => {
+				AuthenticationCommands.setMfaTicket({
+					...challenge,
+					runtimeSnapshot: requireAuthInstanceSnapshot(resolvedAuthRuntimeSnapshot),
+				});
+			}}
+			onRequireIpAuthorization={setIpAuthChallenge}
+			data-flx="auth.flow.auth-login-layout.identifier-first-step"
+		/>
+	);
 	const renderCredentialFooterStart = (): ReactNode => {
 		if (suppressInlineBackButtons) {
 			return null;
@@ -918,28 +1065,28 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 	};
 	const renderCredentialStep = (): ReactNode => {
 		const forgotPasswordLink =
-			identifierField === 'login' ? (
-				<AuthRouterLink
-					to={Routes.RECOVER_ACCOUNT}
-					className={styles.link}
-					data-flx="auth.flow.auth-login-layout.link.recover"
-				>
-					{i18n._(FORGOT_YOUR_PASSWORD_DESCRIPTOR)}
-				</AuthRouterLink>
-			) : (
-				resolveForgotPasswordLink(
-					emailsEnabled,
-					forgotPasswordAction,
-					<AuthRouterLink to="/forgot" className={styles.link} data-flx="auth.flow.auth-login-layout.link">
-						{i18n._(FORGOT_YOUR_PASSWORD_DESCRIPTOR)}
-					</AuthRouterLink>,
-				)
-			);
+			identifierField === 'login'
+				? (forgotPasswordAction ?? (
+						<AuthRouterLink
+							to={Routes.RECOVER_ACCOUNT}
+							className={styles.link}
+							data-flx="auth.flow.auth-login-layout.link.recover"
+						>
+							{i18n._(FORGOT_YOUR_PASSWORD_DESCRIPTOR)}
+						</AuthRouterLink>
+					))
+				: resolveForgotPasswordLink(
+						emailsEnabled,
+						forgotPasswordAction,
+						<AuthRouterLink to="/forgot" className={styles.link} data-flx="auth.flow.auth-login-layout.link">
+							{i18n._(FORGOT_YOUR_PASSWORD_DESCRIPTOR)}
+						</AuthRouterLink>,
+					);
 		return (
 			<AuthLoginCredentialStepPanel
 				extraTopContent={extraTopContent}
 				showTitle={showTitle}
-				title={resolveAuthStepTitle(title, i18n._(WELCOME_BACK_DESCRIPTOR))}
+				title={resolveAuthStepTitle(formTitle, i18n._(WELCOME_BACK_DESCRIPTOR))}
 				switchError={resolveStepError(showAccountSelector, switchError)}
 				form={form}
 				isLoading={isLoading}
@@ -972,7 +1119,8 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 				<AuthSsoPanel
 					redirectPath={ssoRedirectPath ?? undefined}
 					runtimeSnapshot={runtimeSnapshot}
-					onStart={isDesktop() ? handleShowBrowserStep : undefined}
+					onStart={isDesktop() ? handleShowSsoBrowserStep : undefined}
+					onStepTitleChange={childStepTitleChange}
 					dataFlx="auth.flow.auth-login-layout.sso-panel"
 					data-flx="auth.flow.auth-login-layout.render-auth-login-step.auth-sso-panel"
 				/>
@@ -986,18 +1134,14 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 					error={switchError}
 					disabled={isSwitching}
 					onSelectAccount={switchToAccount}
+					onSignOutAccount={handleSignOutStoredAccount}
 					onAddAccount={handleAddAnotherAccount}
 					data-flx="auth.flow.auth-login-layout.account-selector"
 				/>
 			);
 		}
 		if (authLoginStep === AuthLoginStep.DESKTOP_HANDOFF_APPROVAL) {
-			return (
-				<ConnectedHandoffApprovalFlow
-					handoff={handoff}
-					data-flx="auth.flow.auth-login-layout.connected-handoff-approval-flow"
-				/>
-			);
+			return <HandoffApprovalFlow handoff={handoff} data-flx="auth.flow.auth-login-layout.handoff-approval-flow" />;
 		}
 		if (authLoginStep === AuthLoginStep.IP_AUTHORIZATION && ipAuthChallenge != null) {
 			const runtimeSnapshot = requireAuthInstanceSnapshot(resolvedAuthRuntimeSnapshot);
@@ -1007,6 +1151,7 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 					runtimeSnapshot={runtimeSnapshot}
 					onAuthorized={handleIpAuthorizationComplete}
 					onBack={suppressInlineBackButtons ? undefined : handleBackFromIpAuthorization}
+					onStepTitleChange={childStepTitleChange}
 					data-flx="auth.flow.auth-login-layout.ip-authorization-screen"
 				/>
 			);
@@ -1015,6 +1160,7 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 			return (
 				<AuthLoginInstanceStep
 					extraTopContent={extraTopContent}
+					showTitle={onStepTitleChange == null}
 					title={i18n._(CHOOSE_INSTANCE_DESCRIPTOR)}
 					initialInstanceUrl={getInitialInstanceUrl(resolvedAuthRuntimeSnapshot)}
 					onContinue={handleContinueFromInstance}
@@ -1044,8 +1190,18 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 				/>
 			);
 		}
+		if (
+			usesIdentifierFirst(resolvedAuthRuntimeSnapshot) &&
+			(authLoginStep === AuthLoginStep.METHOD || authLoginStep === AuthLoginStep.CREDENTIALS)
+		) {
+			return renderIdentifierFirstStep();
+		}
 		if (authLoginStep === AuthLoginStep.METHOD) {
-			return renderMethodStep();
+			return (
+				<AgeBlockedRemovalGate data-flx="auth.flow.auth-login-layout.age-blocked-removal-gate">
+					{renderMethodStep()}
+				</AgeBlockedRemovalGate>
+			);
 		}
 		if (authLoginStep === AuthLoginStep.BROWSER) {
 			const runtimeSnapshot = requireAuthInstanceSnapshot(resolvedAuthRuntimeSnapshot);
@@ -1065,6 +1221,7 @@ export const AuthLoginLayout = observer(function AuthLoginLayout({
 					onChangeInstance={instanceSelectorChangeAction}
 					onSuccess={handleBrowserLoginSuccess}
 					showBackButton={!suppressInlineBackButtons}
+					startSso={browserStepStartsSso}
 					data-flx="auth.flow.auth-login-layout.auth-login-browser-step"
 				/>
 			);

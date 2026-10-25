@@ -53,12 +53,12 @@ export const DEFAULT_COMPOSER_MARKDOWN_FLAGS =
 	ParserFlags.ALLOW_TABLES |
 	ParserFlags.ALLOW_ALERTS;
 
-export interface MarkdownRecoveredRange {
+interface MarkdownRecoveredRange {
 	start: number;
 	end: number;
 }
 
-export interface MarkdownHighlightResult {
+interface MarkdownHighlightResult {
 	spans: Array<MarkdownSpan>;
 	recovered: Array<MarkdownRecoveredRange>;
 }
@@ -84,7 +84,7 @@ export function computeMarkdownHighlightSpans(
 	return computeMarkdownHighlightResult(source, parserFlags).spans;
 }
 
-export function computeMarkdownHighlightResult(
+function computeMarkdownHighlightResult(
 	source: string,
 	parserFlags = DEFAULT_COMPOSER_MARKDOWN_FLAGS,
 ): MarkdownHighlightResult {
@@ -284,12 +284,12 @@ function alignNode(node: Node, format: MarkdownHlFormat, ctx: AlignContext): voi
 			return;
 		}
 		case 'Strong': {
-			const delimiter = ctx.source.startsWith('**', ctx.pos)
-				? '**'
-				: ctx.source.startsWith('__', ctx.pos)
-					? '__'
-					: null;
-			if (delimiter == null) {
+			let delimiter: '**' | '__';
+			if (ctx.source.startsWith('**', ctx.pos)) {
+				delimiter = '**';
+			} else if (ctx.source.startsWith('__', ctx.pos)) {
+				delimiter = '__';
+			} else {
 				ctx.failed = true;
 				return;
 			}
@@ -1124,11 +1124,11 @@ function isUnpairedSurrogateAt(text: string, index: number): boolean {
 	return false;
 }
 
-export function foldUnpairedSurrogates(text: string): string {
+function foldUnpairedSurrogates(text: string): string {
 	return text.replace(UNPAIRED_SURROGATE_RE, REPLACEMENT_CHARACTER);
 }
 
-export function equalsParserText(sourceText: string, parserText: string): boolean {
+function equalsParserText(sourceText: string, parserText: string): boolean {
 	return sourceText === parserText || foldUnpairedSurrogates(sourceText) === parserText;
 }
 

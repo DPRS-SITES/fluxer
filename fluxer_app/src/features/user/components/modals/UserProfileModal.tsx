@@ -1,15 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import {showDmActionErrorModal} from '@app/features/app/components/alerts/DmActionErrorModal';
-import {ConfirmModal} from '@app/features/app/components/dialogs/ConfirmModal';
 import {UserSettingsModal} from '@app/features/app/components/dialogs/LoadableSettingsModals';
 import * as Modal from '@app/features/app/components/dialogs/Modal';
 import RuntimeConfig from '@app/features/app/state/RuntimeConfig';
 import Authentication from '@app/features/auth/state/Authentication';
-import * as PrivateChannelCommands from '@app/features/channel/commands/PrivateChannelCommands';
 import DeveloperOptions from '@app/features/devtools/state/DeveloperOptions';
 import {
-	BLOCKED_USER_DM_WARNING_DESCRIPTOR,
 	COPY_USER_ID_DESCRIPTOR,
 	COPY_USERNAME_DESCRIPTOR,
 	OPEN_DM_DESCRIPTOR,
@@ -17,8 +13,11 @@ import {
 	START_VOICE_CALL_DESCRIPTOR,
 } from '@app/features/i18n/utils/CommonMessageDescriptors';
 import GuildMembers from '@app/features/member/state/GuildMembers';
-import {BLOCK_DESCRIPTOR, REPORT_USER_DESCRIPTOR} from '@app/features/moderation/utils/ModerationMessageDescriptors';
-import {openReportUserModal} from '@app/features/moderation/utils/ReportActionUtils';
+import {
+	BLOCK_DESCRIPTOR,
+	REPORT_USER_PROFILE_DESCRIPTOR,
+} from '@app/features/moderation/utils/ModerationMessageDescriptors';
+import {openReportUserProfileModal} from '@app/features/moderation/utils/ReportActionUtils';
 import {Logger} from '@app/features/platform/utils/AppLogger';
 import MemberPresenceSubscription from '@app/features/presence/state/MemberPresenceSubscription';
 import Relationships from '@app/features/relationship/state/Relationships';
@@ -54,16 +53,30 @@ import type {Profile} from '@app/features/user/models/Profile';
 import {User} from '@app/features/user/models/User';
 import UserNote from '@app/features/user/state/UserNote';
 import Users from '@app/features/user/state/Users';
+import {accountGateReason} from '@app/features/user/utils/AccountGatePresentation';
+import {canPerform} from '@app/features/user/utils/AccountGates';
+import {blockedDmConfirmModal, openDMChannelOrShowError} from '@app/features/user/utils/DMActionUtils';
 import * as NicknameUtils from '@app/features/user/utils/NicknameUtils';
 import type * as ProfileDisplayUtils from '@app/features/user/utils/ProfileDisplayUtils';
+import {canOpenProfileEditor} from '@app/features/user/utils/ProfileEditAccess';
 import {
 	getProfileMembershipDisplayName,
 	resolveProfileGuildMembership,
 	toProfileDisplayContext,
 } from '@app/features/user/utils/ProfileGuildMembership';
 import {createMockProfile} from '@app/features/user/utils/ProfileUtils';
+import {
+	MORE_ACTIONS_DESCRIPTOR,
+	SEND_FRIEND_REQUEST_DESCRIPTOR,
+	UNBLOCK_USER_DESCRIPTOR,
+	USER_PROFILE_DESCRIPTOR,
+	VIEW_COMMUNITY_PROFILE_DESCRIPTOR,
+	VIEW_GLOBAL_PROFILE_DESCRIPTOR,
+	YOU_CAN_T_MESSAGE_YOURSELF_DESCRIPTOR,
+} from '@app/features/user/utils/UserMessageDescriptors';
 import * as CallUtils from '@app/features/voice/utils/CallUtils';
 import {hasActiveDirectCallWithUser} from '@app/features/voice/utils/PrivateCallMenuUtils';
+import {TierGatedActions} from '@fluxer/constants/src/AccountTierConstants';
 import {PublicUserFlags, RelationshipTypes} from '@fluxer/constants/src/UserConstants';
 import {msg} from '@lingui/core/macro';
 import {Trans, useLingui} from '@lingui/react/macro';
@@ -87,49 +100,19 @@ import {observer} from 'mobx-react-lite';
 import type React from 'react';
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 
-const USER_PROFILE_DESCRIPTOR = msg({
-	message: 'User profile',
-	comment: 'Short label in the user profile modal. Keep it concise.',
-});
 const USER_PROFILE_2_DESCRIPTOR = msg({
 	message: 'User profile: {tag}',
 	comment: 'Short label in the user profile modal. Keep it concise. Preserve {tag}; it is inserted by code.',
 });
-const VIEW_COMMUNITY_PROFILE_DESCRIPTOR = msg({
-	message: 'View community profile',
-	comment: 'Button or menu action label in the user profile modal. Keep it concise.',
-});
-const VIEW_GLOBAL_PROFILE_DESCRIPTOR = msg({
-	message: 'View global profile',
-	comment: 'Button or menu action label in the user profile modal. Keep it concise.',
-});
+
 const YOU_CAN_T_BEFRIEND_YOURSELF_DESCRIPTOR = msg({
 	message: "You can't befriend yourself",
 	comment: 'Error message in the user profile modal.',
 });
-const YOU_CAN_T_MESSAGE_YOURSELF_DESCRIPTOR = msg({
-	message: "You can't message yourself",
-	comment: 'Error message in the user profile modal.',
-});
-const MORE_ACTIONS_DESCRIPTOR = msg({
-	message: 'More actions',
-	comment: 'Short label in the user profile modal. Keep it concise.',
-});
-const UNBLOCK_USER_DESCRIPTOR = msg({
-	message: 'Unblock user',
-	comment: 'Button or menu action label in the user profile modal. Keep it concise. Keep the tone plain and specific.',
-});
-const CLAIM_YOUR_ACCOUNT_TO_SEND_FRIEND_REQUESTS_DESCRIPTOR = msg({
-	message: 'Claim your account to send friend requests.',
-	comment: 'Description text in the user profile modal.',
-});
-const SEND_FRIEND_REQUEST_DESCRIPTOR = msg({
-	message: 'Send friend request',
-	comment: 'Button or menu action label in the user profile modal. Keep it concise.',
-});
+
 const logger = new Logger('UserProfileModal');
 
-export interface UserProfileModalProps {
+interface UserProfileModalProps {
 	userId: string;
 	guildId?: string;
 	autoFocusNote?: boolean;
@@ -269,26 +252,17 @@ export const UserProfileModal: UserProfileModalComponent = observer(
 			);
 		};
 		const handleMessage = async () => {
-			try {
-				ModalCommands.pop();
-				await PrivateChannelCommands.openDMChannel(userId);
-			} catch (error) {
-				logger.error('Failed to open DM channel:', error);
-				showDmActionErrorModal(error);
-			}
+			ModalCommands.pop();
+			await openDMChannelOrShowError(userId);
 		};
 		const handleOpenBlockedDm = () => {
 			ModalCommands.push(
-				modal(() => (
-					<ConfirmModal
-						title={i18n._(OPEN_DM_DESCRIPTOR)}
-						description={i18n._(BLOCKED_USER_DM_WARNING_DESCRIPTOR, {userName: displayUserName})}
-						primaryText={i18n._(OPEN_DM_DESCRIPTOR)}
-						primaryVariant="primary"
-						onPrimary={handleMessage}
-						data-flx="user.user-profile-modal.handle-open-blocked-dm.confirm-modal"
-					/>
-				)),
+				blockedDmConfirmModal(
+					i18n,
+					displayUserName,
+					handleMessage,
+					'user.user-profile-modal.handle-open-blocked-dm.confirm-modal',
+				),
 			);
 		};
 		const handleSendFriendRequest = () => {
@@ -322,25 +296,13 @@ export const UserProfileModal: UserProfileModalComponent = observer(
 			RelationshipActionUtils.cancelFriendRequest(i18n, userId);
 		};
 		const handleStartVoiceCall = async (event?: ContextMenuActionEvent) => {
-			try {
-				const channelId = await PrivateChannelCommands.ensureDMChannel(userId);
-				await CallUtils.requestStartCall(i18n, channelId, CallUtils.getCallStartRequestOptions(event, {kind: 'voice'}));
-			} catch (error) {
-				logger.error('Failed to start voice call:', error);
-				showDmActionErrorModal(error);
-			}
+			await CallUtils.startCallWithUser(i18n, userId, CallUtils.getCallStartRequestOptions(event, {kind: 'voice'}));
 		};
 		const handleStartVideoCall = async (event?: ContextMenuActionEvent) => {
-			try {
-				const channelId = await PrivateChannelCommands.ensureDMChannel(userId);
-				await CallUtils.requestStartCall(i18n, channelId, CallUtils.getCallStartRequestOptions(event, {kind: 'video'}));
-			} catch (error) {
-				logger.error('Failed to start video call:', error);
-				showDmActionErrorModal(error);
-			}
+			await CallUtils.startCallWithUser(i18n, userId, CallUtils.getCallStartRequestOptions(event, {kind: 'video'}));
 		};
-		const handleReportUser = () => {
-			openReportUserModal({i18n, user: displayUser, guildId});
+		const handleReportUserProfile = () => {
+			openReportUserProfileModal({user: displayUser, guildId});
 		};
 		const handleCopyFluxerTag = () => {
 			TextCopyCommands.copy(i18n, displayUser.tag, true);
@@ -358,9 +320,6 @@ export const UserProfileModal: UserProfileModalComponent = observer(
 			}
 		};
 		const renderBlockMenuItem = (onClose: () => void) => {
-			if (displayUser?.system) {
-				return null;
-			}
 			switch (relationshipType) {
 				case RelationshipTypes.BLOCKED:
 					return (
@@ -465,7 +424,7 @@ export const UserProfileModal: UserProfileModalComponent = observer(
 							{i18n._(COPY_USER_ID_DESCRIPTOR)}
 						</MenuItem>
 					</MenuGroup>
-					{!isCurrentUser && relationshipType === RelationshipTypes.FRIEND && !RuntimeConfig.directMessagesDisabled && (
+					{!isCurrentUser && relationshipType === RelationshipTypes.FRIEND && !RuntimeConfig.friendsDisabled && (
 						<MenuGroup data-flx="user.user-profile-modal.open-more-options-menu.menu-group--4">
 							<MenuItem
 								icon={
@@ -486,18 +445,18 @@ export const UserProfileModal: UserProfileModalComponent = observer(
 							</MenuItem>
 						</MenuGroup>
 					)}
-					{!isCurrentUser && (
+					{!isCurrentUser && !displayUser.system && (
 						<MenuGroup data-flx="user.user-profile-modal.open-more-options-menu.menu-group--5">
 							<MenuItem
 								icon={<FlagIcon data-flx="user.user-profile-modal.open-more-options-menu.flag-icon" />}
 								onClick={() => {
-									handleReportUser();
+									handleReportUserProfile();
 									props.onClose();
 								}}
 								danger
-								data-flx="user.user-profile-modal.open-more-options-menu.menu-item.report-user"
+								data-flx="user.user-profile-modal.open-more-options-menu.menu-item.report-user-profile"
 							>
-								{i18n._(REPORT_USER_DESCRIPTOR)}
+								{i18n._(REPORT_USER_PROFILE_DESCRIPTOR)}
 							</MenuItem>
 							{renderBlockMenuItem(props.onClose)}
 						</MenuGroup>
@@ -516,7 +475,8 @@ export const UserProfileModal: UserProfileModalComponent = observer(
 			));
 		};
 		const renderActionButtons = () => {
-			const currentUserUnclaimed = !(Users.currentUser?.isClaimed() ?? true);
+			const showEditProfile = canOpenProfileEditor(Users.currentUser);
+			const friendRequestGate = canPerform(Users.currentUser, TierGatedActions.FRIEND_REQUEST);
 			if (isCurrentUser && disableEditProfile) {
 				return (
 					<div
@@ -575,7 +535,7 @@ export const UserProfileModal: UserProfileModalComponent = observer(
 						className={userProfileModalStyles.actionButtons}
 						data-flx="user.user-profile-modal.render-action-buttons.div--4"
 					>
-						{!currentUserUnclaimed && (
+						{showEditProfile && (
 							<Button
 								small={true}
 								leftIcon={
@@ -614,7 +574,7 @@ export const UserProfileModal: UserProfileModalComponent = observer(
 				if (isUserBot && !isFriendlyBot) {
 					return null;
 				}
-				if (RuntimeConfig.directMessagesDisabled && relationshipType !== RelationshipTypes.BLOCKED) {
+				if (RuntimeConfig.friendsDisabled && relationshipType !== RelationshipTypes.BLOCKED) {
 					return null;
 				}
 				if (relationshipType === RelationshipTypes.FRIEND) {
@@ -722,9 +682,9 @@ export const UserProfileModal: UserProfileModalComponent = observer(
 					);
 				}
 				if (relationshipType === undefined && (!isUserBot || isFriendlyBot)) {
-					const tooltipText = currentUserUnclaimed
-						? i18n._(CLAIM_YOUR_ACCOUNT_TO_SEND_FRIEND_REQUESTS_DESCRIPTOR)
-						: i18n._(SEND_FRIEND_REQUEST_DESCRIPTOR);
+					const tooltipText = friendRequestGate.allowed
+						? i18n._(SEND_FRIEND_REQUEST_DESCRIPTOR)
+						: accountGateReason(i18n, friendRequestGate);
 					return (
 						<Tooltip
 							text={tooltipText}
@@ -744,7 +704,7 @@ export const UserProfileModal: UserProfileModalComponent = observer(
 									}
 									aria-label={i18n._(SEND_FRIEND_REQUEST_DESCRIPTOR)}
 									onClick={handleSendFriendRequest}
-									disabled={currentUserUnclaimed}
+									disabled={!friendRequestGate.allowed}
 									data-flx="user.user-profile-modal.render-primary-action-button.button.send-friend-request"
 								/>
 							</div>
@@ -803,6 +763,7 @@ export const UserProfileModal: UserProfileModalComponent = observer(
 		return (
 			<Modal.Root
 				size="medium"
+				centered
 				initialFocusRef={autoFocusNote ? noteRef : undefined}
 				className={userProfileModalStyles.modalRoot}
 				data-flx="user.user-profile-modal.modal-root"

@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import {EmailI18nService} from '@pkgs/email/src/EmailI18nService';
 import type {EmailConfig, EmailMessage, IEmailProvider} from '@pkgs/email/src/EmailProviderTypes';
 import {EmailService} from '@pkgs/email/src/EmailService';
 import {describe, expect, it} from 'vitest';
@@ -10,10 +9,19 @@ const CONFIG: EmailConfig = {
 	fromEmail: 'noreply@example.com',
 	fromName: 'Fluxer',
 	appBaseUrl: 'https://example.com',
+	apiBaseUrl: 'https://api.example.com',
+	appealsEmail: 'appeals@fluxer.com',
+	privacyEmail: 'privacy@fluxer.com',
+	safetyEmail: 'safety@fluxer.com',
+	supportEmail: 'support@fluxer.com',
+	productName: 'Fluxer',
 	marketingBaseUrl: 'https://example.com',
+	staticCdnBaseUrl: 'https://static.example.com',
+	legalAddress: 'Fluxer Platform AB, c/o Embassy House, Östgötagatan 12, 116 25 Stockholm, Sweden',
+	brandLogo: true,
 };
 
-async function sendWith(config: EmailConfig): Promise<EmailMessage> {
+function createCapturingServiceFor(config: EmailConfig): {service: EmailService; sent: Array<EmailMessage>} {
 	const sent: Array<EmailMessage> = [];
 	const provider: IEmailProvider = {
 		sendEmail: async (message) => {
@@ -21,21 +29,22 @@ async function sendWith(config: EmailConfig): Promise<EmailMessage> {
 			return true;
 		},
 	};
-	const service = new EmailService(config, new EmailI18nService(), provider);
-	await expect(service.sendRegistrationApprovedEmail('user@example.com', 'testuser', 'en-US')).resolves.toBe(true);
-	expect(sent).toHaveLength(1);
-	return sent[0];
+	return {service: new EmailService(config, provider), sent};
 }
 
-describe('EmailService reply-to', () => {
-	it('sets the configured reply-to address on every message', async () => {
-		const message = await sendWith({...CONFIG, replyTo: 'support@example.com'});
-		expect(message.replyTo).toBe('support@example.com');
-		expect(message.from).toEqual({email: 'noreply@example.com', name: 'Fluxer'});
-	});
-
-	it.each([undefined, null, ''])('omits the reply-to address when it is %j', async (replyTo) => {
-		const message = await sendWith({...CONFIG, replyTo});
-		expect(message).not.toHaveProperty('replyTo');
+describe('EmailService', () => {
+	it('keeps the HTML part on a plain-http instance whose links stay on its own origins', async () => {
+		const {service, sent} = createCapturingServiceFor({
+			...CONFIG,
+			appBaseUrl: 'http://chat.example.org',
+			apiBaseUrl: 'http://chat.example.org/api',
+			marketingBaseUrl: 'http://chat.example.org',
+			staticCdnBaseUrl: 'http://static.chat.example.org:8080',
+		});
+		await service.send('password_reset', 'user@example.com', {resetToken: 'tok.abc'}, 'en-US');
+		const html = sent[0].html ?? '';
+		expect(html).toContain('href="http://chat.example.org/reset#token=tok.abc"');
+		expect(html).toContain('src="http://static.chat.example.org:8080/email/brand/v1/logo-color.png"');
+		expect(html).not.toContain('%%');
 	});
 });

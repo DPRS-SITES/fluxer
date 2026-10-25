@@ -11,29 +11,20 @@ const SPLASH_WINDOW_HEIGHT_DEFAULT = 350;
 const SPLASH_BACKGROUND_COLOR = '#1a1a1a';
 const SPLASH_ACTION_LABEL_MAX_LENGTH = 48;
 const SPLASH_MESSAGE_MAX_LENGTH = 160;
-const SPLASH_VERSION_LABEL_MAX_LENGTH = 64;
-const SPLASH_OPTION_LABEL_MAX_LENGTH = 48;
-const SPLASH_OPTION_BUTTON_LABEL_MAX_LENGTH = 24;
-const SPLASH_OPTION_MAX_COUNT = 8;
-const SPLASH_OPTION_VALUE_PATTERN = /^[a-z0-9_]{1,32}$/;
 const SPLASH_PROGRESS_MAX = 100;
 
-export const SPLASH_READY_WATCHDOG_MS = 3000;
-export const SPLASH_CLOSE_DELAY_MS = 100;
+const SPLASH_READY_WATCHDOG_MS = 3000;
+const SPLASH_CLOSE_DELAY_MS = 100;
 
-export const DESKTOP_SPLASH_STATE_CHANNEL = 'desktop-splash:state';
-export const DESKTOP_SPLASH_READY_CHANNEL = 'desktop-splash:ready';
-export const DESKTOP_SPLASH_RETRY_NOW_CHANNEL = 'desktop-splash:retry-now';
-export const DESKTOP_SPLASH_QUIT_CHANNEL = 'desktop-splash:quit';
-export const DESKTOP_SPLASH_OPEN_DOWNLOAD_CHANNEL = 'desktop-splash:open-download';
-export const DESKTOP_SPLASH_NETWORK_ONLINE_CHANNEL = 'desktop-splash:network-online';
-
-export const SplashLayout = Object.freeze({
-	SPLASH: 'splash',
-	MANUAL_UPDATE: 'manual-update',
-} as const);
-
-export type SplashLayout = (typeof SplashLayout)[keyof typeof SplashLayout];
+const DESKTOP_SPLASH_STATE_CHANNEL = 'desktop-splash:state';
+const DESKTOP_SPLASH_REVEALED_CHANNEL = 'desktop-splash:revealed';
+const DESKTOP_SPLASH_READY_CHANNEL = 'desktop-splash:ready';
+const DESKTOP_SPLASH_RETRY_NOW_CHANNEL = 'desktop-splash:retry-now';
+const DESKTOP_SPLASH_QUIT_CHANNEL = 'desktop-splash:quit';
+const DESKTOP_SPLASH_OPEN_DOWNLOAD_CHANNEL = 'desktop-splash:open-download';
+const DESKTOP_SPLASH_NETWORK_ONLINE_CHANNEL = 'desktop-splash:network-online';
+const DESKTOP_SPLASH_OPEN_LOGS_CHANNEL = 'desktop-splash:open-logs';
+const DESKTOP_SPLASH_COPY_DIAGNOSTICS_CHANNEL = 'desktop-splash:copy-diagnostics';
 
 export const SplashStatus = Object.freeze({
 	CHECKING_FOR_UPDATES: 'checking-for-updates',
@@ -41,14 +32,12 @@ export const SplashStatus = Object.freeze({
 	INSTALLING_UPDATES: 'installing-updates',
 	VERIFYING: 'verifying',
 	UPDATE_FAILURE: 'update-failure',
+	DOWNLOAD_STALLED: 'download-stalled',
 	SHELL_UPDATE_DOWNLOADING: 'shell-update-downloading',
 	SHELL_UPDATE_RESTARTING: 'shell-update-restarting',
 	BLOCKED_UPDATE_REQUIRED: 'blocked-update-required',
 	BLOCKED_UPDATE_UNREACHABLE: 'blocked-update-unreachable',
-	BLOCKED_SECURITY_UPDATE_REQUIRED: 'blocked-security-update-required',
-	BLOCKED_SECURITY_UPDATE_MANAGED: 'blocked-security-update-managed',
 	BLOCKED_SHELL_UPDATE: 'blocked-shell-update',
-	BLOCKED_SHELL_UPDATE_MANAGED: 'blocked-shell-update-managed',
 	BLOCKED_UNSUPPORTED_BUILD: 'blocked-unsupported-build',
 	LAUNCHING: 'launching',
 	UNREACHABLE_LAUNCH: 'unreachable-launch',
@@ -57,24 +46,17 @@ export const SplashStatus = Object.freeze({
 
 export type SplashStatus = (typeof SplashStatus)[keyof typeof SplashStatus];
 
-export const SplashActionKind = Object.freeze({
+const SplashActionKind = Object.freeze({
 	RETRY: 'retry',
 	DOWNLOAD: 'download',
 	QUIT: 'quit',
 } as const);
 
-export type SplashActionKind = (typeof SplashActionKind)[keyof typeof SplashActionKind];
+type SplashActionKind = (typeof SplashActionKind)[keyof typeof SplashActionKind];
 
 export interface SplashActionDescriptor {
 	readonly kind: SplashActionKind;
 	readonly label: string;
-}
-
-export interface SplashDownloadOption {
-	readonly value: string;
-	readonly label: string;
-	readonly buttonLabel: string;
-	readonly kind: SplashActionKind;
 }
 
 export const SplashAction = Object.freeze({
@@ -85,44 +67,42 @@ export const SplashAction = Object.freeze({
 
 export interface SplashState {
 	readonly status: SplashStatus;
-	readonly requiredSecurityUpdate?: boolean;
-	readonly layout?: SplashLayout | null;
 	readonly current?: number | null;
 	readonly total?: number | null;
 	readonly progress?: number | null;
 	readonly seconds?: number | null;
+	readonly receivedBytes?: number | null;
+	readonly totalBytes?: number | null;
+	readonly bytesPerSecond?: number | null;
 	readonly action?: SplashActionDescriptor | null;
 	readonly message?: string | null;
-	readonly versionLabel?: string | null;
-	readonly options?: ReadonlyArray<SplashDownloadOption> | null;
 }
 
-export interface SerializedSplashState {
-	readonly layout: SplashLayout;
+interface SerializedSplashState {
 	readonly status: SplashStatus;
-	readonly requiredSecurityUpdate: boolean;
 	readonly current: number | null;
 	readonly total: number | null;
 	readonly progress: number | null;
 	readonly seconds: number | null;
+	readonly receivedBytes: number | null;
+	readonly totalBytes: number | null;
+	readonly bytesPerSecond: number | null;
 	readonly action: SplashActionDescriptor | null;
 	readonly message: string | null;
-	readonly versionLabel: string | null;
-	readonly options: ReadonlyArray<SplashDownloadOption> | null;
 }
 
 type SplashListener = () => void;
-type SplashDownloadListener = (value: string | null) => void;
 
 const logger = createChildLogger('SplashWindow');
-const SPLASH_LAYOUTS = new Set<string>(Object.values(SplashLayout));
 const SPLASH_STATUSES = new Set<string>(Object.values(SplashStatus));
 const SPLASH_ACTION_KINDS = new Set<string>(Object.values(SplashActionKind));
 const readyListeners = new Set<SplashListener>();
 const retryListeners = new Set<SplashListener>();
 const quitListeners = new Set<SplashListener>();
 const networkOnlineListeners = new Set<SplashListener>();
-const openDownloadListeners = new Set<SplashDownloadListener>();
+const openDownloadListeners = new Set<SplashListener>();
+const openLogsListeners = new Set<SplashListener>();
+const copyDiagnosticsListeners = new Set<SplashListener>();
 
 let splashWindow: BrowserWindow | null = null;
 let splashIpcRegistered = false;
@@ -131,6 +111,9 @@ let affordanceLatched = false;
 let lastSerializedState: SerializedSplashState | null = null;
 let readyWatchdog: NodeJS.Timeout | null = null;
 let themeSourceBeforeSplash: typeof nativeTheme.themeSource | null = null;
+let darkThemePendingShow = false;
+let splashHeldHidden = false;
+let splashDocumentReady = false;
 
 function toSplashCount(value: number | null | undefined): number | null {
 	if (typeof value !== 'number' || !Number.isFinite(value)) return null;
@@ -157,73 +140,26 @@ function toSplashAction(action: SplashActionDescriptor | null | undefined): Spla
 	return {kind: action.kind, label};
 }
 
-function toSplashOption(option: SplashDownloadOption): SplashDownloadOption | null {
-	if (option == null || typeof option !== 'object') return null;
-	if (typeof option.value !== 'string' || !SPLASH_OPTION_VALUE_PATTERN.test(option.value)) return null;
-	if (!SPLASH_ACTION_KINDS.has(option.kind)) return null;
-	const label = toSplashText(option.label, SPLASH_OPTION_LABEL_MAX_LENGTH);
-	if (label == null) return null;
-	const buttonLabel = toSplashText(option.buttonLabel, SPLASH_OPTION_BUTTON_LABEL_MAX_LENGTH);
-	if (buttonLabel == null) return null;
-	return {value: option.value, label, buttonLabel, kind: option.kind};
-}
-
-function toSplashOptions(
-	options: ReadonlyArray<SplashDownloadOption> | null | undefined,
-): ReadonlyArray<SplashDownloadOption> | null {
-	if (!Array.isArray(options)) return null;
-	const accepted: Array<SplashDownloadOption> = [];
-	for (const option of options.slice(0, SPLASH_OPTION_MAX_COUNT)) {
-		const normalized = toSplashOption(option);
-		if (normalized != null) {
-			accepted.push(normalized);
-		}
-	}
-	return accepted.length === 0 ? null : accepted;
-}
-
-function withManualUpdateAffordance(state: SerializedSplashState): SerializedSplashState {
-	if (state.layout !== SplashLayout.MANUAL_UPDATE || hasSplashAffordance(state)) return state;
-	return {...state, action: SplashAction.QUIT};
-}
-
-export function serializeSplashState(state: SplashState): SerializedSplashState {
-	return withManualUpdateAffordance({
-		layout: SPLASH_LAYOUTS.has(state.layout as string) ? (state.layout as SplashLayout) : SplashLayout.SPLASH,
+function serializeSplashState(state: SplashState): SerializedSplashState {
+	return {
 		status: SPLASH_STATUSES.has(state.status) ? state.status : SplashStatus.CHECKING_FOR_UPDATES,
-		requiredSecurityUpdate: state.requiredSecurityUpdate === true,
 		current: toSplashCount(state.current),
 		total: toSplashCount(state.total),
 		progress: toSplashProgress(state.progress),
 		seconds: toSplashCount(state.seconds),
+		receivedBytes: toSplashCount(state.receivedBytes),
+		totalBytes: toSplashCount(state.totalBytes),
+		bytesPerSecond: toSplashCount(state.bytesPerSecond),
 		action: toSplashAction(state.action),
 		message: toSplashText(state.message, SPLASH_MESSAGE_MAX_LENGTH),
-		versionLabel: toSplashText(state.versionLabel, SPLASH_VERSION_LABEL_MAX_LENGTH),
-		options: toSplashOptions(state.options),
-	});
+	};
 }
 
-export function hasSplashAffordance(state: SerializedSplashState): boolean {
-	return state.action != null || state.options != null;
+function hasSplashAffordance(state: SerializedSplashState): boolean {
+	return state.action != null;
 }
 
-export function toSplashDownloadValue(value: unknown): string | null {
-	if (typeof value !== 'string') return null;
-	return SPLASH_OPTION_VALUE_PATTERN.test(value) ? value : null;
-}
-
-export function getSplashWindowHeight(platform: NodeJS.Platform): number {
-	return platform === 'darwin' ? SPLASH_WINDOW_HEIGHT_DARWIN : SPLASH_WINDOW_HEIGHT_DEFAULT;
-}
-
-export function shouldQuitOnSplashClosed(platform: NodeJS.Platform, isLaunchLatched: boolean): boolean {
-	return platform !== 'darwin' && !isLaunchLatched;
-}
-
-function addSplashListener<T extends SplashListener | SplashDownloadListener>(
-	listeners: Set<T>,
-	listener: T,
-): () => void {
+function addSplashListener(listeners: Set<SplashListener>, listener: SplashListener): () => void {
 	listeners.add(listener);
 	return () => {
 		listeners.delete(listener);
@@ -240,16 +176,6 @@ function emitSplashListeners(listeners: Set<SplashListener>): void {
 	}
 }
 
-function emitSplashDownloadListeners(value: string | null): void {
-	for (const listener of Array.from(openDownloadListeners)) {
-		try {
-			listener(value);
-		} catch (error) {
-			logger.error('A splash listener threw', error);
-		}
-	}
-}
-
 function isSplashSender(event: IpcMainEvent): boolean {
 	return splashWindow != null && !splashWindow.isDestroyed() && event.sender === splashWindow.webContents;
 }
@@ -259,11 +185,13 @@ function showSplashWindow(reason: 'ready' | 'watchdog'): void {
 		clearTimeout(readyWatchdog);
 		readyWatchdog = null;
 	}
+	if (splashHeldHidden) return;
 	const window = splashWindow;
 	if (window == null || window.isDestroyed() || window.isVisible()) return;
 	if (reason === 'watchdog') {
 		logger.warn('The splash preload never reported ready, showing the window anyway');
 	}
+	applySplashTheme();
 	window.showInactive();
 }
 
@@ -272,6 +200,7 @@ function registerSplashIpc(): void {
 	splashIpcRegistered = true;
 	ipcMain.on(DESKTOP_SPLASH_READY_CHANNEL, (event) => {
 		if (!isSplashSender(event)) return;
+		splashDocumentReady = true;
 		showSplashWindow('ready');
 		if (lastSerializedState != null) {
 			event.sender.send(DESKTOP_SPLASH_STATE_CHANNEL, lastSerializedState);
@@ -290,9 +219,17 @@ function registerSplashIpc(): void {
 		if (!isSplashSender(event)) return;
 		emitSplashListeners(networkOnlineListeners);
 	});
-	ipcMain.on(DESKTOP_SPLASH_OPEN_DOWNLOAD_CHANNEL, (event, value: unknown) => {
+	ipcMain.on(DESKTOP_SPLASH_OPEN_DOWNLOAD_CHANNEL, (event) => {
 		if (!isSplashSender(event)) return;
-		emitSplashDownloadListeners(toSplashDownloadValue(value));
+		emitSplashListeners(openDownloadListeners);
+	});
+	ipcMain.on(DESKTOP_SPLASH_OPEN_LOGS_CHANNEL, (event) => {
+		if (!isSplashSender(event)) return;
+		emitSplashListeners(openLogsListeners);
+	});
+	ipcMain.on(DESKTOP_SPLASH_COPY_DIAGNOSTICS_CHANNEL, (event) => {
+		if (!isSplashSender(event)) return;
+		emitSplashListeners(copyDiagnosticsListeners);
 	});
 }
 
@@ -312,14 +249,45 @@ function registerSplashDiagnostics(window: BrowserWindow): void {
 	});
 }
 
-export function openSplashWindow(): BrowserWindow {
-	if (splashWindow != null && !splashWindow.isDestroyed()) return splashWindow;
+export function openSplashWindow(options: {readonly darkThemeOnShow?: boolean} = {}): BrowserWindow {
+	const existing = splashWindow;
+	if (existing != null && !existing.isDestroyed()) {
+		if (splashHeldHidden) {
+			splashHeldHidden = false;
+			existing.setSkipTaskbar(false);
+			if (splashDocumentReady) showSplashWindow('ready');
+		}
+		return existing;
+	}
+	return createSplashWindow(options.darkThemeOnShow === true, false);
+}
+
+export function preloadSplashWindow(): void {
+	if (splashWindow != null && !splashWindow.isDestroyed()) return;
+	createSplashWindow(true, true);
+}
+
+export function revealPreloadedSplashWindow(): BrowserWindow | null {
+	const window = splashWindow;
+	if (!splashHeldHidden || !splashDocumentReady || window == null || window.isDestroyed()) return null;
+	splashHeldHidden = false;
+	window.setSkipTaskbar(false);
+	window.webContents.send(DESKTOP_SPLASH_REVEALED_CHANNEL);
+	applySplashTheme();
+	window.show();
+	window.focus();
+	return window;
+}
+
+function createSplashWindow(darkThemeOnShow: boolean, heldHidden: boolean): BrowserWindow {
 	registerSplashIpc();
-	if (themeSourceBeforeSplash == null) themeSourceBeforeSplash = nativeTheme.themeSource;
-	nativeTheme.themeSource = 'dark';
+	darkThemePendingShow = true;
+	splashHeldHidden = heldHidden;
+	splashDocumentReady = false;
+	if (!darkThemeOnShow) applySplashTheme();
 	const window = new BrowserWindow({
 		width: SPLASH_WINDOW_WIDTH,
-		height: getSplashWindowHeight(process.platform),
+		height: process.platform === 'darwin' ? SPLASH_WINDOW_HEIGHT_DARWIN : SPLASH_WINDOW_HEIGHT_DEFAULT,
 		frame: false,
 		hasShadow: true,
 		resizable: false,
@@ -346,19 +314,28 @@ export function openSplashWindow(): BrowserWindow {
 	window.on('closed', () => {
 		if (splashWindow === window) {
 			splashWindow = null;
+			splashHeldHidden = false;
+			splashDocumentReady = false;
 		}
 		restoreThemeSource();
-		if (!shouldQuitOnSplashClosed(process.platform, launchLatched)) return;
+		if (process.platform === 'darwin' || launchLatched) {
+			return;
+		}
 		logger.info('The splash window closed before launch, quitting');
 		app.quit();
 	});
-	readyWatchdog = setTimeout(() => {
-		readyWatchdog = null;
-		showSplashWindow('watchdog');
-	}, SPLASH_READY_WATCHDOG_MS);
-	readyWatchdog.unref();
-	const documentUrl = pathToFileURL(getDesktopDistributionPath('splash', 'index.html')).href;
-	window.loadURL(documentUrl).catch((error) => {
+	if (heldHidden) {
+		window.setSkipTaskbar(true);
+	} else {
+		readyWatchdog = setTimeout(() => {
+			readyWatchdog = null;
+			showSplashWindow('watchdog');
+		}, SPLASH_READY_WATCHDOG_MS);
+		readyWatchdog.unref();
+	}
+	const documentUrl = pathToFileURL(getDesktopDistributionPath('splash', 'index.html'));
+	if (heldHidden) documentUrl.searchParams.set('held', '1');
+	window.loadURL(documentUrl.href).catch((error) => {
 		logger.error('Failed to load the splash document', error);
 	});
 	return window;
@@ -370,11 +347,20 @@ export function focusSplashWindow(): void {
 	if (window.isMinimized()) {
 		window.restore();
 	}
+	applySplashTheme();
 	window.show();
 	window.focus();
 }
 
+function applySplashTheme(): void {
+	if (!darkThemePendingShow) return;
+	darkThemePendingShow = false;
+	if (themeSourceBeforeSplash == null) themeSourceBeforeSplash = nativeTheme.themeSource;
+	nativeTheme.themeSource = 'dark';
+}
+
 function restoreThemeSource(): void {
+	darkThemePendingShow = false;
 	if (themeSourceBeforeSplash == null) return;
 	nativeTheme.themeSource = themeSourceBeforeSplash;
 	themeSourceBeforeSplash = null;
@@ -383,6 +369,8 @@ function restoreThemeSource(): void {
 export function closeSplashWindow(): void {
 	const window = splashWindow;
 	splashWindow = null;
+	splashHeldHidden = false;
+	splashDocumentReady = false;
 	restoreThemeSource();
 	lastSerializedState = null;
 	affordanceLatched = false;
@@ -391,6 +379,8 @@ export function closeSplashWindow(): void {
 	quitListeners.clear();
 	networkOnlineListeners.clear();
 	openDownloadListeners.clear();
+	openLogsListeners.clear();
+	copyDiagnosticsListeners.clear();
 	if (readyWatchdog != null) {
 		clearTimeout(readyWatchdog);
 		readyWatchdog = null;
@@ -447,6 +437,14 @@ export function onSplashNetworkOnline(listener: SplashListener): () => void {
 	return addSplashListener(networkOnlineListeners, listener);
 }
 
-export function onSplashOpenDownload(listener: SplashDownloadListener): () => void {
+export function onSplashOpenDownload(listener: SplashListener): () => void {
 	return addSplashListener(openDownloadListeners, listener);
+}
+
+export function onSplashOpenLogs(listener: SplashListener): () => void {
+	return addSplashListener(openLogsListeners, listener);
+}
+
+export function onSplashCopyDiagnostics(listener: SplashListener): () => void {
+	return addSplashListener(copyDiagnosticsListeners, listener);
 }

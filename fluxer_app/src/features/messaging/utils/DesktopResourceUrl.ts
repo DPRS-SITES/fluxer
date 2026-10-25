@@ -2,10 +2,7 @@
 
 import {runtimeInstanceKey} from '@app/features/app/state/InstanceSnapshotStore';
 import RuntimeConfig from '@app/features/app/state/RuntimeConfig';
-import {
-	parseDesktopLocalResourceProxyTarget,
-	unwrapDesktopLocalResourceURL,
-} from '@app/features/messaging/utils/DesktopLocalResourceTarget';
+import {unwrapDesktopLocalResourceURL} from '@app/features/messaging/utils/DesktopLocalResourceTarget';
 import {isDesktopLocalAppDocument} from '@app/features/platform/DesktopLocalAppRuntime';
 import {
 	LOCAL_APP_REMOTE_PROXY_PATH_PREFIX,
@@ -37,7 +34,7 @@ class DesktopResourceRuntimeKeyError extends Error {
 }
 
 export function wrapDesktopLocalResourceURL(value: string): string {
-	return wrapResolvedDesktopLocalResourceURL(parseDesktopLocalResourceProxyTarget(value), false);
+	return wrapResolvedDesktopLocalResourceURL(unwrapDesktopLocalResourceURL(value), false);
 }
 
 export function wrapDesktopLocalResourceURLForInstance(value: string, instanceKey: string): string {
@@ -45,7 +42,7 @@ export function wrapDesktopLocalResourceURLForInstance(value: string, instanceKe
 	if (instanceKey.trim().length === 0) {
 		throw new DesktopResourceRuntimeKeyError();
 	}
-	const targetValue = parseDesktopLocalResourceProxyTarget(value);
+	const targetValue = unwrapDesktopLocalResourceURL(value);
 	let target: URL;
 	try {
 		target = new URL(targetValue);
@@ -56,8 +53,45 @@ export function wrapDesktopLocalResourceURLForInstance(value: string, instanceKe
 	return buildDesktopLocalResourceProxyURL(target, instanceKey);
 }
 
+export function resolveDesktopDisplayResourceURL(value: string): string {
+	if (!isDesktopLocalAppDocument()) return value;
+	const target = parseDisplayTarget(value);
+	if (target == null) return value;
+	if (isDirectlyDisplayableTarget(target)) return target.toString();
+	return wrapResolvedDesktopLocalResourceURL(target.toString(), false);
+}
+
+export function resolveDesktopDisplayResourceURLForInstance(value: string, instanceKey: string): string {
+	if (!isDesktopLocalAppDocument()) return value;
+	const target = parseDisplayTarget(value);
+	if (target != null && isDirectlyDisplayableTarget(target)) return target.toString();
+	return wrapDesktopLocalResourceURLForInstance(value, instanceKey);
+}
+
+export function resolveDesktopCrossOriginMediaURL(value: string | undefined): string | undefined {
+	if (value == null || value.length === 0) return value;
+	return wrapDesktopLocalResourceURL(value);
+}
+
+function parseDisplayTarget(value: string): URL | null {
+	try {
+		return new URL(unwrapDesktopLocalResourceURL(value));
+	} catch {
+		return null;
+	}
+}
+
+function isDirectlyDisplayableTarget(target: URL): boolean {
+	if (target.protocol === 'https:') return true;
+	return target.protocol === 'http:' && isDocumentAllowedCleartextHost(target.hostname);
+}
+
+function isDocumentAllowedCleartextHost(hostname: string): boolean {
+	return hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '127.0.0.1';
+}
+
 export function updateDesktopLocalResourceURLTarget(value: string, updateTarget: (target: URL) => boolean): string {
-	const targetValue = parseDesktopLocalResourceProxyTarget(value);
+	const targetValue = unwrapDesktopLocalResourceURL(value);
 	let target: URL;
 	try {
 		target = new URL(targetValue);
@@ -70,7 +104,7 @@ export function updateDesktopLocalResourceURLTarget(value: string, updateTarget:
 
 export function wrapDesktopLocalUploadURL(value: string): string {
 	if (!isDesktopLocalAppDocument()) return value;
-	const targetValue = parseDesktopLocalResourceProxyTarget(value);
+	const targetValue = unwrapDesktopLocalResourceURL(value);
 	let target: URL;
 	try {
 		target = new URL(targetValue);

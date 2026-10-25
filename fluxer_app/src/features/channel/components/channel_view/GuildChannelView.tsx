@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 import {
+	AccountGateBarrier,
 	AccountLimitedBarrier,
 	AccountTooNewBarrier,
 	AnnouncementFollowBarrier,
 	NotMemberLongEnoughBarrier,
 	SendMessageDisabledBarrier,
-	UnclaimedAccountBarrier,
-	UnverifiedEmailBarrier,
 } from '@app/features/channel/components/barriers/BarrierComponents';
 import {ChannelChatLayout} from '@app/features/channel/components/ChannelChatLayout';
 import {ChannelHeader} from '@app/features/channel/components/ChannelHeader';
@@ -21,10 +20,8 @@ import {ChannelViewScaffold} from '@app/features/channel/components/channel_view
 import {useChannelSearchState} from '@app/features/channel/components/channel_view/useChannelSearchState';
 import {useVoiceCallChromePinState} from '@app/features/channel/components/channel_view/useVoiceCallChromePinState';
 import {MatureContentChannelGate} from '@app/features/channel/components/MatureContentChannelGate';
-import {useMessagesBottomBarVisibility} from '@app/features/channel/components/MessagesBottomBarVisibility';
 import {VerificationBarrier} from '@app/features/channel/components/VerificationBarrier';
-import {useChannelMemberListVisibility} from '@app/features/channel/hooks/useChannelMemberListVisibility';
-import {useChannelSearchVisibility} from '@app/features/channel/hooks/useChannelSearchVisibility';
+import {useChannelPanelVisibility} from '@app/features/channel/hooks/useChannelPanelVisibility';
 import type {Channel} from '@app/features/channel/models/Channel';
 import Channels from '@app/features/channel/state/Channels';
 import * as ChannelUtils from '@app/features/channel/utils/ChannelUtils';
@@ -45,6 +42,7 @@ import MobileLayout from '@app/features/ui/state/MobileLayout';
 import {Tooltip} from '@app/features/ui/tooltip/Tooltip';
 import {isPwaOnMobileOrTablet} from '@app/features/ui/utils/PwaUtils';
 import Users from '@app/features/user/state/Users';
+import {canPerform} from '@app/features/user/utils/AccountGates';
 import {CompactVoiceCallStreamHeaderInfo} from '@app/features/voice/components/CompactVoiceCallStreamHeaderInfo';
 import {useVoiceCallFullscreenViewState} from '@app/features/voice/components/useVoiceCallAppFullscreen';
 import {VoiceCallView} from '@app/features/voice/components/VoiceCallView';
@@ -60,11 +58,13 @@ import {
 } from '@app/features/voice/utils/MobileVoiceTextChatHistory';
 import {useFluxerDocumentTitle} from '@app/features/window/hooks/useFluxerDocumentTitle';
 import Window from '@app/features/window/state/Window';
+import {AccountVerificationNeeds, TierGatedActions} from '@fluxer/constants/src/AccountTierConstants';
 import {ChannelTypes, Permissions} from '@fluxer/constants/src/ChannelConstants';
 import {msg} from '@lingui/core/macro';
 import {useLingui} from '@lingui/react/macro';
 import {clsx} from 'clsx';
 import {observer} from 'mobx-react-lite';
+import type React from 'react';
 import {useCallback, useEffect, useLayoutEffect, useRef} from 'react';
 
 const JOIN_VOICE_CHANNEL_DESCRIPTOR = msg({
@@ -205,7 +205,6 @@ export const GuildChannelView = observer(({channelId, guildId}: GuildChannelView
 		activeSearchSegments,
 	} = searchState;
 	const isSearchPanelVisible = isSearchActive && !isMobileLayout;
-	const {onBottomBarVisibilityChange} = useMessagesBottomBarVisibility(channelId);
 	const {
 		showFullscreenView: showVoiceCallFullscreenView,
 		fullscreenRequestNonce: voiceCallFullscreenRequestNonce,
@@ -303,8 +302,8 @@ export const GuildChannelView = observer(({channelId, guildId}: GuildChannelView
 		}
 		wasVoiceCallFullscreenViewOpenRef.current = showVoiceCallFullscreenView;
 	}, [handleOpenVoiceTextChat, showVoiceCallFullscreenView]);
-	useChannelSearchVisibility(channelId, isSearchPanelVisible);
-	useChannelMemberListVisibility(channelId, isMemberListVisible && !isMobileLayout);
+	useChannelPanelVisibility(channelId, isSearchPanelVisible);
+	useChannelPanelVisibility(channelId, isMemberListVisible && !isMobileLayout);
 	useEffect(() => {
 		const handleGlobalKeydown = (event: Event) => {
 			const keyboardEvent = event as KeyboardEvent;
@@ -379,15 +378,24 @@ export const GuildChannelView = observer(({channelId, guildId}: GuildChannelView
 		);
 	};
 	const renderChatArea = (inputSuppressed = false) => {
+		if (guild?.visiting) return null;
 		if (DeveloperOptions.mockVerificationBarrier !== 'none' && !channel.isPrivate()) {
 			switch (DeveloperOptions.mockVerificationBarrier) {
-				case 'unclaimed_account':
-					return (
-						<UnclaimedAccountBarrier data-flx="channel.channel-view.guild-channel-view.render-chat-area.unclaimed-account-barrier" />
+				case 'unclaimed_account': {
+					const gate = canPerform(null, TierGatedActions.MESSAGE);
+					return gate.allowed ? null : (
+						<AccountGateBarrier
+							gate={gate}
+							data-flx="channel.channel-view.guild-channel-view.render-chat-area.unclaimed-account-barrier"
+						/>
 					);
+				}
 				case 'unverified_email':
 					return (
-						<UnverifiedEmailBarrier data-flx="channel.channel-view.guild-channel-view.render-chat-area.unverified-email-barrier" />
+						<AccountGateBarrier
+							gate={{action: TierGatedActions.GUILD_VERIFICATION, need: AccountVerificationNeeds.CONFIRM_EMAIL}}
+							data-flx="channel.channel-view.guild-channel-view.render-chat-area.unverified-email-barrier"
+						/>
 					);
 				case 'account_too_new':
 					return (
@@ -462,6 +470,29 @@ export const GuildChannelView = observer(({channelId, guildId}: GuildChannelView
 				</div>
 			);
 		}
+		let sidePanel: React.ReactNode = null;
+		if (isSearchPanelVisible) {
+			sidePanel = (
+				<div className={styles.searchPanel} data-flx="channel.channel-view.guild-channel-view.search-panel">
+					<ChannelSearchResults
+						channel={channel}
+						searchQuery={activeSearchQuery}
+						searchSegments={activeSearchSegments}
+						refreshKey={searchRefreshKey}
+						onClose={() => searchState.setIsSearchActive(false)}
+						data-flx="channel.channel-view.guild-channel-view.channel-search-results"
+					/>
+				</div>
+			);
+		} else if (shouldRenderMemberList) {
+			sidePanel = (
+				<ChannelMembers
+					channel={channel}
+					guild={guild}
+					data-flx="channel.channel-view.guild-channel-view.channel-members--2"
+				/>
+			);
+		}
 		return (
 			<ChannelViewScaffold
 				className={clsx(
@@ -518,7 +549,6 @@ export const GuildChannelView = observer(({channelId, guildId}: GuildChannelView
 								key={channel.id}
 								channel={channel}
 								allowAutoAck={!isVoiceTextCallExpanded}
-								onBottomBarVisibilityChange={onBottomBarVisibilityChange}
 								data-flx="channel.channel-view.guild-channel-view.messages"
 							/>
 						}
@@ -526,26 +556,7 @@ export const GuildChannelView = observer(({channelId, guildId}: GuildChannelView
 						data-flx="channel.channel-view.guild-channel-view.channel-chat-layout"
 					/>
 				}
-				sidePanel={
-					isSearchPanelVisible ? (
-						<div className={styles.searchPanel} data-flx="channel.channel-view.guild-channel-view.search-panel">
-							<ChannelSearchResults
-								channel={channel}
-								searchQuery={activeSearchQuery}
-								searchSegments={activeSearchSegments}
-								refreshKey={searchRefreshKey}
-								onClose={() => searchState.setIsSearchActive(false)}
-								data-flx="channel.channel-view.guild-channel-view.channel-search-results"
-							/>
-						</div>
-					) : shouldRenderMemberList ? (
-						<ChannelMembers
-							channel={channel}
-							guild={guild}
-							data-flx="channel.channel-view.guild-channel-view.channel-members--2"
-						/>
-					) : null
-				}
+				sidePanel={sidePanel}
 				showMemberListDivider={shouldRenderMemberList && !isSearchActive}
 				chatAreaInert={isVoiceTextCallExpanded}
 				data-flx="channel.channel-view.guild-channel-view.channel-grid-voice-call"
@@ -554,6 +565,33 @@ export const GuildChannelView = observer(({channelId, guildId}: GuildChannelView
 	}
 	const shouldRenderMemberList = isMemberListVisible && !isMobileLayout && !isSearchActive && !threadPanelOpen;
 	const isThreadChannel = channel.isThread();
+	let sidePanel: React.ReactNode = null;
+	if (isSearchPanelVisible) {
+		sidePanel = (
+			<div className={styles.searchPanel} data-flx="channel.channel-view.guild-channel-view.search-panel--2">
+				<ChannelSearchResults
+					channel={channel}
+					searchQuery={activeSearchQuery}
+					searchSegments={activeSearchSegments}
+					refreshKey={searchRefreshKey}
+					onClose={() => searchState.setIsSearchActive(false)}
+					data-flx="channel.channel-view.guild-channel-view.channel-search-results--2"
+				/>
+			</div>
+		);
+	} else if (shouldRenderMemberList && isThreadChannel) {
+		sidePanel = (
+			<ThreadMembersPanel thread={channel} data-flx="channel.channel-view.guild-channel-view.thread-members-panel" />
+		);
+	} else if (shouldRenderMemberList) {
+		sidePanel = (
+			<ChannelMembers
+				channel={channel}
+				guild={guild}
+				data-flx="channel.channel-view.guild-channel-view.channel-members"
+			/>
+		);
+	}
 	const scaffold = (
 		<ChannelViewScaffold
 			header={
@@ -573,7 +611,6 @@ export const GuildChannelView = observer(({channelId, guildId}: GuildChannelView
 						<Messages
 							key={channel.id}
 							channel={channel}
-							onBottomBarVisibilityChange={onBottomBarVisibilityChange}
 							data-flx="channel.channel-view.guild-channel-view.messages--2"
 						/>
 					}
@@ -590,33 +627,7 @@ export const GuildChannelView = observer(({channelId, guildId}: GuildChannelView
 					data-flx="channel.channel-view.guild-channel-view.channel-chat-layout--2"
 				/>
 			}
-			sidePanel={
-				isSearchPanelVisible ? (
-					<div className={styles.searchPanel} data-flx="channel.channel-view.guild-channel-view.search-panel--2">
-						<ChannelSearchResults
-							channel={channel}
-							searchQuery={activeSearchQuery}
-							searchSegments={activeSearchSegments}
-							refreshKey={searchRefreshKey}
-							onClose={() => searchState.setIsSearchActive(false)}
-							data-flx="channel.channel-view.guild-channel-view.channel-search-results--2"
-						/>
-					</div>
-				) : shouldRenderMemberList ? (
-					isThreadChannel ? (
-						<ThreadMembersPanel
-							thread={channel}
-							data-flx="channel.channel-view.guild-channel-view.thread-members-panel"
-						/>
-					) : (
-						<ChannelMembers
-							channel={channel}
-							guild={guild}
-							data-flx="channel.channel-view.guild-channel-view.channel-members"
-						/>
-					)
-				) : null
-			}
+			sidePanel={sidePanel}
 			showMemberListDivider={shouldRenderMemberList && !isSearchActive}
 			data-flx="channel.channel-view.guild-channel-view.channel-view-scaffold"
 		/>

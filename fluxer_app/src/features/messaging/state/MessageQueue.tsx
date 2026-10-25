@@ -4,6 +4,8 @@ import i18n from '@app/app/I18n';
 import {showDmActionErrorModal} from '@app/features/app/components/alerts/DmActionErrorModal';
 import {FeatureTemporarilyDisabledModal} from '@app/features/app/components/alerts/FeatureTemporarilyDisabledModal';
 import {Endpoints} from '@app/features/app/constants/Endpoints';
+import RuntimeConfig from '@app/features/app/state/RuntimeConfig';
+import {describeAccountTierBlock, promptForAccountTier} from '@app/features/auth/utils/AccountTierPrompt';
 import DeveloperOptions from '@app/features/devtools/state/DeveloperOptions';
 import {createSystemMessage} from '@app/features/devtools/utils/CommandUtils';
 import * as DraftCommands from '@app/features/messaging/commands/DraftCommands';
@@ -54,6 +56,7 @@ import * as ModalCommands from '@app/features/ui/commands/ModalCommands';
 import {modal} from '@app/features/ui/commands/ModalCommands';
 import {formatUserSettingsPath} from '@app/features/user/components/settings_utils/SettingsConstants';
 import PrivacyPreferences from '@app/features/user/state/PrivacyPreferences';
+import {accountGateReason} from '@app/features/user/utils/AccountGatePresentation';
 import {Queue} from '@app/lib/list/ListQueue';
 import {APIErrorCodes} from '@fluxer/constants/src/ApiErrorCodes';
 import type {
@@ -83,6 +86,11 @@ const YOUR_MESSAGE_COULD_NOT_BE_DELIVERED_BECAUSE_IT_DESCRIPTOR = msg({
 	message:
 		'Your message could not be delivered because it was flagged by our safety systems. If you believe this is a mistake, please contact support.',
 	comment: 'Label in the message queue state.',
+});
+const YOUR_MESSAGE_COULD_NOT_BE_DELIVERED_SELF_HOSTED_DESCRIPTOR = msg({
+	message:
+		'Your message could not be delivered because it was flagged by our safety systems. If you believe this is a mistake, please contact the administrators of this instance.',
+	comment: 'Message send error on a self-hosted instance when the safety system blocks the message.',
 });
 const logger = new Logger('MessageQueue');
 const DEFAULT_MAX_SIZE = 5;
@@ -119,23 +127,23 @@ interface SendMessagePayload extends BaseMessagePayload {
 	tts?: boolean;
 }
 
-export type MessageQueuePayload = SendMessagePayload;
+type MessageQueuePayload = SendMessagePayload;
 type MessageQueueCompletion<TResult> = {
 	retry: RetryError | null;
 	result?: TResult;
 	error?: unknown;
 };
 
-export interface RetryError {
+interface RetryError {
 	retryAfter?: number;
 }
 
-export interface ApiErrorBody {
+interface ApiErrorBody {
 	code?: number | string;
 	message?: string;
 }
 
-export interface PreparedSendAttachments {
+interface PreparedSendAttachments {
 	attachments?: Array<ApiAttachmentMetadata>;
 	files?: Array<File>;
 }
@@ -245,7 +253,7 @@ class PresignedUploadFallbackUnavailableError extends Error {
 	}
 }
 
-export class MessageQueue extends Queue<MessageQueuePayload, RestResponse<Message> | undefined> {
+class MessageQueue extends Queue<MessageQueuePayload, RestResponse<Message> | undefined> {
 	private readonly maxSize: number;
 	private readonly abortControllers = new Map<string, AbortController>();
 	private readonly textareaAttachmentUploads = new Map<number, TextareaAttachmentUpload>();
@@ -1056,6 +1064,12 @@ export class MessageQueue extends Queue<MessageQueuePayload, RestResponse<Messag
 			MessageCommands.createOptimistic(channelId, systemMessage.toJSON());
 			return;
 		}
+		const tierBlock = describeAccountTierBlock(error);
+		if (tierBlock !== null && promptForAccountTier(error)) {
+			const tierMessage = accountGateReason(i18n, tierBlock);
+			MessageCommands.createOptimistic(channelId, createSystemMessage(channelId, tierMessage).toJSON());
+			return;
+		}
 		const unclaimedErrorCode = getUnclaimedAccountErrorCode(error);
 		if (unclaimedErrorCode) {
 			const systemMessage = createSystemMessage(
@@ -1086,7 +1100,11 @@ export class MessageQueue extends Queue<MessageQueuePayload, RestResponse<Messag
 		if (getApiErrorBody(error)?.code === APIErrorCodes.CONTENT_BLOCKED) {
 			const systemMessage = createSystemMessage(
 				channelId,
-				i18n._(YOUR_MESSAGE_COULD_NOT_BE_DELIVERED_BECAUSE_IT_DESCRIPTOR),
+				i18n._(
+					RuntimeConfig.isSelfHosted()
+						? YOUR_MESSAGE_COULD_NOT_BE_DELIVERED_SELF_HOSTED_DESCRIPTOR
+						: YOUR_MESSAGE_COULD_NOT_BE_DELIVERED_BECAUSE_IT_DESCRIPTOR,
+				),
 			);
 			MessageCommands.createOptimistic(channelId, systemMessage.toJSON());
 			return;
@@ -1153,7 +1171,12 @@ export class MessageQueue extends Queue<MessageQueuePayload, RestResponse<Messag
 			);
 		} else if (error instanceof HttpError && isExplicitContentError(error)) {
 			ModalCommands.push(
-				modal(() => <MatureContentRejectedModal data-flx="messaging.message-queue.mature-content-rejected-modal" />),
+				modal(() => (
+					<MatureContentRejectedModal
+						channelId={channelId}
+						data-flx="messaging.message-queue.mature-content-rejected-modal"
+					/>
+				)),
 			);
 		} else if (error instanceof HttpError && isFileTooLargeError(error)) {
 			ModalCommands.push(

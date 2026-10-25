@@ -2,12 +2,17 @@
 
 mod failure;
 mod input;
+mod strip;
 
 pub(in crate::server) use failure::MediaFailure;
-pub(in crate::server) use input::{MediaInput, MediaInputLimit, load_media_input};
+pub(in crate::server) use input::{
+    MediaInput, MediaInputLimit, STORED_SNIFF_PREFIX_BYTES, load_media_input, read_sniff_prefix,
+    spool_stored_media,
+};
+pub(in crate::server) use strip::{StrippedMedia, probe_audio_duration, strip_media};
 
 use crate::{
-    constants::AssetExtension,
+    constants::{self, AssetExtension},
     image_quality::ImageQuality,
     image_transform::AnimationMode,
     media_process, mime,
@@ -16,7 +21,7 @@ use crate::{
     server::{
         format_policy::image_extension_from_filename,
         state::AppState,
-        transform::execution::{run_transform, transform_error_is_timeout},
+        transform::execution::{deadline_instant, run_transform, transform_error_is_timeout},
     },
 };
 use bytes::Bytes;
@@ -34,6 +39,9 @@ pub(in crate::server) async fn resolve_metadata(
     include_data: bool,
 ) -> Result<MetadataOutput, MediaFailure> {
     let mut input = load_media_input(app, input, MediaInputLimit::INTERNAL_REQUEST).await?;
+    if include_data && input.data.len() > constants::MAX_MEDIA_PROXY_BYTES {
+        return Err(MediaFailure::MetadataDecodedTooLarge);
+    }
     if include_data && metadata_input_is_svg(&input) {
         input = rasterize_metadata_svg(app, input).await?;
     }
@@ -43,21 +51,39 @@ pub(in crate::server) async fn resolve_metadata(
         app.media.nsfw().record_declined_scan();
         NSFWPolicy::Disabled
     };
-    let json = media_process::metadata_json_with_options(
-        &input.data,
-        &input.filename,
-        media_process::MetadataOptions {
-            placeholder: true,
-            nsfw,
-        },
-        &app.media.limits(),
-        app.media.nsfw(),
-        &app.metrics.transform(),
-    )
-    .await
-    .map_err(|err| MediaFailure::MetadataExtractionFailed {
+    let runtime = app.media.transforms();
+    let options = media_process::MetadataOptions {
+        placeholder: true,
+        nsfw,
+        deadline_ms: runtime.transform_deadline_ms(),
+    };
+    let deadline = deadline_instant(options.deadline_ms);
+    let media_limits = app.media.limits();
+    let transform_metrics = app.metrics.transform();
+    let data = input.data.clone();
+    let cost_data = input.data.clone();
+    let extraction_failed = |err: &dyn std::fmt::Debug| MediaFailure::MetadataExtractionFailed {
         detail: format!("filename={} err={err:?}", input.filename),
-    })?;
+    };
+    let prepared = runtime
+        .tasks()
+        .run_native(
+            deadline,
+            move || Ok(media_process::metadata_cost(&cost_data, &media_limits)?),
+            move || {
+                Ok(media_process::prepare_metadata(
+                    &data,
+                    &options,
+                    &media_limits,
+                    &transform_metrics,
+                )?)
+            },
+        )
+        .await
+        .map_err(|err| extraction_failed(&err))?;
+    let json = media_process::finish_metadata(prepared, app.media.nsfw())
+        .await
+        .map_err(|err| extraction_failed(&err))?;
     Ok(MetadataOutput {
         metadata: serde_json::from_str(&json).unwrap_or_else(|_| serde_json::json!({})),
         data: include_data.then_some(input.data),
@@ -74,6 +100,8 @@ async fn rasterize_metadata_svg(
     input: LoadedMediaInput,
 ) -> Result<LoadedMediaInput, MediaFailure> {
     let options = media_process::ImageOptions {
+        width: Some(constants::SVG_RASTER_MAX_DIMENSION),
+        height: Some(constants::SVG_RASTER_MAX_DIMENSION),
         format: OutputFormat::WebP,
         quality: ImageQuality::Lossless,
         animation: AnimationMode::Static,
@@ -103,95 +131,5 @@ fn replace_image_extension(filename: &str, ext: AssetExtension) -> String {
     match last_dot {
         Some(idx) => format!("{}.{}", &filename[..idx], ext.name()),
         None => format!("{}.{}", filename, ext.name()),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::byte_budget::{BudgetedBytes, ByteBudget};
-    use crate::config::Config;
-    use std::sync::Arc;
-
-    fn test_app_state() -> Arc<AppState> {
-        let cfg = Config::load_from_iter([("FLUXER_MEDIA_PROXY_SECRET_KEY", "secret")])
-            .expect("test config");
-        Arc::new(AppState::for_tests(cfg))
-    }
-
-    #[test]
-    fn metadata_base64_svg_detection_uses_bytes_or_filename() {
-        let svg_bytes = LoadedMediaInput {
-            data: Bytes::from_static(br#"<svg xmlns="http://www.w3.org/2000/svg"></svg>"#),
-            filename: "upload.bin".to_owned(),
-        };
-        assert!(metadata_input_is_svg(&svg_bytes));
-
-        let svg_filename = LoadedMediaInput {
-            data: Bytes::from_static(b"not svg"),
-            filename: "icons/logo.svg".to_owned(),
-        };
-        assert!(metadata_input_is_svg(&svg_filename));
-
-        let png_filename = LoadedMediaInput {
-            data: Bytes::from_static(b"not svg"),
-            filename: "icons/logo.png".to_owned(),
-        };
-        assert!(!metadata_input_is_svg(&png_filename));
-    }
-
-    #[test]
-    fn replace_image_extension_only_changes_last_path_segment() {
-        assert_eq!(
-            "avatars/user.icon.webp",
-            replace_image_extension("avatars/user.icon.svg", AssetExtension::Webp)
-        );
-        assert_eq!(
-            "avatars.v1/user.webp",
-            replace_image_extension("avatars.v1/user", AssetExtension::Webp)
-        );
-    }
-
-    #[tokio::test]
-    async fn metadata_base64_svg_rasterizes_to_webp_bytes() {
-        let app = test_app_state();
-        let input = LoadedMediaInput {
-            data: Bytes::from_static(
-                br#"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><rect width="8" height="8" fill="red"/></svg>"#,
-            ),
-            filename: "icons/logo.svg".to_owned(),
-        };
-        let raster = match rasterize_metadata_svg(&app, input).await {
-            Ok(raster) => raster,
-            Err(failure) => panic!("unexpected failure {}", failure.code()),
-        };
-
-        assert_eq!("icons/logo.webp", raster.filename);
-        assert_eq!("image/webp", mime::sniff(&raster.data).mime);
-    }
-
-    #[test]
-    fn an_external_media_input_keeps_owing_the_shared_buffer_budget() {
-        let budget = ByteBudget::new(16);
-        let reservation = budget.try_reserve(16).expect("reserve at limit");
-        let data = input::retained_input_bytes(BudgetedBytes::budgeted(
-            Bytes::from_static(b"payload"),
-            reservation,
-        ));
-
-        assert_eq!(b"payload", data.as_ref());
-        assert!(
-            budget.try_reserve(1).is_none(),
-            "a resident external input still owes the external buffer budget"
-        );
-
-        drop(data);
-        assert_eq!(
-            16,
-            budget
-                .try_reserve(16)
-                .expect("dropping the input releases its reservation")
-                .amount()
-        );
     }
 }

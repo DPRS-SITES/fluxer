@@ -50,6 +50,7 @@ import {handleRecentMentionDelete} from '@app/features/messaging/events/RecentMe
 import {handleSavedMessageCreate} from '@app/features/messaging/events/SavedMessageCreate';
 import {handleSavedMessageDelete} from '@app/features/messaging/events/SavedMessageDelete';
 import {handleTypingStart} from '@app/features/messaging/events/TypingStart';
+import {handleOperatorPassUpdate} from '@app/features/premium/events/OperatorPassUpdate';
 import {handlePresenceUpdate} from '@app/features/presence/events/PresenceUpdate';
 import {handlePresenceUpdateBulk} from '@app/features/presence/events/PresenceUpdateBulk';
 import {handleRelationshipAdd} from '@app/features/relationship/events/RelationshipAdd';
@@ -76,6 +77,7 @@ import {handleCallDelete} from '@app/features/voice/events/CallDelete';
 import {handleCallUpdate} from '@app/features/voice/events/CallUpdate';
 import {handleEntranceSoundPlay} from '@app/features/voice/events/EntranceSoundPlay';
 import {handleVoiceServerUpdate} from '@app/features/voice/events/VoiceServerUpdate';
+import {handleVoiceSignal} from '@app/features/voice/events/VoiceSignal';
 import {handleVoiceStateUpdate} from '@app/features/voice/events/VoiceStateUpdate';
 
 export interface GatewayGeoipPayload {
@@ -95,7 +97,7 @@ export interface GatewayHandlerContext {
 	markGuildSynced: (guildId: string) => void;
 }
 
-export type GatewayEventHandler = (data: unknown, context: GatewayHandlerContext) => void;
+type GatewayEventHandler = (data: unknown, context: GatewayHandlerContext) => void;
 export type GatewayHandlerRegistry = Map<string, GatewayEventHandler>;
 
 export function createHandlerRegistry(): GatewayHandlerRegistry {
@@ -107,6 +109,7 @@ export function createHandlerRegistry(): GatewayHandlerRegistry {
 	registry.set('USER_GUILD_SETTINGS_UPDATE', handleUserGuildSettingsUpdate as GatewayEventHandler);
 	registry.set('USER_PINNED_DMS_UPDATE', handleUserPinnedDmsUpdate as GatewayEventHandler);
 	registry.set('USER_NOTE_UPDATE', handleUserNoteUpdate as GatewayEventHandler);
+	registry.set('OPERATOR_PASS_UPDATE', handleOperatorPassUpdate as GatewayEventHandler);
 	registry.set('USER_CONNECTIONS_UPDATE', handleUserConnectionsUpdate as GatewayEventHandler);
 	registry.set('WEBAUTHN_CREDENTIALS_UPDATE', handleWebAuthnCredentialsUpdate as GatewayEventHandler);
 	registry.set('GUILD_CREATE', handleGuildCreate as GatewayEventHandler);
@@ -164,6 +167,7 @@ export function createHandlerRegistry(): GatewayHandlerRegistry {
 	registry.set('PRESENCE_UPDATE_BULK', handlePresenceUpdateBulk as GatewayEventHandler);
 	registry.set('VOICE_STATE_UPDATE', handleVoiceStateUpdate as GatewayEventHandler);
 	registry.set('VOICE_SERVER_UPDATE', handleVoiceServerUpdate as GatewayEventHandler);
+	registry.set('VOICE_SIGNAL', handleVoiceSignal as GatewayEventHandler);
 	registry.set('CALL_CREATE', handleCallCreate as GatewayEventHandler);
 	registry.set('CALL_UPDATE', handleCallUpdate as GatewayEventHandler);
 	registry.set('CALL_DELETE', handleCallDelete as GatewayEventHandler);

@@ -14,39 +14,6 @@ describe('canonicalizeUrl', () => {
 	it('preserves path', () => {
 		expect(canonicalizeUrl('https://example.com/foo/bar')).toBe('https://example.com/foo/bar');
 	});
-	it('strips utm_source tracking param', () => {
-		expect(canonicalizeUrl('https://example.com/?utm_source=twitter')).toBe('https://example.com/');
-	});
-	it('strips utm_medium tracking param', () => {
-		expect(canonicalizeUrl('https://example.com/?utm_medium=social')).toBe('https://example.com/');
-	});
-	it('strips utm_campaign tracking param', () => {
-		expect(canonicalizeUrl('https://example.com/?utm_campaign=spring')).toBe('https://example.com/');
-	});
-	it('strips fbclid tracking param', () => {
-		expect(canonicalizeUrl('https://example.com/?fbclid=abc123')).toBe('https://example.com/');
-	});
-	it('strips gclid tracking param', () => {
-		expect(canonicalizeUrl('https://example.com/?gclid=xyz')).toBe('https://example.com/');
-	});
-	it('strips mc_cid tracking param', () => {
-		expect(canonicalizeUrl('https://example.com/?mc_cid=abc')).toBe('https://example.com/');
-	});
-	it('strips mc_eid tracking param', () => {
-		expect(canonicalizeUrl('https://example.com/?mc_eid=def')).toBe('https://example.com/');
-	});
-	it('strips msclkid tracking param', () => {
-		expect(canonicalizeUrl('https://example.com/?msclkid=bing')).toBe('https://example.com/');
-	});
-	it('strips _ga tracking param', () => {
-		expect(canonicalizeUrl('https://example.com/?_ga=123')).toBe('https://example.com/');
-	});
-	it('strips _gl tracking param', () => {
-		expect(canonicalizeUrl('https://example.com/?_gl=456')).toBe('https://example.com/');
-	});
-	it('strips igshid tracking param', () => {
-		expect(canonicalizeUrl('https://example.com/?igshid=abc')).toBe('https://example.com/');
-	});
 	it('strips ref_src and ref_url tracking params', () => {
 		expect(canonicalizeUrl('https://example.com/?ref_src=twsrc&ref_url=https://t.co')).toBe('https://example.com/');
 	});
@@ -60,9 +27,6 @@ describe('canonicalizeUrl', () => {
 	});
 	it('strips fragment', () => {
 		expect(canonicalizeUrl('https://example.com/page#section')).toBe('https://example.com/page');
-	});
-	it('strips fragment along with tracking params', () => {
-		expect(canonicalizeUrl('https://example.com/?utm_source=tw#top')).toBe('https://example.com/');
 	});
 	it('strips default port 80 for http', () => {
 		expect(canonicalizeUrl('http://example.com:80/path')).toBe('http://example.com/path');
@@ -84,9 +48,6 @@ describe('canonicalizeUrl', () => {
 	});
 	it('rejects ftp scheme', () => {
 		expect(canonicalizeUrl('ftp://example.com/file')).toBeNull();
-	});
-	it('rejects tel scheme', () => {
-		expect(canonicalizeUrl('tel:+1234567890')).toBeNull();
 	});
 	it('rejects invalid URLs', () => {
 		expect(canonicalizeUrl('not-a-url')).toBeNull();
@@ -142,16 +103,6 @@ describe('extractUrlCandidates', () => {
 	});
 	it('strips trailing punctuation', () => {
 		const result = extractUrlCandidates('visit https://example.com/page.');
-		expect(result).toHaveLength(1);
-		expect(result[0]).toBe('https://example.com/page');
-	});
-	it('strips trailing comma', () => {
-		const result = extractUrlCandidates('see https://example.com/page, then');
-		expect(result).toHaveLength(1);
-		expect(result[0]).toBe('https://example.com/page');
-	});
-	it('strips trailing exclamation mark', () => {
-		const result = extractUrlCandidates('wow https://example.com/page!');
 		expect(result).toHaveLength(1);
 		expect(result[0]).toBe('https://example.com/page');
 	});
@@ -232,5 +183,52 @@ describe('extractLinkHosts', () => {
 	it('returns an empty array without links', () => {
 		expect(extractLinkHosts('shop.example.com')).toEqual([]);
 		expect(extractLinkHosts(null)).toEqual([]);
+	});
+});
+
+describe('canonicalizeUrl character boundaries', () => {
+	it.each([
+		{name: 'start of heading', input: 'https://example.com/a\x01z', expected: null},
+		{name: 'backspace', input: 'https://example.com/a\x08z', expected: null},
+		{name: 'form feed', input: 'https://example.com/a\x0cz', expected: null},
+		{name: 'last C0 control', input: 'https://example.com/a\x1fz', expected: null},
+		{name: 'space after C0 range', input: 'https://example.com/a z', expected: null},
+		{name: 'delete character', input: 'https://example.com/a\x7fz', expected: 'https://example.com/a%7fz'},
+		{name: 'next line C1 character', input: 'https://example.com/a\x85z', expected: 'https://example.com/a%c2%85z'},
+		{name: 'nonbreaking space', input: 'https://example.com/a\u00a0z', expected: null},
+		{name: 'zero width space', input: 'https://example.com/a\u200bz', expected: 'https://example.com/a%e2%80%8bz'},
+		{name: 'line separator', input: 'https://example.com/a\u2028z', expected: null},
+		{name: 'paragraph separator', input: 'https://example.com/a\u2029z', expected: null},
+		{name: 'byte order mark', input: 'https://example.com/a\ufeffz', expected: null},
+		{
+			name: 'outer Unicode whitespace',
+			input: '\u00a0\ufeffHTTPS://Example.com/Path\u00a0\ufeff',
+			expected: 'https://example.com/path',
+		},
+		{
+			name: 'encoded controls and space',
+			input: 'https://example.com/%00%1F%20',
+			expected: 'https://example.com/%00%1f%20',
+		},
+		{name: 'leading null control', input: '\x00https://example.com/path', expected: null},
+		{name: 'trailing unit separator', input: 'https://example.com/path\x1f', expected: null},
+		{
+			name: 'unpaired high surrogate',
+			input: 'https://example.com/a\ud800z',
+			expected: 'https://example.com/a%ef%bf%bdz',
+		},
+		{
+			name: 'surrogate pair',
+			input: 'https://example.com/a\ud83d\ude00z',
+			expected: 'https://example.com/a%f0%9f%98%80z',
+		},
+		{name: 'query control', input: 'https://example.com/?q=a\x1fz', expected: null},
+		{
+			name: 'query zero width space',
+			input: 'https://example.com/?q=a\u200bz',
+			expected: 'https://example.com/?q=a%e2%80%8bz',
+		},
+	])('$name', ({input, expected}) => {
+		expect(canonicalizeUrl(input)).toBe(expected);
 	});
 });

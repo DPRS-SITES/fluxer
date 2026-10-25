@@ -6,6 +6,7 @@ import {isSsoPendingContextKey, ssoPendingContextKey} from '@app/features/platfo
 import AppStorage, {flushAppStorageWrites} from '@app/features/platform/state/PersistentStorage';
 import {getProtectedSessionStorage} from '@app/features/platform/state/ProtectedWebStorage';
 import {Logger} from '@app/features/platform/utils/AppLogger';
+import {isRecord as isPlainRecord} from '@fluxer/record_utils/src/RecordGuards';
 
 const PENDING_SSO_CONTEXT_TTL_MS = 30 * 60 * 1000;
 const PENDING_SSO_CONTEXT_MAX_ENTRIES = 16;
@@ -13,7 +14,7 @@ const PENDING_SSO_CONTEXT_JSON_MAX_LENGTH = 262_144;
 const OAUTH_STATE_MAX_LENGTH = 512;
 const STORED_SSO_PENDING_CONTEXT_KEYS: ReadonlyArray<string> = ['createdAtMs', 'expiresAtMs', 'instance', 'redirectTo'];
 
-export const LEGACY_SSO_REDIRECT_TO_STORAGE_KEY = 'fluxer:sso:redirect_to';
+const LEGACY_SSO_REDIRECT_TO_STORAGE_KEY = 'fluxer:sso:redirect_to';
 
 const logger = new Logger('SsoPendingContext');
 
@@ -44,7 +45,7 @@ function readLegacySsoRedirectTo(): string | null {
 	}
 }
 
-export function clearLegacySsoRedirectTo(): void {
+function clearLegacySsoRedirectTo(): void {
 	const storage = getProtectedSessionStorage();
 	if (storage === null) {
 		return;
@@ -67,10 +68,6 @@ export function isValidOAuthState(state: string): boolean {
 		}
 	}
 	return true;
-}
-
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value != null && !Array.isArray(value);
 }
 
 function isExactRecord(value: unknown, expectedKeys: ReadonlyArray<string>): value is Record<string, unknown> {

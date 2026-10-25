@@ -4,17 +4,13 @@ import styles from '@app/features/app/components/dialogs/components/ClientInfo.m
 import Config from '@app/features/app/config/Config';
 import DeveloperMode from '@app/features/devtools/state/DeveloperMode';
 import {UNKNOWN_DESCRIPTOR} from '@app/features/i18n/utils/CommonMessageDescriptors';
-import {
-	formatClientBuildInfo,
-	formatReleaseChannelLabel,
-	getClientInfo,
-	getClientInfoSync,
-} from '@app/features/platform/utils/ClientInfo';
+import {formatClientBuildInfo, getClientInfo, getClientInfoSync} from '@app/features/platform/utils/ClientInfo';
 import * as TextCopyCommands from '@app/features/ui/commands/TextCopyCommands';
 import * as ToastCommands from '@app/features/ui/commands/ToastCommands';
 import FocusRing from '@app/features/ui/focus_ring/FocusRing';
 import {Tooltip} from '@app/features/ui/tooltip/Tooltip';
 import {isDesktop} from '@app/features/ui/utils/NativeUtils';
+import {formatReleaseChannelLabel} from '@fluxer/desktop_ipc/src/DesktopLabels';
 import {msg} from '@lingui/core/macro';
 import {useLingui} from '@lingui/react/macro';
 import {observer} from 'mobx-react-lite';
@@ -90,14 +86,14 @@ export const ClientInfo = observer(() => {
 				desktopVersion: desktopVersionLabel,
 			})
 		: null;
-	const buildLabel = desktopBuildLabel
-		? primaryDesktopReleaseChannel === releaseChannel
-			? i18n._(WEB_BUILD_SECONDARY_DESCRIPTOR, {buildVersion})
-			: i18n._(WEB_BUILD_SECONDARY_WITH_CHANNEL_DESCRIPTOR, {releaseChannel, buildVersion})
-		: i18n._(WEB_BUILD_DESCRIPTOR, {
-				releaseChannel,
-				buildVersion,
-			});
+	let buildLabel: string;
+	if (!desktopBuildLabel) {
+		buildLabel = i18n._(WEB_BUILD_DESCRIPTOR, {releaseChannel, buildVersion});
+	} else if (primaryDesktopReleaseChannel === releaseChannel) {
+		buildLabel = i18n._(WEB_BUILD_SECONDARY_DESCRIPTOR, {buildVersion});
+	} else {
+		buildLabel = i18n._(WEB_BUILD_SECONDARY_WITH_CHANNEL_DESCRIPTOR, {releaseChannel, buildVersion});
+	}
 	const onClick = () => {
 		const justUnlocked = DeveloperMode.registerBuildTap();
 		if (justUnlocked) {

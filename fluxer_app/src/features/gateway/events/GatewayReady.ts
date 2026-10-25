@@ -2,8 +2,7 @@
 
 import {startDomainMigrationTrigger} from '@app/features/app/domain_migration/DomainMigrationTrigger';
 import Initialization from '@app/features/app/state/Initialization';
-import accountStorage from '@app/features/auth/state/AccountStorage';
-import Accounts from '@app/features/auth/state/Accounts';
+import {syncAccountUserData} from '@app/features/auth/state/AccountUserDataSync';
 import Authentication from '@app/features/auth/state/Authentication';
 import AuthSession from '@app/features/auth/state/AuthSession';
 import ChannelPins from '@app/features/channel/state/ChannelPins';
@@ -77,21 +76,20 @@ export interface ReadyPayload {
 	user_settings?: UserSettingsResponse;
 	user_guild_settings?: Array<GatewayGuildSettings>;
 	read_states?: Array<GatewayReadState>;
-	read_state_proto?: string;
 	presences?: Array<PresenceRecord>;
 	auth_session_id_hash?: string;
 	rtc_regions?: Array<RtcRegionResponse>;
 	webauthn_credentials?: Array<WebAuthnCredential>;
 }
 
-export class GatewayReadyIdentityMismatchError extends Error {
+class GatewayReadyIdentityMismatchError extends Error {
 	constructor(expectedUserId: string, receivedUserId: string) {
 		super(`READY user mismatch: expected ${expectedUserId}, received ${receivedUserId}`);
 		this.name = 'GatewayReadyIdentityMismatchError';
 	}
 }
 
-export class GatewayReadyAccountContextMissingError extends Error {
+class GatewayReadyAccountContextMissingError extends Error {
 	constructor() {
 		super('Gateway READY has no account context');
 		this.name = 'GatewayReadyAccountContextMissingError';
@@ -152,18 +150,7 @@ function handleReadyInternal(data: ReadyPayload, context: GatewayHandlerContext,
 	RtcRegions.setRegions(data.rtc_regions ?? []);
 	Users.handleGatewayReady(accountKey, data.user);
 	Users.cacheUsers(data.users ?? []);
-	const user = data.user;
-	const userData = {
-		username: user.username,
-		discriminator: user.discriminator,
-		globalName: user.global_name,
-		email: user.email ?? undefined,
-		avatar: user.avatar ?? undefined,
-	};
-	void accountStorage.updateAccountUserData(accountKey, userData).catch((error) => {
-		logger.warn(`Failed to persist account user data for ${accountKey}`, error);
-	});
-	Accounts.updateAccountUserData(accountKey, userData);
+	syncAccountUserData(accountKey, data.user);
 	Authentication.handleGatewayReady({user: data.user});
 	Guilds.handleGatewayReady({guilds});
 	UserSettings.handleGatewayReady(data.user_settings);
@@ -192,7 +179,6 @@ function handleReadyInternal(data: ReadyPayload, context: GatewayHandlerContext,
 	WebAuthnCredentials.handleGatewayReady(data.webauthn_credentials);
 	ReadStates.handleGatewayReady({
 		readState: data.read_states ?? [],
-		readStateProto: data.read_state_proto,
 		channels,
 	});
 	GuildReadState.handleGatewayReady();

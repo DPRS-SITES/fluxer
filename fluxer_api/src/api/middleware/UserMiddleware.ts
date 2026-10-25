@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import {isOperatorPath, isOperatorRequest} from '@app/api/admin/operator/OperatorRequests';
 import * as AuthSession from '@app/api/auth/AuthSession';
+import {SYSTEM_USER_ID} from '@app/api/constants/Core';
 import {Logger} from '@app/api/Logger';
 import {hashRequestToken, recordAuthFailure} from '@app/api/middleware/RequestErrorTelemetry';
 import type {User} from '@app/api/models/User';
@@ -85,12 +87,22 @@ export const UserMiddleware = createMiddleware<HonoEnv>(async (ctx, next) => {
 	const rawAuthHeader = ctx.req.header('Authorization');
 	const parsed = parseAuthHeader(rawAuthHeader);
 	const resolvedClientIp = getRequestClientIp(ctx);
-	ctx.set('oauthBearerToken', undefined);
 	ctx.set('oauthBearerApplicationId', undefined);
 	ctx.set('oauthBearerAllowed', false);
 	ctx.set('oauthBearerScopes', undefined);
-	ctx.set('oauthBearerUserId', undefined);
 	ctx.set('authToken', undefined);
+	ctx.set('adminApiKeyId', null);
+	if (isOperatorRequest(ctx.req.raw)) {
+		if (isOperatorPath(path)) {
+			const operator = await ctx.get('apiContext').services.users.findUnique(SYSTEM_USER_ID);
+			if (operator) {
+				ctx.set('authTokenType', 'operator');
+				setUserInContext(ctx, operator, false);
+			}
+		}
+		await next();
+		return;
+	}
 	if (!parsed) {
 		if (rawAuthHeader) {
 			recordAuthFailure(resolvedClientIp, hashRequestToken(rawAuthHeader));
@@ -127,14 +139,10 @@ export const UserMiddleware = createMiddleware<HonoEnv>(async (ctx, next) => {
 	if (type === 'bearer') {
 		const oauth2TokenRepository = ctx.get('oauth2TokenRepository');
 		const accessToken = await oauth2TokenRepository.getAccessToken(token);
-		const tokenUser = accessToken?.userId
-			? await ctx.get('apiContext').services.users.findUnique(accessToken.userId)
-			: null;
+		const tokenUser = accessToken ? await ctx.get('apiContext').services.users.findUnique(accessToken.userId) : null;
 		if (accessToken && !(tokenUser && isSignInRefused(tokenUser))) {
-			ctx.set('oauthBearerToken', token);
 			ctx.set('oauthBearerApplicationId', accessToken.applicationId);
 			ctx.set('oauthBearerScopes', accessToken.scope);
-			ctx.set('oauthBearerUserId', accessToken.userId ?? undefined);
 			ctx.set('authTokenType', 'bearer');
 			if (tokenUser) {
 				setUserInContext(ctx, tokenUser, false);
@@ -173,8 +181,8 @@ export const UserMiddleware = createMiddleware<HonoEnv>(async (ctx, next) => {
 			const user = await ctx.get('apiContext').services.users.findUnique(apiKey.createdById);
 			if (user) {
 				ctx.set('authTokenType', 'admin_api_key');
-				ctx.set('adminApiKey', apiKey);
 				ctx.set('adminApiKeyAcls', apiKey.acls);
+				ctx.set('adminApiKeyId', apiKey.keyId);
 				setUserInContext(ctx, user, false);
 			}
 		} else {

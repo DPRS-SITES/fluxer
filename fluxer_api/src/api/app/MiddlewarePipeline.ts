@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import type {ILogger} from '@app/api/ILogger';
 import {ActivityContextMiddleware} from '@app/api/infrastructure/activity/ActivityMeta';
 import {AuditLogMiddleware} from '@app/api/middleware/AuditLogMiddleware';
 import {ClientFeaturesMiddleware} from '@app/api/middleware/ClientFeaturesMiddleware';
 import {ConcurrencyLimitMiddleware} from '@app/api/middleware/ConcurrencyLimitMiddleware';
 import ContentFilterMiddleware from '@app/api/middleware/ContentFilterMiddleware';
+import {DateOfBirthGateMiddleware} from '@app/api/middleware/DateOfBirthGateMiddleware';
 import {GuildAvailabilityMiddleware} from '@app/api/middleware/GuildAvailabilityMiddleware';
+import {GuildVisitorRequestContextMiddleware} from '@app/api/middleware/GuildVisitorRequestContextMiddleware';
 import {IpBanMiddleware} from '@app/api/middleware/IpBanMiddleware';
 import {LocaleMiddleware} from '@app/api/middleware/LocaleMiddleware';
 import {RequestCacheMiddleware} from '@app/api/middleware/RequestCacheMiddleware';
@@ -16,15 +17,18 @@ import {ServiceMiddleware} from '@app/api/middleware/ServiceMiddleware';
 import {TrustedClientIpHeaderMiddleware} from '@app/api/middleware/TrustedClientIpHeaderMiddleware';
 import {UserMiddleware} from '@app/api/middleware/UserMiddleware';
 import type {HonoApp} from '@app/api/types/HonoEnv';
+import {PeerAddressMiddleware} from '@app/api/utils/RequestClientIp';
+import {embeddedWorkerStalledComponents} from '@app/api/worker/EmbeddedWorker';
 import {Headers as HttpHeaders} from '@fluxer/constants/src/Headers';
 import {InvalidApiOriginError} from '@fluxer/errors/src/domains/core/InvalidApiOriginError';
 import {cors} from '@fluxer/hono/src/middleware/Cors';
 import {applyMiddlewareStack} from '@fluxer/hono/src/middleware/MiddlewareStack';
 import {createInfoRequestLogger, requestLogger} from '@fluxer/hono/src/middleware/RequestLogger';
 import {resolveClientIpHeaderName} from '@fluxer/ip_utils/src/ClientIp';
+import type {LoggerInterface} from '@fluxer/logger/src/LoggerInterface';
 
 interface MiddlewarePipelineOptions {
-	logger: ILogger;
+	logger: LoggerInterface;
 	nodeEnv: string;
 	corsOrigins: Array<string>;
 	trustClientIpHeader: boolean;
@@ -35,6 +39,7 @@ interface MiddlewarePipelineOptions {
 export function configureMiddleware(routes: HonoApp, options: MiddlewarePipelineOptions): void {
 	const {logger, nodeEnv, corsOrigins, trustClientIpHeader, clientIpHeaderName, maxInflightRequests} = options;
 	const resolvedHeader = resolveClientIpHeaderName(clientIpHeaderName);
+	routes.use(PeerAddressMiddleware);
 	routes.use('/webhooks/:webhook_id/:token', cors({origins: '*'}));
 	routes.use('/webhooks/:webhook_id/:token/messages/:message_id', cors({origins: '*'}));
 	routes.use(
@@ -65,6 +70,7 @@ export function configureMiddleware(routes: HonoApp, options: MiddlewarePipeline
 				HttpHeaders.X_AUDIT_LOG_REASON,
 				HttpHeaders.X_CAPTCHA_ID,
 				HttpHeaders.X_CAPTCHA_TOKEN,
+				HttpHeaders.X_FLUXER_CAPABILITIES,
 				HttpHeaders.X_FLUXER_CLIENT_INSTALLATION_ID,
 				HttpHeaders.X_FLUXER_FEATURES,
 				HttpHeaders.X_FLUXER_PLATFORM,
@@ -72,11 +78,11 @@ export function configureMiddleware(routes: HonoApp, options: MiddlewarePipeline
 			],
 			exposedHeaders: [HttpHeaders.X_FLUXER_VERSION, HttpHeaders.ETAG],
 		},
-		skipLogger: true,
-		skipErrorHandler: true,
 	});
 	routes.use(ConcurrencyLimitMiddleware({maxInflightRequests}));
-	routes.get('/_health', async (ctx) => ctx.text('OK'));
+	routes.get('/_health', async (ctx) =>
+		embeddedWorkerStalledComponents().length > 0 ? ctx.text('Worker stalled', 503) : ctx.text('OK'),
+	);
 	routes.use(IpBanMiddleware);
 	routes.use(
 		requestLogger({
@@ -114,6 +120,8 @@ export function configureMiddleware(routes: HonoApp, options: MiddlewarePipeline
 	routes.use(ActivityContextMiddleware);
 	routes.use(ServiceMiddleware);
 	routes.use(UserMiddleware);
+	routes.use(DateOfBirthGateMiddleware);
+	routes.use(GuildVisitorRequestContextMiddleware);
 	routes.use(ContentFilterMiddleware);
 	routes.use(GuildAvailabilityMiddleware);
 	routes.use(LocaleMiddleware);

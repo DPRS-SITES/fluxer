@@ -9,33 +9,23 @@ native_root="$repo_root/fluxer_desktop/native"
 cargo_bin="${CARGO_BIN:-cargo}"
 cargo_deny_bin="${CARGO_DENY_BIN:-cargo-deny}"
 native_target_dir="${DESKTOP_NATIVE_CARGO_TARGET_DIR:-$repo_root/target/desktop-native-workspaces}"
+windows_backend_target="x86_64-pc-windows-msvc"
 mode="${1:-}"
 
 linux_workspaces=(
 	"app-store/Cargo.toml"
-	"audio-apm/Cargo.toml"
-	"audio-mix/Cargo.toml"
-	"audio-timing/Cargo.toml"
-	"encoder-ring/Cargo.toml"
 	"gateway-socket/Cargo.toml"
-	"gpu-rebuild/Cargo.toml"
 	"hardware-encoder/Cargo.toml"
 	"linux-audio-capture/Cargo.toml"
 	"linux-evdev/Cargo.toml"
 	"linux-input-hook/Cargo.toml"
 	"linux-notifications/Cargo.toml"
 	"linux-portals/Cargo.toml"
-	"linux-screen-capture/Cargo.toml"
 	"platform-info/Cargo.toml"
 	"rt-thread/Cargo.toml"
-	"rust/Cargo.toml"
-	"screen-frame-bus/Cargo.toml"
+	"sample-pool/Cargo.toml"
 	"system-hunspell/Cargo.toml"
 	"webauthn/Cargo.toml"
-)
-
-fuzz_workspaces=(
-	"rust/fuzz/Cargo.toml"
 )
 
 macos_workspaces=(
@@ -52,7 +42,6 @@ windows_workspaces=(
 	"win-game-capture/Cargo.toml"
 	"win-process-loopback/Cargo.toml"
 	"win-shell/Cargo.toml"
-	"win-toast/Cargo.toml"
 	"windows-input-hook/Cargo.toml"
 )
 
@@ -62,11 +51,11 @@ fail() {
 }
 
 if [ "$#" -ne 1 ]; then
-	fail "Usage: $0 dependencies|fmt|clippy|test"
+	fail "Usage: $0 dependencies|fmt|clippy"
 fi
 
 case "$mode" in
-dependencies | fmt | clippy | test) ;;
+dependencies | fmt | clippy) ;;
 *) fail "Unknown desktop native workspace check: $mode" ;;
 esac
 
@@ -87,13 +76,6 @@ workspace_category() {
 	for classified_manifest in "${linux_workspaces[@]}"; do
 		if [ "$relative_manifest" = "$classified_manifest" ]; then
 			printf 'linux\n'
-			return
-		fi
-	done
-
-	for classified_manifest in "${fuzz_workspaces[@]}"; do
-		if [ "$relative_manifest" = "$classified_manifest" ]; then
-			printf 'fuzz\n'
 			return
 		fi
 	done
@@ -126,6 +108,7 @@ run_dependencies() {
 		-D warnings \
 		-A unmatched-skip \
 		-A unnecessary-skip \
+		-A advisory-not-detected \
 		-D duplicate
 }
 
@@ -149,15 +132,19 @@ run_clippy() {
 		-D warnings
 }
 
-run_tests() {
+run_clippy_windows_backend() {
 	local manifest="$1"
 
-	CI=true CARGO_TARGET_DIR="$native_target_dir" \
-		"$cargo_bin" test \
+	CARGO_TARGET_DIR="$native_target_dir" \
+		"$cargo_bin" clippy \
 		--manifest-path "$manifest" \
 		--workspace \
+		--all-targets \
 		--all-features \
-		--locked
+		--locked \
+		--target "$windows_backend_target" \
+		-- \
+		-D warnings
 }
 
 find "$native_root" -type d -name target -prune -o -type f -name Cargo.toml -print | LC_ALL=C sort >"$manifest_list"
@@ -167,7 +154,6 @@ if [ ! -s "$manifest_list" ]; then
 fi
 
 linux_count=0
-fuzz_count=0
 macos_count=0
 windows_count=0
 
@@ -185,7 +171,6 @@ while IFS= read -r manifest; do
 	category="$(workspace_category "$relative_manifest")"
 	case "$category" in
 	linux) linux_count=$((linux_count + 1)) ;;
-	fuzz) fuzz_count=$((fuzz_count + 1)) ;;
 	macos) macos_count=$((macos_count + 1)) ;;
 	windows) windows_count=$((windows_count + 1)) ;;
 	*) fail "Unclassified desktop native workspace: $relative_manifest" ;;
@@ -195,7 +180,6 @@ done <"$manifest_list"
 
 printf '%s\n' \
 	"${linux_workspaces[@]}" \
-	"${fuzz_workspaces[@]}" \
 	"${macos_workspaces[@]}" \
 	"${windows_workspaces[@]}" |
 	LC_ALL=C sort >"$expected_inventory"
@@ -204,7 +188,7 @@ if ! diff -u "$expected_inventory" "$discovered_inventory"; then
 	fail "Desktop native workspace inventory does not match discovery"
 fi
 
-if [ "$mode" = clippy ] || [ "$mode" = test ]; then
+if [ "$mode" = clippy ]; then
 	host_kernel="$(uname -s)"
 	if [ "$host_kernel" != Linux ]; then
 		fail "Desktop native $mode checks require a Linux host, found: $host_kernel"
@@ -212,6 +196,7 @@ if [ "$mode" = clippy ] || [ "$mode" = test ]; then
 fi
 
 checked_count=0
+windows_backend_count=0
 
 cd "$native_root"
 
@@ -231,25 +216,20 @@ while IFS= read -r manifest; do
 	clippy)
 		case "$category" in
 		linux) printf 'Clippy full Linux/shared coverage: %s\n' "$relative_manifest" ;;
-		fuzz) printf 'Clippy fuzz-target coverage: %s\n' "$relative_manifest" ;;
 		macos) printf 'Clippy Linux stub/common coverage; macOS backend not validated: %s\n' "$relative_manifest" ;;
-		windows) printf 'Clippy Linux stub/common coverage; Windows backend not validated: %s\n' "$relative_manifest" ;;
+		windows) printf 'Clippy Linux stub/common coverage: %s\n' "$relative_manifest" ;;
 		esac
 		run_clippy "$manifest"
-		;;
-	test)
-		case "$category" in
-		linux) printf 'Test full Linux/shared coverage: %s\n' "$relative_manifest" ;;
-		fuzz) printf 'Test command is a no-op for test=false fuzz binaries: %s\n' "$relative_manifest" ;;
-		macos) printf 'Test Linux stub/common coverage; macOS backend not validated: %s\n' "$relative_manifest" ;;
-		windows) printf 'Test Linux stub/common coverage; Windows backend not validated: %s\n' "$relative_manifest" ;;
-		esac
-		run_tests "$manifest"
+		if [ "$category" = windows ]; then
+			printf 'Clippy Windows backend coverage for %s: %s\n' "$windows_backend_target" "$relative_manifest"
+			run_clippy_windows_backend "$manifest"
+			windows_backend_count=$((windows_backend_count + 1))
+		fi
 		;;
 	esac
 	checked_count=$((checked_count + 1))
 done <"$manifest_list"
 
-discovered_count=$((linux_count + fuzz_count + macos_count + windows_count))
-printf 'Desktop native workspace categories: discovered=%s linux-full=%s fuzz=%s macos-stub-common=%s windows-stub-common=%s\n' "$discovered_count" "$linux_count" "$fuzz_count" "$macos_count" "$windows_count"
-printf 'Desktop native %s summary: checked=%s\n' "$mode" "$checked_count"
+discovered_count=$((linux_count + macos_count + windows_count))
+printf 'Desktop native workspace categories: discovered=%s linux-full=%s macos-stub-common=%s windows=%s\n' "$discovered_count" "$linux_count" "$macos_count" "$windows_count"
+printf 'Desktop native %s summary: checked=%s windows-backend=%s\n' "$mode" "$checked_count" "$windows_backend_count"

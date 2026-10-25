@@ -7,26 +7,43 @@ import bulkDeleteMessagesForUsers from '@app/api/worker/tasks/admin_bulk/BulkDel
 import bulkScheduleUserDeletion from '@app/api/worker/tasks/admin_bulk/BulkScheduleUserDeletion';
 import bulkUpdateGuildFeatures from '@app/api/worker/tasks/admin_bulk/BulkUpdateGuildFeatures';
 import bulkUpdateUserFlags from '@app/api/worker/tasks/admin_bulk/BulkUpdateUserFlags';
+import backfillPasskeyTrait from '@app/api/worker/tasks/BackfillPasskeyTrait';
+import backfillUserAclIndex from '@app/api/worker/tasks/BackfillUserAclIndex';
 import batchGuildAuditLogMessageDeletes from '@app/api/worker/tasks/BatchGuildAuditLogMessageDeletes';
 import bulkDeleteSelfMessagesImmediate from '@app/api/worker/tasks/BulkDeleteSelfMessagesImmediate';
 import bulkDeleteUserMessages from '@app/api/worker/tasks/BulkDeleteUserMessages';
-import bulkDeleteUserMessagesScoped from '@app/api/worker/tasks/BulkDeleteUserMessagesScoped';
+import clearAuthenticatedReporterEmails from '@app/api/worker/tasks/ClearAuthenticatedReporterEmails';
+import closePaymentDisputeAccounts from '@app/api/worker/tasks/ClosePaymentDisputeAccounts';
 import crosspostMessage from '@app/api/worker/tasks/CrosspostMessage';
 import crosspostMessageChunk from '@app/api/worker/tasks/CrosspostMessageChunk';
 import deleteUserMessagesInGuildByTime from '@app/api/worker/tasks/DeleteUserMessagesInGuildByTime';
 import drainActivitySpool from '@app/api/worker/tasks/DrainActivitySpool';
 import expireAttachments from '@app/api/worker/tasks/ExpireAttachments';
+import expireReportSnapshots from '@app/api/worker/tasks/ExpireReportSnapshots';
 import expireStaleJobs from '@app/api/worker/tasks/ExpireStaleJobs';
 import extractEmbeds from '@app/api/worker/tasks/ExtractEmbeds';
-import finalizeNcmecAttachmentReport from '@app/api/worker/tasks/FinalizeNcmecAttachmentReport';
 import flushUserActivityBuffer from '@app/api/worker/tasks/FlushUserActivityBuffer';
+import guildProcessDeletion from '@app/api/worker/tasks/GuildProcessDeletion';
+import {
+	endGuildVisitsForCodeTask,
+	endUnassignedGuildVisitsTask,
+	pruneGuildVisitsTask,
+} from '@app/api/worker/tasks/GuildVisitTasks';
 import handleMentionChunk from '@app/api/worker/tasks/HandleMentionChunk';
 import handleMentions from '@app/api/worker/tasks/HandleMentions';
 import harvestGuildData from '@app/api/worker/tasks/HarvestGuildData';
 import harvestUserData from '@app/api/worker/tasks/HarvestUserData';
 import indexChannelMessages from '@app/api/worker/tasks/IndexChannelMessages';
 import indexGuildMembers from '@app/api/worker/tasks/IndexGuildMembers';
+import joinSingleCommunityMembers from '@app/api/worker/tasks/JoinSingleCommunityMembers';
+import liftExpiredGuildInvitePauses from '@app/api/worker/tasks/LiftExpiredGuildInvitePauses';
 import messageShred from '@app/api/worker/tasks/MessageShred';
+import notifyRegistrationApprovers from '@app/api/worker/tasks/NotifyRegistrationApprovers';
+import operatorPassOfferCompletion from '@app/api/worker/tasks/OperatorPassOfferCompletion';
+import operatorPassRemovalExpiry from '@app/api/worker/tasks/OperatorPassRemovalExpiry';
+import operatorPassSaleBroadcast from '@app/api/worker/tasks/OperatorPassSaleBroadcast';
+import operatorPassWaitlistCleanup from '@app/api/worker/tasks/OperatorPassWaitlistCleanup';
+import operatorPassWallRetention from '@app/api/worker/tasks/OperatorPassWallRetention';
 import pollAppStoreNotificationHistory from '@app/api/worker/tasks/PollAppStoreNotificationHistory';
 import pollGooglePlayVoidedPurchases from '@app/api/worker/tasks/PollGooglePlayVoidedPurchases';
 import processAppStoreNotification from '@app/api/worker/tasks/ProcessAppStoreNotification';
@@ -40,6 +57,7 @@ import processPremiumStateReconciliationQueue from '@app/api/worker/tasks/Proces
 import processStorePurchaseRefreshQueue from '@app/api/worker/tasks/ProcessStorePurchaseRefreshQueue';
 import processStripeWebhook from '@app/api/worker/tasks/ProcessStripeWebhook';
 import prunePostgresKvTtl from '@app/api/worker/tasks/PrunePostgresKvTtl';
+import reconcileAttachmentDecay from '@app/api/worker/tasks/ReconcileAttachmentDecay';
 import reconcileUserPayments from '@app/api/worker/tasks/ReconcileUserPayments';
 import refreshSearchIndex from '@app/api/worker/tasks/RefreshSearchIndex';
 import refreshStorePurchase from '@app/api/worker/tasks/RefreshStorePurchase';
@@ -55,7 +73,6 @@ import syncUrlBlocklists from '@app/api/worker/tasks/SyncUrlBlocklists';
 import {
 	archiveInactiveThreads,
 	deleteChannelThreads,
-	rebuildThreadAutoArchiveQueue,
 	removeThreadMembershipsForGuildMember,
 	repairThreadIndexes,
 } from '@app/api/worker/tasks/ThreadMaintenanceTasks';
@@ -69,36 +86,49 @@ export const workerTasks: Record<WorkerTaskName, WorkerTaskHandler> = {
 	applicationProcessDeletion,
 	archiveInactiveThreads,
 	deleteChannelThreads,
-	rebuildThreadAutoArchiveQueue,
 	removeThreadMembershipsForGuildMember,
 	repairThreadIndexes,
 	syncThreadSearchDocument,
 	backfillThreadSearch,
+	backfillPasskeyTrait,
+	backfillUserAclIndex,
 	batchGuildAuditLogMessageDeletes,
 	bulkAddGuildMembers: bulkAddGuildMembers,
 	bulkBanFileShas: bulkBanFileShas,
 	bulkDeleteMessagesForUsers: bulkDeleteMessagesForUsers,
 	bulkDeleteSelfMessagesImmediate,
 	bulkDeleteUserMessages,
-	bulkDeleteUserMessagesScoped,
 	bulkScheduleUserDeletion: bulkScheduleUserDeletion,
 	bulkUpdateGuildFeatures: bulkUpdateGuildFeatures,
 	bulkUpdateUserFlags: bulkUpdateUserFlags,
+	clearAuthenticatedReporterEmails,
+	closePaymentDisputeAccounts,
 	crosspostMessage,
 	crosspostMessageChunk,
 	deleteUserMessagesInGuildByTime,
 	drainActivitySpool,
+	endGuildVisitsForCode: endGuildVisitsForCodeTask,
+	endUnassignedGuildVisits: endUnassignedGuildVisitsTask,
 	expireAttachments,
+	expireReportSnapshots,
 	expireStaleJobs,
 	extractEmbeds,
-	finalizeNcmecAttachmentReport,
+	guildProcessDeletion,
 	handleMentions,
 	handleMentionChunk,
 	harvestGuildData,
 	harvestUserData,
 	indexChannelMessages,
 	indexGuildMembers,
+	joinSingleCommunityMembers,
+	liftExpiredGuildInvitePauses,
 	messageShred,
+	notifyRegistrationApprovers,
+	operatorPassOfferCompletion,
+	operatorPassRemovalExpiry,
+	operatorPassWallRetention,
+	operatorPassSaleBroadcast,
+	operatorPassWaitlistCleanup,
 	processAssetDeletionQueue,
 	processCachePurgeQueue,
 	processStripeWebhook,
@@ -106,6 +136,7 @@ export const workerTasks: Record<WorkerTaskName, WorkerTaskHandler> = {
 	processInactivityDeletions,
 	processPendingBulkMessageDeletions,
 	processPremiumStateReconciliationQueue,
+	reconcileAttachmentDecay,
 	reconcileUserPayments,
 	processAppStoreNotification,
 	processGooglePlayNotification,
@@ -114,6 +145,7 @@ export const workerTasks: Record<WorkerTaskName, WorkerTaskHandler> = {
 	pollGooglePlayVoidedPurchases,
 	pollAppStoreNotificationHistory,
 	prunePostgresKvTtl,
+	pruneGuildVisits: pruneGuildVisitsTask,
 	refreshSearchIndex,
 	seedThreadPermissions,
 	removeChannelFollowers,

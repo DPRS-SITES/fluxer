@@ -23,7 +23,7 @@
 	min-width: 0;
 	min-height: 0;
 	max-width: 60vw;
-	border-left: 0.0625rem solid var(--user-area-divider-color);
+	border-inline-start: 0.0625rem solid var(--user-area-divider-color);
 	background: var(--background-secondary-lighter);
 }
 
@@ -31,7 +31,7 @@
 	position: absolute;
 	top: 0;
 	bottom: 0;
-	left: -0.25rem;
+	inset-inline-start: -0.25rem;
 	width: 0.5rem;
 	cursor: col-resize;
 	z-index: 10;
@@ -80,13 +80,28 @@
 }
 
 .membersPopout {
+	--thread-members-popout-max-height: 30rem;
+	--thread-members-popout-padding-block: 0.5rem;
+	--thread-members-popout-border-width: 0.0625rem;
 	display: flex;
 	flex-direction: column;
 	width: 16.5rem;
-	max-height: 30rem;
-	padding: 0.5rem 0;
-	border: 0.0625rem solid var(--background-modifier-accent);
+	max-height: var(--thread-members-popout-max-height);
+	padding: var(--thread-members-popout-padding-block) 0;
+	border: var(--thread-members-popout-border-width) solid var(--background-modifier-accent);
 	border-radius: 0.5rem;
 	background: var(--background-secondary);
 	overflow: hidden;
+}
+
+.membersPopoutList {
+	width: 100%;
+	height: auto;
+	max-height: calc(
+		var(--thread-members-popout-max-height) -
+		2 *
+		var(--thread-members-popout-padding-block) -
+		2 *
+		var(--thread-members-popout-border-width)
+	);
 }

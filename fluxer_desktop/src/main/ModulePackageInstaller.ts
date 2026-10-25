@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import {errorMessage} from '@electron/common/ErrorMessage';
+
 import {
 	ModulePackageHashMismatchError,
 	ModulePackageIOError,
@@ -14,7 +16,8 @@ import type {ModulePlanItem} from '@electron/main/ModuleUpdatePlanner';
 
 const MODULE_PACKAGE_HASH_MISMATCH_RETRIES = 1;
 const MODULE_PACKAGE_HEADER_TIMEOUT_MS = 30000;
-const MODULE_PACKAGE_STALL_TIMEOUT_MS = 60000;
+const MODULE_PACKAGE_STALL_TIMEOUT_MS = 30000;
+const MODULE_PACKAGE_PROGRESS_INTERVAL_MS = 250;
 const TRANSIENT_HTTP_STATUS_FLOOR = 500;
 const TRANSIENT_PACKAGE_HTTP_STATUSES: ReadonlySet<number> = new Set([408, 425, 429]);
 const CAUSE_CHAIN_LIMIT = 8;
@@ -37,6 +40,8 @@ interface ModulePackageInstallProgress {
 	readonly total: number;
 	readonly moduleName: string;
 	readonly progress: number;
+	readonly receivedBytes: number;
+	readonly totalBytes: number;
 }
 
 export const ModulePackageInstallerReportType = Object.freeze({
@@ -77,6 +82,7 @@ interface ModulePackageInstallerOptions {
 	readonly packageOrigin: string;
 	readonly fetch: typeof globalThis.fetch;
 	readonly onProgress: (progress: ModulePackageInstallProgress) => void;
+	readonly now?: () => number;
 	readonly report: (report: ModulePackageInstallerReport) => void;
 }
 
@@ -92,6 +98,17 @@ export class ModulePackageFetchError extends Error {
 	}
 }
 
+class ModulePackageStallError extends ModulePackageFetchError {
+	public constructor(moduleName: string, stallMs: number) {
+		super(moduleName, null, `package download stalled for ${stallMs}ms`);
+		this.name = 'ModulePackageStallError';
+	}
+}
+
+export function isModulePackageStall(error: unknown): boolean {
+	return findCause(error, ModulePackageStallError) != null;
+}
+
 class ModulePackageUrlPolicyError extends Error {
 	public readonly module: string;
 
@@ -100,10 +117,6 @@ class ModulePackageUrlPolicyError extends Error {
 		this.name = 'ModulePackageUrlPolicyError';
 		this.module = moduleName;
 	}
-}
-
-function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
 }
 
 export function describeErrorChain(error: unknown): string {
@@ -168,6 +181,7 @@ export class ModulePackageInstaller {
 	private readonly packageOrigin: string;
 	private readonly fetchImplementation: typeof globalThis.fetch;
 	private readonly onProgress: (progress: ModulePackageInstallProgress) => void;
+	private readonly now: () => number;
 	private readonly reporter: (report: ModulePackageInstallerReport) => void;
 
 	public constructor(options: ModulePackageInstallerOptions) {
@@ -175,6 +189,7 @@ export class ModulePackageInstaller {
 		this.packageOrigin = options.packageOrigin;
 		this.fetchImplementation = options.fetch;
 		this.onProgress = options.onProgress;
+		this.now = options.now ?? Date.now;
 		this.reporter = options.report;
 	}
 
@@ -186,12 +201,22 @@ export class ModulePackageInstaller {
 					sha256: item.entry.sha256,
 					download: (resumeFrom) => this.openPackageStream(item, current, total, resumeFrom),
 				});
+				await this.store.recordShellRanges([
+					{
+						module: item.module,
+						sha256: item.entry.sha256,
+						minimum: item.entry.minimumShellVersion?.source ?? null,
+						maximum: item.entry.maximumShellVersion?.source ?? null,
+					},
+				]);
 				this.onProgress({
 					phase: ModulePackageInstallPhase.INSTALLING,
 					current,
 					total,
 					moduleName: item.module,
 					progress: Math.round((current / total) * 100),
+					receivedBytes: item.entry.bytes,
+					totalBytes: item.entry.bytes,
 				});
 				return;
 			} catch (error) {
@@ -238,6 +263,8 @@ export class ModulePackageInstaller {
 			total,
 			moduleName: item.module,
 			progress: item.entry.bytes === 0 ? 0 : Math.floor((offset / item.entry.bytes) * 100),
+			receivedBytes: offset,
+			totalBytes: item.entry.bytes,
 		});
 		if (offset > 0 && offset === item.entry.bytes) {
 			return {offset, chunks: []};
@@ -339,18 +366,13 @@ export class ModulePackageInstaller {
 		let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 		let received = start;
 		let reported = item.entry.bytes === 0 ? 0 : Math.floor((start / item.entry.bytes) * 100);
+		let reportedAt = this.now();
 		let completed = false;
 		let transferFailure: unknown = null;
 		let stall: NodeJS.Timeout | null = null;
 		const arm = (): void => {
 			stall = setTimeout(() => {
-				controller.abort(
-					new ModulePackageFetchError(
-						item.module,
-						null,
-						`package download stalled for ${MODULE_PACKAGE_STALL_TIMEOUT_MS}ms`,
-					),
-				);
+				controller.abort(new ModulePackageStallError(item.module, MODULE_PACKAGE_STALL_TIMEOUT_MS));
 			}, MODULE_PACKAGE_STALL_TIMEOUT_MS);
 		};
 		const disarm = (): void => {
@@ -378,27 +400,32 @@ export class ModulePackageInstaller {
 					);
 				}
 				const percent = item.entry.bytes === 0 ? 100 : Math.floor((received / item.entry.bytes) * 100);
-				if (percent > reported) {
+				const at = this.now();
+				if (percent > reported || at - reportedAt >= MODULE_PACKAGE_PROGRESS_INTERVAL_MS) {
 					reported = percent;
+					reportedAt = at;
 					this.onProgress({
 						phase: ModulePackageInstallPhase.DOWNLOADING,
 						current,
 						total,
 						moduleName: item.module,
 						progress: percent,
+						receivedBytes: received,
+						totalBytes: item.entry.bytes,
 					});
 				}
 				yield chunk.value;
 			}
 		} catch (error) {
-			transferFailure =
-				controller.signal.reason instanceof ModulePackageFetchError
-					? controller.signal.reason
-					: error instanceof ModulePackageFetchError
-						? error
-						: new ModulePackageFetchError(item.module, null, `package download failed for ${item.module}`, {
-								cause: error,
-							});
+			if (controller.signal.reason instanceof ModulePackageFetchError) {
+				transferFailure = controller.signal.reason;
+			} else if (error instanceof ModulePackageFetchError) {
+				transferFailure = error;
+			} else {
+				transferFailure = new ModulePackageFetchError(item.module, null, `package download failed for ${item.module}`, {
+					cause: error,
+				});
+			}
 			throw transferFailure;
 		} finally {
 			disarm();

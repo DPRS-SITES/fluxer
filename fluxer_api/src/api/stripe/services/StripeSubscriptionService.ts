@@ -5,20 +5,29 @@ import type {GiftCodeDurationType} from '@app/api/database/types/PaymentTypes';
 import type {UserRow} from '@app/api/database/types/UserTypes';
 import type {IGatewayService} from '@app/api/infrastructure/IGatewayService';
 import {Logger} from '@app/api/Logger';
-import {getBillingRepository} from '@app/api/middleware/ServiceRegistry';
+import {getPaymentDisputeRepository} from '@app/api/middleware/ServiceSingletons';
 import {addGiftCodeDuration} from '@app/api/models/GiftCode';
 import type {User} from '@app/api/models/User';
+import {assertNoOpenPaymentDispute} from '@app/api/payment_disputes/PaymentDisputeReviews';
 import type {StoreEntitlementService} from '@app/api/store_billing/StoreEntitlementService';
 import type {ProductInfo, RecurringBillingCycle} from '@app/api/stripe/ProductRegistry';
+import {
+	buildGiftTrialMetadata,
+	getGiftTrialPaidUntil,
+	isGiftTrialRunning,
+	isPastStripeTrialLimit,
+} from '@app/api/stripe/StripeGiftTrialMetadata';
+import {mirrorSubscription} from '@app/api/stripe/StripeMirror';
 import {
 	getPrimarySubscriptionItem,
 	getSubscriptionEntitlementPeriodEndUnix,
 	getSubscriptionItemPeriodEndUnix,
 	getSubscriptionPremiumPeriodEnd,
+	loadSubscriptionSchedule,
 } from '@app/api/stripe/StripeSubscriptionPeriod';
 import {extractId} from '@app/api/stripe/StripeUtils';
-import type {IUserRepository} from '@app/api/user/IUserRepository';
-import {mapUserToPrivateResponse} from '@app/api/user/UserMappers';
+import type {UserRepository} from '@app/api/user/repositories/UserRepository';
+import {dispatchUserUpdate} from '@app/api/user/UserMappers';
 import type {Currency} from '@app/api/utils/CurrencyUtils';
 import {UserPremiumTypes} from '@fluxer/constants/src/UserConstants';
 import {NoActiveSubscriptionError} from '@fluxer/errors/src/domains/payment/NoActiveSubscriptionError';
@@ -107,10 +116,15 @@ function mapSchedulePhaseAddInvoiceItems(
 	return mapped.length > 0 ? mapped : null;
 }
 
+export type GiftTrialExtension =
+	| {kind: 'extended'; subscription: Stripe.Subscription}
+	| {kind: 'already_applied'}
+	| {kind: 'past_trial_limit'};
+
 export class StripeSubscriptionService {
 	constructor(
 		private stripe: Stripe | null,
-		private userRepository: IUserRepository,
+		private userRepository: UserRepository,
 		private productRegistry: {
 			getRecurringSubscriptionPriceId: (billingCycle: RecurringBillingCycle, currency: string) => string | null;
 			getProduct: (priceId: string) => ProductInfo | null;
@@ -138,7 +152,7 @@ export class StripeSubscriptionService {
 			const subscription = await this.stripe.subscriptions.retrieve(user.stripeSubscriptionId, {
 				expand: ['items.data.price', 'schedule'],
 			});
-			const schedule = await this.loadSubscriptionSchedule(subscription.schedule);
+			const schedule = await loadSubscriptionSchedule(this.stripe, subscription.schedule);
 			if (schedule) {
 				await this.cancelScheduledSubscriptionAtPeriodEnd(user, subscription, schedule);
 				return;
@@ -146,17 +160,11 @@ export class StripeSubscriptionService {
 			const updatedSubscription = await this.stripe.subscriptions.update(user.stripeSubscriptionId, {
 				cancel_at_period_end: true,
 			});
-			try {
-				await getBillingRepository().subscriptions.upsertFromStripe(updatedSubscription, {
-					knownUserId: user.id,
-					snapshotCapturedAt: new Date(),
-				});
-			} catch (mirrorErr) {
-				Logger.error(
-					{mirrorErr, subId: updatedSubscription.id},
-					'Mirror upsert failed after Stripe write; reconciler will heal',
-				);
-			}
+			await mirrorSubscription(
+				updatedSubscription,
+				user.id,
+				'Mirror upsert failed after Stripe write; reconciler will heal',
+			);
 			const updatedUser = await this.userRepository.patchUpsert(
 				userId,
 				{
@@ -164,7 +172,7 @@ export class StripeSubscriptionService {
 				},
 				user.toRow(),
 			);
-			await this.dispatchUser(updatedUser);
+			await dispatchUserUpdate(this.gatewayService, updatedUser);
 			Logger.debug({userId, subscriptionId: user.stripeSubscriptionId}, 'Subscription set to cancel at period end');
 		} catch (error: unknown) {
 			Logger.error(
@@ -215,17 +223,11 @@ export class StripeSubscriptionService {
 				},
 				{idempotencyKey: `admin-cancel-now:${user.id}:${user.stripeSubscriptionId}`},
 			);
-			try {
-				await getBillingRepository().subscriptions.upsertFromStripe(canceledSubscription, {
-					knownUserId: user.id,
-					snapshotCapturedAt: new Date(),
-				});
-			} catch (mirrorErr) {
-				Logger.error(
-					{mirrorErr, subId: canceledSubscription.id},
-					'Mirror upsert failed after Stripe write; reconciler will heal',
-				);
-			}
+			await mirrorSubscription(
+				canceledSubscription,
+				user.id,
+				'Mirror upsert failed after Stripe write; reconciler will heal',
+			);
 			const patch: Partial<UserRow> = {
 				premium_will_cancel: false,
 				premium_billing_cycle: null,
@@ -233,16 +235,19 @@ export class StripeSubscriptionService {
 				premium_grace_ends_at: null,
 			};
 			if (user.premiumType !== UserPremiumTypes.LIFETIME) {
-				const hasActiveGift =
-					user.premiumGiftExtensionEndsAt != null && user.premiumGiftExtensionEndsAt.getTime() > Date.now();
+				const now = new Date();
+				const paidUntil = getGiftTrialPaidUntil(canceledSubscription, now.getTime()) ?? user.premiumUntil;
+				const giftEnd = this.pullGiftExtensionBackToNow(user.premiumGiftExtensionEndsAt, paidUntil, now);
+				const hasActiveGift = giftEnd != null && giftEnd.getTime() > now.getTime();
 				Object.assign(patch, {
 					premium_type: hasActiveGift ? user.premiumType : UserPremiumTypes.NONE,
 					premium_since: hasActiveGift ? user.premiumSince : null,
-					premium_until: new Date(),
+					premium_until: now,
+					premium_gift_extension_ends_at: giftEnd,
 				});
 			}
 			const updatedUser = await this.userRepository.patchUpsert(userId, patch, user.toRow());
-			await this.dispatchUser(updatedUser);
+			await dispatchUserUpdate(this.gatewayService, updatedUser);
 			Logger.debug({userId, subscriptionId: user.stripeSubscriptionId}, 'Subscription canceled immediately');
 		} catch (error: unknown) {
 			Logger.error(
@@ -253,6 +258,13 @@ export class StripeSubscriptionService {
 			throw new StripeError(message);
 		}
 		await this.storeEntitlementService?.reapplyAfterStripeChange(userId);
+	}
+
+	private pullGiftExtensionBackToNow(giftEnd: Date | null, paidUntil: Date | null, now: Date): Date | null {
+		if (!giftEnd || !paidUntil || paidUntil.getTime() <= now.getTime() || giftEnd.getTime() < paidUntil.getTime()) {
+			return giftEnd;
+		}
+		return new Date(giftEnd.getTime() - (paidUntil.getTime() - now.getTime()));
 	}
 
 	async reactivateSubscription(userId: UserID): Promise<void> {
@@ -269,11 +281,12 @@ export class StripeSubscriptionService {
 		if (!user.premiumWillCancel) {
 			throw new StripeSubscriptionNotCancelingError();
 		}
+		await assertNoOpenPaymentDispute(getPaymentDisputeRepository(), user.id);
 		try {
 			let subscription = await this.stripe.subscriptions.retrieve(user.stripeSubscriptionId, {
 				expand: ['schedule'],
 			});
-			const schedule = await this.loadSubscriptionSchedule(subscription.schedule);
+			const schedule = await loadSubscriptionSchedule(this.stripe, subscription.schedule);
 			if (schedule) {
 				await this.stripe.subscriptionSchedules.release(schedule.id, {
 					preserve_cancel_date: false,
@@ -286,17 +299,11 @@ export class StripeSubscriptionService {
 			const reactivatedSubscription = clearCancellationParams
 				? await this.stripe.subscriptions.update(user.stripeSubscriptionId, clearCancellationParams)
 				: subscription;
-			try {
-				await getBillingRepository().subscriptions.upsertFromStripe(reactivatedSubscription, {
-					knownUserId: user.id,
-					snapshotCapturedAt: new Date(),
-				});
-			} catch (mirrorErr) {
-				Logger.error(
-					{mirrorErr, subId: reactivatedSubscription.id},
-					'Mirror upsert failed after Stripe write; reconciler will heal',
-				);
-			}
+			await mirrorSubscription(
+				reactivatedSubscription,
+				user.id,
+				'Mirror upsert failed after Stripe write; reconciler will heal',
+			);
 			const updatedUser = await this.userRepository.patchUpsert(
 				userId,
 				{
@@ -304,7 +311,7 @@ export class StripeSubscriptionService {
 				},
 				user.toRow(),
 			);
-			await this.dispatchUser(updatedUser);
+			await dispatchUserUpdate(this.gatewayService, updatedUser);
 			Logger.debug({userId, subscriptionId: user.stripeSubscriptionId}, 'Subscription reactivated');
 		} catch (error: unknown) {
 			Logger.error({error, userId, subscriptionId: user.stripeSubscriptionId}, 'Failed to reactivate subscription');
@@ -328,7 +335,7 @@ export class StripeSubscriptionService {
 			const subscription = await this.stripe.subscriptions.retrieve(user.stripeSubscriptionId, {
 				expand: ['items.data.price', 'schedule'],
 			});
-			const schedule = await this.loadSubscriptionSchedule(subscription.schedule);
+			const schedule = await loadSubscriptionSchedule(this.stripe, subscription.schedule);
 			if (!schedule || !this.subscriptionScheduleHasPendingBillingCycleChange(schedule, subscription)) {
 				Logger.debug(
 					{userId, subscriptionId: user.stripeSubscriptionId, scheduleId: schedule?.id ?? null},
@@ -342,17 +349,11 @@ export class StripeSubscriptionService {
 			const releasedSubscription = await this.stripe.subscriptions.retrieve(subscription.id, {
 				expand: ['items.data.price'],
 			});
-			try {
-				await getBillingRepository().subscriptions.upsertFromStripe(releasedSubscription, {
-					knownUserId: user.id,
-					snapshotCapturedAt: new Date(),
-				});
-			} catch (mirrorErr) {
-				Logger.error(
-					{mirrorErr, subId: releasedSubscription.id},
-					'Mirror upsert failed after releasing pending billing-cycle schedule; reconciler will heal',
-				);
-			}
+			await mirrorSubscription(
+				releasedSubscription,
+				user.id,
+				'Mirror upsert failed after releasing pending billing-cycle schedule; reconciler will heal',
+			);
 			const patch: Record<string, unknown> = {
 				premium_will_cancel: Boolean(releasedSubscription.cancel_at || releasedSubscription.cancel_at_period_end),
 			};
@@ -365,7 +366,7 @@ export class StripeSubscriptionService {
 				patch['stripe_customer_id'] = updatedCustomerId;
 			}
 			const updatedUser = await this.userRepository.patchUpsert(userId, patch, user.toRow());
-			await this.dispatchUser(updatedUser);
+			await dispatchUserUpdate(this.gatewayService, updatedUser);
 			Logger.debug(
 				{userId, subscriptionId: user.stripeSubscriptionId, scheduleId: schedule.id},
 				'Pending subscription billing-cycle change canceled',
@@ -396,6 +397,7 @@ export class StripeSubscriptionService {
 		if (!user.stripeSubscriptionId) {
 			throw new StripeNoActiveSubscriptionError();
 		}
+		await assertNoOpenPaymentDispute(getPaymentDisputeRepository(), user.id);
 		try {
 			const subscription = await this.stripe.subscriptions.retrieve(user.stripeSubscriptionId, {
 				expand: ['schedule'],
@@ -419,7 +421,7 @@ export class StripeSubscriptionService {
 			if (!targetPriceId) {
 				throw new StripeInvalidProductConfigurationError();
 			}
-			const scheduledChange = await this.loadSubscriptionSchedule(subscription.schedule);
+			const scheduledChange = await loadSubscriptionSchedule(this.stripe, subscription.schedule);
 			if (scheduledChange && this.subscriptionScheduleHasFutureTargetPrice(scheduledChange, targetPriceId)) {
 				const patch: Record<string, unknown> = {
 					premium_will_cancel: false,
@@ -433,7 +435,7 @@ export class StripeSubscriptionService {
 					patch['stripe_customer_id'] = updatedCustomerId;
 				}
 				const updatedUser = await this.userRepository.patchUpsert(userId, patch, user.toRow());
-				await this.dispatchUser(updatedUser);
+				await dispatchUserUpdate(this.gatewayService, updatedUser);
 				Logger.debug(
 					{
 						userId,
@@ -470,17 +472,11 @@ export class StripeSubscriptionService {
 				payment_behavior: 'error_if_incomplete',
 				proration_behavior: 'always_invoice',
 			});
-			try {
-				await getBillingRepository().subscriptions.upsertFromStripe(updatedSubscription, {
-					knownUserId: user.id,
-					snapshotCapturedAt: new Date(),
-				});
-			} catch (mirrorErr) {
-				Logger.error(
-					{mirrorErr, subId: updatedSubscription.id},
-					'Mirror upsert failed after Stripe write; reconciler will heal',
-				);
-			}
+			await mirrorSubscription(
+				updatedSubscription,
+				user.id,
+				'Mirror upsert failed after Stripe write; reconciler will heal',
+			);
 			const patch: Record<string, unknown> = {
 				premium_billing_cycle: billingCycle,
 				premium_will_cancel: false,
@@ -494,7 +490,7 @@ export class StripeSubscriptionService {
 				patch['stripe_customer_id'] = updatedCustomerId;
 			}
 			const updatedUser = await this.userRepository.patchUpsert(userId, patch, user.toRow());
-			await this.dispatchUser(updatedUser);
+			await dispatchUserUpdate(this.gatewayService, updatedUser);
 			Logger.debug(
 				{
 					userId,
@@ -530,6 +526,7 @@ export class StripeSubscriptionService {
 		if (!user.stripeSubscriptionId) {
 			throw new StripeNoActiveSubscriptionError();
 		}
+		await assertNoOpenPaymentDispute(getPaymentDisputeRepository(), user.id);
 		const lockKey = `list_price_switch_lock:${user.id}`;
 		const lockToken = await this.cacheService.acquireLock(
 			lockKey,
@@ -591,7 +588,7 @@ export class StripeSubscriptionService {
 				current_amount_minor: currentAmountMinor,
 				currency,
 			};
-			const schedule = await this.loadSubscriptionSchedule(subscription.schedule);
+			const schedule = await loadSubscriptionSchedule(this.stripe, subscription.schedule);
 			const pendingSchedule =
 				schedule && (schedule.status === 'active' || schedule.status === 'not_started') ? schedule : null;
 			if (pendingSchedule) {
@@ -685,17 +682,11 @@ export class StripeSubscriptionService {
 				subscription.id,
 				this.getClearCancellationUpdateParams(subscription) ?? {proration_behavior: 'none'},
 			);
-			try {
-				await getBillingRepository().subscriptions.upsertFromStripe(currentSubscription, {
-					knownUserId: user.id,
-					snapshotCapturedAt: new Date(),
-				});
-			} catch (mirrorErr) {
-				Logger.error(
-					{mirrorErr, subId: currentSubscription.id},
-					'Mirror upsert failed after clearing cancellation for scheduled billing cycle change; reconciler will heal',
-				);
-			}
+			await mirrorSubscription(
+				currentSubscription,
+				user.id,
+				'Mirror upsert failed after clearing cancellation for scheduled billing cycle change; reconciler will heal',
+			);
 		}
 		const scheduleId = extractId(currentSubscription.schedule);
 		const schedule = scheduleId
@@ -747,17 +738,11 @@ export class StripeSubscriptionService {
 			scheduledSubscription = await this.stripe.subscriptions.retrieve(currentSubscription.id, {
 				expand: ['items.data.price'],
 			});
-			try {
-				await getBillingRepository().subscriptions.upsertFromStripe(scheduledSubscription, {
-					knownUserId: user.id,
-					snapshotCapturedAt: new Date(),
-				});
-			} catch (mirrorErr) {
-				Logger.error(
-					{mirrorErr, subId: scheduledSubscription.id},
-					'Mirror upsert failed after scheduling a period-end price change; reconciler will heal',
-				);
-			}
+			await mirrorSubscription(
+				scheduledSubscription,
+				user.id,
+				'Mirror upsert failed after scheduling a period-end price change; reconciler will heal',
+			);
 		}
 		const patch: Record<string, unknown> = {
 			premium_will_cancel: clearCancellation
@@ -773,7 +758,7 @@ export class StripeSubscriptionService {
 			patch['stripe_customer_id'] = updatedCustomerId;
 		}
 		const updatedUser = await this.userRepository.patchUpsert(user.id, patch, user.toRow());
-		await this.dispatchUser(updatedUser);
+		await dispatchUserUpdate(this.gatewayService, updatedUser);
 		Logger.debug(
 			{
 				userId: user.id,
@@ -817,17 +802,11 @@ export class StripeSubscriptionService {
 		const updatedSubscription = await this.stripe.subscriptions.retrieve(subscription.id, {
 			expand: ['items.data.price'],
 		});
-		try {
-			await getBillingRepository().subscriptions.upsertFromStripe(updatedSubscription, {
-				knownUserId: user.id,
-				snapshotCapturedAt: new Date(),
-			});
-		} catch (mirrorErr) {
-			Logger.error(
-				{mirrorErr, subId: updatedSubscription.id},
-				'Mirror upsert failed after schedule-managed cancellation; reconciler will heal',
-			);
-		}
+		await mirrorSubscription(
+			updatedSubscription,
+			user.id,
+			'Mirror upsert failed after schedule-managed cancellation; reconciler will heal',
+		);
 		const patch: Record<string, unknown> = {
 			premium_will_cancel: true,
 		};
@@ -840,7 +819,7 @@ export class StripeSubscriptionService {
 			patch['stripe_customer_id'] = updatedCustomerId;
 		}
 		const updatedUser = await this.userRepository.patchUpsert(user.id, patch, user.toRow());
-		await this.dispatchUser(updatedUser);
+		await dispatchUserUpdate(this.gatewayService, updatedUser);
 		Logger.debug(
 			{userId: user.id, subscriptionId: subscription.id, scheduleId: schedule.id, periodEnd},
 			'Subscription schedule set to cancel at period end',
@@ -913,21 +892,6 @@ export class StripeSubscriptionService {
 			};
 		}
 		return null;
-	}
-
-	private async loadSubscriptionSchedule(
-		scheduleRef: Stripe.Subscription['schedule'],
-	): Promise<Stripe.SubscriptionSchedule | null> {
-		if (!scheduleRef) {
-			return null;
-		}
-		if (typeof scheduleRef === 'object') {
-			return scheduleRef;
-		}
-		if (!this.stripe) {
-			return null;
-		}
-		return this.stripe.subscriptionSchedules.retrieve(scheduleRef);
 	}
 
 	private subscriptionScheduleHasFutureTargetPrice(
@@ -1215,7 +1179,7 @@ export class StripeSubscriptionService {
 		durationType: GiftCodeDurationType,
 		durationQuantity: number,
 		idempotencyKey: string,
-	): Promise<void> {
+	): Promise<GiftTrialExtension> {
 		if (!this.stripe || !user.stripeSubscriptionId) {
 			Logger.debug(
 				{
@@ -1246,11 +1210,11 @@ export class StripeSubscriptionService {
 		);
 		if (await this.cacheService.get<boolean>(appliedKey)) {
 			Logger.debug({userId: user.id, idempotencyKey}, 'Gift trial extension already applied (idempotent hit)');
-			return;
+			return {kind: 'already_applied'};
 		}
 		if (await this.cacheService.get<boolean>(inflightKey)) {
 			Logger.debug({userId: user.id, idempotencyKey}, 'Gift trial extension in-flight; skipping duplicate');
-			return;
+			return {kind: 'already_applied'};
 		}
 		await this.cacheService.set(inflightKey, true, seconds('1 minute'));
 		Logger.debug({userId: user.id, idempotencyKey, inflightKey}, 'Gift trial inflight sentinel set');
@@ -1268,7 +1232,7 @@ export class StripeSubscriptionService {
 		try {
 			if (await this.cacheService.get<boolean>(appliedKey)) {
 				Logger.debug({userId: user.id, idempotencyKey}, 'Gift trial extension already applied after lock acquisition');
-				return;
+				return {kind: 'already_applied'};
 			}
 			const subscription = await this.stripe.subscriptions.retrieve(user.stripeSubscriptionId);
 			Logger.debug(
@@ -1282,7 +1246,8 @@ export class StripeSubscriptionService {
 			const currentTrialEnd = subscription.trial_end;
 			const item = getPrimarySubscriptionItem(subscription);
 			const currentPeriodEnd = getSubscriptionItemPeriodEndUnix(item);
-			const baseUnix = currentTrialEnd ?? currentPeriodEnd;
+			const nowMs = Date.now();
+			const baseUnix = isGiftTrialRunning(subscription, nowMs) ? currentTrialEnd : currentPeriodEnd;
 			Logger.debug(
 				{
 					userId: user.id,
@@ -1303,6 +1268,9 @@ export class StripeSubscriptionService {
 			if (newTrialEnd === null) {
 				throw new StripeError('Gift duration must be greater than zero when extending subscription trial');
 			}
+			if (isPastStripeTrialLimit(newTrialEnd.getTime(), nowMs)) {
+				return {kind: 'past_trial_limit'};
+			}
 			const newTrialEndUnix = Math.floor(newTrialEnd.getTime() / 1000);
 			Logger.debug(
 				{
@@ -1320,20 +1288,15 @@ export class StripeSubscriptionService {
 				{
 					trial_end: newTrialEndUnix,
 					proration_behavior: 'none',
+					metadata: buildGiftTrialMetadata(subscription, idempotencyKey, baseUnix, newTrialEndUnix, nowMs),
 				},
 				{idempotencyKey: stripeIdempotencyKey},
 			);
-			try {
-				await getBillingRepository().subscriptions.upsertFromStripe(trialExtendedSubscription, {
-					knownUserId: user.id,
-					snapshotCapturedAt: new Date(),
-				});
-			} catch (mirrorErr) {
-				Logger.error(
-					{mirrorErr, subId: trialExtendedSubscription.id},
-					'Mirror upsert failed after Stripe write; reconciler will heal',
-				);
-			}
+			await mirrorSubscription(
+				trialExtendedSubscription,
+				user.id,
+				'Mirror upsert failed after Stripe write; reconciler will heal',
+			);
 			Logger.debug(
 				{
 					userId: user.id,
@@ -1357,6 +1320,7 @@ export class StripeSubscriptionService {
 				},
 				'Extended subscription with gift trial period',
 			);
+			return {kind: 'extended', subscription: trialExtendedSubscription};
 		} catch (error: unknown) {
 			Logger.error(
 				{error, userId: user.id, subscriptionId: user.stripeSubscriptionId, idempotencyKey},
@@ -1414,14 +1378,6 @@ export class StripeSubscriptionService {
 		} catch (error) {
 			Logger.error({error, userId, lockKey}, 'Failed to release user trial extension lock');
 		}
-	}
-
-	private async dispatchUser(user: User): Promise<void> {
-		await this.gatewayService.dispatchPresence({
-			userId: user.id,
-			event: 'USER_UPDATE',
-			data: mapUserToPrivateResponse(user),
-		});
 	}
 
 	private getBillingCycleFromInterval(interval: string): RecurringBillingCycle | null {

@@ -11,7 +11,6 @@
     get_from_cluster/1,
     get_local_fast/1,
     local_bulk_presence_map/1,
-    fetch_remote_bulk_presence_map/2,
     normalize_user_ids/1,
     group_user_ids_by_owner/1,
     sanitize_presence_map/1,
@@ -123,15 +122,6 @@ local_bulk_presence_map(UserIds) ->
         Groups
     ).
 
--spec fetch_remote_bulk_presence_map(node(), [integer()]) -> #{integer() => map()}.
-fetch_remote_bulk_presence_map(OwnerNode, UserIds) ->
-    case safe_remote_call(OwnerNode, {bulk_get_local_map, UserIds}, invalid_reply) of
-        Reply when is_map(Reply) -> sanitize_presence_map(Reply);
-        _ ->
-            FallbackReply = safe_remote_call(OwnerNode, {bulk_get_local, UserIds}, []),
-            map_from_presence_list(FallbackReply)
-    end.
-
 -spec safe_remote_call(node(), term(), term()) -> term().
 safe_remote_call(TargetNode, Request, Fallback) ->
     safe_remote_call(TargetNode, Request, Fallback, ?REMOTE_CALL_TIMEOUT_MS).
@@ -203,7 +193,7 @@ add_user_to_owner_group(UserId, Acc) ->
 
 -spec local_shard_count() -> pos_integer().
 local_shard_count() ->
-    {Count, _Source} = determine_shard_count(presence_cache_shards),
+    {Count, _Source} = clustered_ets_cache:determine_shard_count([presence_cache_shards]),
     Count.
 
 -spec select_shard(term(), pos_integer()) -> non_neg_integer().
@@ -281,14 +271,6 @@ accumulate_ets_lookup(TableName, UserId, AccMap) ->
         error:badarg -> AccMap
     end.
 
--spec determine_shard_count(atom()) -> {pos_integer(), configured | auto}.
-determine_shard_count(ConfigKey) ->
-    case clustered_ets_cache:determine_shard_count([ConfigKey]) of
-        {Count, ConfigKey} -> {Count, configured};
-        {Count, auto} -> {Count, auto};
-        {Count, _Source} -> {Count, configured}
-    end.
-
 -spec normalize_shard_groups([{non_neg_integer(), [term()]}]) ->
     [{non_neg_integer(), [integer()]}].
 normalize_shard_groups(Groups) ->
@@ -310,93 +292,3 @@ presence_user_id(Presence) ->
         _ ->
             undefined
     end.
-
--ifdef(TEST).
--include_lib("eunit/include/eunit.hrl").
-
-group_user_ids_by_owner_matches_single_owner_resolution_test() ->
-    Key = {gateway_cluster_membership, members_by_role},
-    Previous = persistent_term:get(Key, undefined),
-    Nodes = ['presence_a@127.0.0.1', 'presence_b@127.0.0.1', 'presence_c@127.0.0.1'],
-    persistent_term:put(Key, #{presence => Nodes}),
-    try
-        UserIds = [11, 22, 33, 44, 55, 66, 77, 88, 99, 1010],
-        Groups = group_user_ids_by_owner(UserIds),
-        Flattened = [
-            {Owner, UserId}
-         || {Owner, OwnerUserIds} <- Groups, UserId <- OwnerUserIds
-        ],
-        lists:foreach(
-            fun({Owner, UserId}) ->
-                ?assertEqual([Owner], lists:sublist(resolve_owner_nodes(UserId), 1))
-            end,
-            Flattened
-        ),
-        ?assertEqual(lists:sort(UserIds), lists:sort([UserId || {_Owner, UserId} <- Flattened]))
-    after
-        restore_persistent_term(Key, Previous)
-    end.
-
-remote_groups_are_fetched_in_parallel_test() ->
-    Test = self(),
-    First = spawn(fun() ->
-        fake_presence_server(Test, #{1 => #{<<"status">> => <<"online">>}})
-    end),
-    Second = spawn(fun() ->
-        fake_presence_server(Test, #{2 => #{<<"status">> => <<"idle">>}})
-    end),
-    Legacy = spawn(fun() -> fake_presence_server(Test, legacy) end),
-    Fetcher = spawn(fun() ->
-        Test ! {fetched, fetch_remote_groups([{First, [1]}, {Second, [2]}, {Legacy, [3]}])}
-    end),
-    Received = [receive_request() || _ <- [First, Second, Legacy]],
-    Expected = [
-        {First, {bulk_get_local_map, [1]}},
-        {Second, {bulk_get_local_map, [2]}},
-        {Legacy, {bulk_get_local_map, [3]}}
-    ],
-    ?assertEqual(lists:sort(Expected), lists:sort(Received)),
-    [Server ! go || Server <- [First, Second, Legacy]],
-    ?assertMatch({Legacy, {bulk_get_local, [3]}}, receive_request()),
-    Legacy ! go,
-    Fetched =
-        receive
-            {fetched, Map} -> Map
-        after 5000 -> timeout
-        end,
-    ?assertEqual(
-        #{
-            1 => #{<<"status">> => <<"online">>},
-            2 => #{<<"status">> => <<"idle">>},
-            3 => #{<<"user">> => #{<<"id">> => 3}}
-        },
-        Fetched
-    ),
-    [exit(Pid, kill) || Pid <- [First, Second, Legacy, Fetcher]].
-
-fake_presence_server(Test, Reply) ->
-    receive
-        {'$gen_call', From, Request} ->
-            Test ! {request, self(), Request},
-            receive
-                go -> gen_server:reply(From, fake_reply(Reply, Request))
-            end,
-            fake_presence_server(Test, Reply)
-    end.
-
-fake_reply(legacy, {bulk_get_local_map, _Ids}) -> unknown_request;
-fake_reply(legacy, {bulk_get_local, Ids}) -> [#{<<"user">> => #{<<"id">> => Id}} || Id <- Ids];
-fake_reply(Map, _Request) -> Map.
-
-receive_request() ->
-    receive
-        {request, Server, Request} -> {Server, Request}
-    after 900 -> no_request
-    end.
-
-restore_persistent_term(Key, undefined) ->
-    persistent_term:erase(Key);
-restore_persistent_term(Key, Value) ->
-    persistent_term:put(Key, Value).
-
--endif.

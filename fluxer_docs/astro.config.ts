@@ -162,11 +162,13 @@ export default defineConfig({
 				{
 					label: 'Self-hosting',
 					items: [
-						'operator/get-started',
-						'operator/sign-in',
-						'operator/configuration',
+						'operator',
+						'operator/running',
 						'operator/reverse-proxy',
-						'operator/upgrading',
+						'operator/sign-in',
+						'operator/kubernetes',
+						'operator/docker-compose',
+						'operator/rexctl',
 					],
 				},
 				{
@@ -217,6 +219,9 @@ export default defineConfig({
 					items: [
 						'http-api/channels',
 						'http-api/messages',
+						'http-api/threads',
+						'http-api/thread-members',
+						'http-api/forums',
 						'http-api/read-states',
 						'http-api/memes',
 						'http-api/gifs',
@@ -243,13 +248,7 @@ export default defineConfig({
 				},
 				{
 					label: 'Commerce',
-					items: [
-						'http-api/billing',
-						'http-api/premium',
-						'http-api/in-app-purchases',
-						'http-api/gifts',
-						'http-api/donations',
-					],
+					items: ['http-api/billing', 'http-api/premium', 'http-api/gifts'],
 				},
 				{
 					label: 'Client surfaces',
@@ -266,6 +265,7 @@ export default defineConfig({
 						'gateway/commands',
 						'gateway/events',
 						'gateway/event-filtering',
+						'gateway/threads',
 						'gateway/limits-and-rate-limits',
 						'gateway/opcodes-and-close-codes',
 					],
@@ -286,7 +286,13 @@ export default defineConfig({
 				},
 				{
 					label: 'Voice',
-					items: ['voice', 'http-api/calls', 'http-api/streams', 'http-api/entrance-sounds'],
+					items: [
+						'voice',
+						'http-api/calls',
+						'http-api/peer-to-peer-voice',
+						'http-api/streams',
+						'http-api/entrance-sounds',
+					],
 				},
 				{
 					label: 'Admin API',
@@ -295,8 +301,10 @@ export default defineConfig({
 						'admin-api/api-keys',
 						'admin-api/users',
 						'admin-api/guilds',
+						'admin-api/threads',
 						'admin-api/applications',
 						'admin-api/reports',
+						'admin-api/enforcement',
 						'admin-api/messages',
 						'admin-api/blocklists',
 						'admin-api/discovery',
@@ -330,6 +338,20 @@ export default defineConfig({
 		}),
 	},
 	output: 'server',
+	redirects: {
+		'/admin-api/operator-pass': '/admin-api/',
+		'/admin-api/payment-disputes': '/admin-api/',
+		'/api-reference': '/http-api/',
+		'/api-reference/[...path]': '/http-api/',
+		'/http-api/donations': '/http-api/billing/',
+		'/http-api/in-app-purchases': '/http-api/premium/',
+		'/http-api/operator-pass': '/http-api/premium/',
+		'/http-api/operator-pass-waitlist': '/http-api/premium/',
+		'/operator/configuration': '/operator/running/',
+		'/operator/get-started': '/operator/',
+		'/operator/operator-pass': '/operator/',
+		'/operator/upgrading': '/operator/running/',
+	},
 	publicDir: path.join(staticDirectory, 'web'),
 	site: docsEndpoint.origin,
 	server: {

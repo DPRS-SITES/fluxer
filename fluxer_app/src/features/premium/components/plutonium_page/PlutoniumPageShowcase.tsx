@@ -3,6 +3,10 @@
 import RuntimeConfig from '@app/features/app/state/RuntimeConfig';
 import styles from '@app/features/premium/components/plutonium_page/PlutoniumPage.module.css';
 import {
+	PlutoniumPageIcon,
+	type PlutoniumPageIconName,
+} from '@app/features/premium/components/plutonium_page/PlutoniumPageIcons';
+import {
 	AVATAR_LSF,
 	BANNER_LSF,
 	EMOJI_CATVIBE,
@@ -31,8 +35,9 @@ import type {MessageDescriptor} from '@lingui/core';
 import {useLingui} from '@lingui/react/macro';
 import {clsx} from 'clsx';
 import type React from 'react';
+import {useCallback, useState} from 'react';
 
-const PERK_SHOT_SIZES = '(min-width: 48rem) 50vw, calc(100vw - 5rem)';
+const PERK_SHOT_SIZES = '(min-width: 80rem) 35rem, (min-width: 48rem) calc(50vw - 3rem), calc(100vw - 2.5rem)';
 const CHAT_SURFACE = 'rgb(30, 29, 35)';
 
 interface PerkOverlay {
@@ -46,6 +51,7 @@ interface PerkOverlay {
 
 interface PerkCard {
 	id: string;
+	icon: PlutoniumPageIconName;
 	title: MessageDescriptor;
 	body: MessageDescriptor;
 	shots: ShotFamily;
@@ -66,6 +72,7 @@ const EXPRESSIONS_OVERLAYS: ReadonlyArray<PerkOverlay> = [
 const PERK_CARDS: ReadonlyArray<PerkCard> = [
 	{
 		id: 'expressions',
+		icon: 'smiley',
 		title: SHOWCASE_EXPRESSIONS_TITLE_DESCRIPTOR,
 		body: SHOWCASE_EXPRESSIONS_BODY_DESCRIPTOR,
 		shots: EXPRESSIONS_SHOTS,
@@ -75,6 +82,7 @@ const PERK_CARDS: ReadonlyArray<PerkCard> = [
 	},
 	{
 		id: 'profile',
+		icon: 'userCircle',
 		title: SHOWCASE_PROFILE_TITLE_DESCRIPTOR,
 		body: SHOWCASE_PROFILE_BODY_DESCRIPTOR,
 		shots: PROFILE_SHOTS,
@@ -85,6 +93,7 @@ const PERK_CARDS: ReadonlyArray<PerkCard> = [
 	},
 	{
 		id: 'stream',
+		icon: 'videoCamera',
 		title: SHOWCASE_STREAM_TITLE_DESCRIPTOR,
 		body: SHOWCASE_STREAM_BODY_DESCRIPTOR,
 		shots: STREAM_SHOTS,
@@ -94,6 +103,7 @@ const PERK_CARDS: ReadonlyArray<PerkCard> = [
 	},
 	{
 		id: 'upload',
+		icon: 'paperclip',
 		title: SHOWCASE_UPLOAD_TITLE_DESCRIPTOR,
 		body: SHOWCASE_UPLOAD_BODY_DESCRIPTOR,
 		shots: UPLOAD_SHOTS,
@@ -109,25 +119,89 @@ function srcSet(urls: ReadonlyArray<string>): string {
 
 function ProfileOverlay() {
 	return (
-		<svg className={styles.perkOverlaySvg} viewBox="0 0 662 407" aria-hidden="true" focusable="false">
-			<defs>
-				<clipPath id="plutonium-perk-banner-clip">
-					<path d="M345.333 121.448V19.833a3.5 3.5 0 0 1 3.5-3.5h293.333a3.5 3.5 0 0 1 3.5 3.5v101.615z" />
+		<svg
+			className={styles.perkOverlaySvg}
+			viewBox="0 0 662 407"
+			aria-hidden="true"
+			focusable="false"
+			data-flx="premium.plutonium-page.plutonium-page-showcase.profile-overlay.perk-overlay-svg"
+		>
+			<defs data-flx="premium.plutonium-page.plutonium-page-showcase.profile-overlay.defs">
+				<clipPath
+					id="plutonium-perk-banner-clip"
+					data-flx="premium.plutonium-page.plutonium-page-showcase.profile-overlay.plutonium-perk-banner-clip"
+				>
+					<path
+						d="M345.333 121.448V19.833a3.5 3.5 0 0 1 3.5-3.5h293.333a3.5 3.5 0 0 1 3.5 3.5v101.615z"
+						data-flx="premium.plutonium-page.plutonium-page-showcase.profile-overlay.path"
+					/>
 				</clipPath>
-				<mask id="plutonium-perk-banner-bite" maskUnits="userSpaceOnUse" x="0" y="0" width="662" height="407">
-					<rect width="662" height="407" fill="#fff" />
-					<circle cx="398.333" cy="114.333" r="43.2" fill="#000" />
+				<mask
+					id="plutonium-perk-banner-bite"
+					maskUnits="userSpaceOnUse"
+					x="0"
+					y="0"
+					width="662"
+					height="407"
+					data-flx="premium.plutonium-page.plutonium-page-showcase.profile-overlay.plutonium-perk-banner-bite"
+				>
+					<rect
+						width="662"
+						height="407"
+						fill="#fff"
+						data-flx="premium.plutonium-page.plutonium-page-showcase.profile-overlay.rect"
+					/>
+					<circle
+						cx="398.333"
+						cy="114.333"
+						r="43.2"
+						fill="#000"
+						data-flx="premium.plutonium-page.plutonium-page-showcase.profile-overlay.circle"
+					/>
 				</mask>
-				<clipPath id="plutonium-perk-avatar-clip">
-					<circle cx="398.333" cy="114.333" r="40" />
+				<clipPath
+					id="plutonium-perk-avatar-clip"
+					data-flx="premium.plutonium-page.plutonium-page-showcase.profile-overlay.plutonium-perk-avatar-clip"
+				>
+					<circle
+						cx="398.333"
+						cy="114.333"
+						r="40"
+						data-flx="premium.plutonium-page.plutonium-page-showcase.profile-overlay.circle--2"
+					/>
 				</clipPath>
-				<mask id="plutonium-perk-avatar-notch" maskUnits="userSpaceOnUse" x="0" y="0" width="662" height="407">
-					<rect width="662" height="407" fill="#fff" />
-					<circle cx="426.333" cy="142.333" r="11.2" fill="#000" />
+				<mask
+					id="plutonium-perk-avatar-notch"
+					maskUnits="userSpaceOnUse"
+					x="0"
+					y="0"
+					width="662"
+					height="407"
+					data-flx="premium.plutonium-page.plutonium-page-showcase.profile-overlay.plutonium-perk-avatar-notch"
+				>
+					<rect
+						width="662"
+						height="407"
+						fill="#fff"
+						data-flx="premium.plutonium-page.plutonium-page-showcase.profile-overlay.rect--2"
+					/>
+					<circle
+						cx="426.333"
+						cy="142.333"
+						r="11.2"
+						fill="#000"
+						data-flx="premium.plutonium-page.plutonium-page-showcase.profile-overlay.circle--3"
+					/>
 				</mask>
 			</defs>
-			<g clipPath="url(#plutonium-perk-banner-clip)">
-				<g mask="url(#plutonium-perk-banner-bite)">
+			<g
+				clipPath="url(#plutonium-perk-banner-clip)"
+				data-flx="premium.plutonium-page.plutonium-page-showcase.profile-overlay.g"
+			>
+				<g
+					mask="url(#plutonium-perk-banner-bite)"
+					data-flx="premium.plutonium-page.plutonium-page-showcase.profile-overlay.g--2"
+				>
 					<image
 						href={BANNER_LSF}
 						x="345.333"
@@ -135,24 +209,76 @@ function ProfileOverlay() {
 						width="300.333"
 						height="105.115"
 						preserveAspectRatio="xMidYMid slice"
+						data-flx="premium.plutonium-page.plutonium-page-showcase.profile-overlay.image"
 					/>
 				</g>
-				<circle cx="398.333" cy="114.333" r="41.6" fill="none" stroke="#0c0b0e" strokeWidth="3.2" />
+				<circle
+					cx="398.333"
+					cy="114.333"
+					r="41.6"
+					fill="none"
+					stroke="#0c0b0e"
+					strokeWidth="3.2"
+					data-flx="premium.plutonium-page.plutonium-page-showcase.profile-overlay.circle--4"
+				/>
 			</g>
-			<g clipPath="url(#plutonium-perk-avatar-clip)" mask="url(#plutonium-perk-avatar-notch)">
-				<image href={AVATAR_LSF} x="358.333" y="74.333" width="80" height="80" preserveAspectRatio="xMidYMid slice" />
+			<g
+				clipPath="url(#plutonium-perk-avatar-clip)"
+				mask="url(#plutonium-perk-avatar-notch)"
+				data-flx="premium.plutonium-page.plutonium-page-showcase.profile-overlay.g--3"
+			>
+				<image
+					href={AVATAR_LSF}
+					x="358.333"
+					y="74.333"
+					width="80"
+					height="80"
+					preserveAspectRatio="xMidYMid slice"
+					data-flx="premium.plutonium-page.plutonium-page-showcase.profile-overlay.image--2"
+				/>
 			</g>
 		</svg>
 	);
 }
 
 function PerkArt({card, eager}: {card: PerkCard; eager: boolean}) {
+	const [status, setStatus] = useState<'pending' | 'loaded' | 'failed'>('pending');
+	const imageRef = useCallback((image: HTMLImageElement | null) => {
+		if (image?.complete) setStatus(image.naturalWidth > 0 ? 'loaded' : 'failed');
+	}, []);
 	return (
-		<div className={styles.perkArt} data-flx="premium.plutonium-page.perk-art">
-			<picture>
-				<source type="image/avif" srcSet={srcSet(card.shots.avif)} sizes={PERK_SHOT_SIZES} />
-				<source type="image/webp" srcSet={srcSet(card.shots.webp)} sizes={PERK_SHOT_SIZES} />
+		<div
+			className={clsx(
+				styles.perkArt,
+				status === 'pending' && styles.perkArtPending,
+				status === 'failed' && styles.perkArtFailed,
+			)}
+			data-flx="premium.plutonium-page.perk-art"
+		>
+			{status !== 'loaded' && (
+				<div className={styles.perkArtPlaceholder} data-flx="premium.plutonium-page.perk-art.placeholder">
+					<PlutoniumPageIcon
+						name={card.icon}
+						className={styles.perkArtPlaceholderIcon}
+						data-flx="premium.plutonium-page.perk-art.placeholder-icon"
+					/>
+				</div>
+			)}
+			<picture data-flx="premium.plutonium-page.plutonium-page-showcase.perk-art.picture">
+				<source
+					type="image/avif"
+					srcSet={srcSet(card.shots.avif)}
+					sizes={PERK_SHOT_SIZES}
+					data-flx="premium.plutonium-page.plutonium-page-showcase.perk-art.source.image-avif"
+				/>
+				<source
+					type="image/webp"
+					srcSet={srcSet(card.shots.webp)}
+					sizes={PERK_SHOT_SIZES}
+					data-flx="premium.plutonium-page.plutonium-page-showcase.perk-art.source.image-webp"
+				/>
 				<img
+					ref={imageRef}
 					draggable={false}
 					className={styles.perkArtImage}
 					src={card.shots.webp[1]}
@@ -162,6 +288,8 @@ function PerkArt({card, eager}: {card: PerkCard; eager: boolean}) {
 					fetchPriority={eager ? 'high' : undefined}
 					decoding="async"
 					alt=""
+					onLoad={() => setStatus('loaded')}
+					onError={() => setStatus('failed')}
 					data-flx="premium.plutonium-page.perk-art.image"
 				/>
 			</picture>
@@ -187,7 +315,9 @@ function PerkArt({card, eager}: {card: PerkCard; eager: boolean}) {
 					data-flx="premium.plutonium-page.perk-art.overlay"
 				/>
 			))}
-			{card.profileOverlay && <ProfileOverlay />}
+			{card.profileOverlay && (
+				<ProfileOverlay data-flx="premium.plutonium-page.plutonium-page-showcase.perk-art.profile-overlay" />
+			)}
 		</div>
 	);
 }
@@ -208,20 +338,22 @@ export function PlutoniumPageShowcase({
 	const {i18n} = useLingui();
 	const showArt = !RuntimeConfig.isSelfHosted();
 	return (
-		<>
+		<div className={styles.featureRows} data-flx="premium.plutonium-page.feature-rows">
 			{PERK_CARDS.map((card, index) => {
 				const flipped = index % 2 === 1;
-				const body =
-					card.id === 'profile' && RuntimeConfig.usesUniqueUsernames
-						? i18n._(SHOWCASE_PROFILE_BODY_WITHOUT_TAG_DESCRIPTOR)
-						: card.id === 'profile'
-							? renderProfileBody(
-									i18n._(card.body, {footnote: '\u0000'}),
-									footnoteId,
-									onFootnoteClick,
-									i18n._(TAG_FOOTNOTE_MARKER_DESCRIPTOR),
-								)
-							: i18n._(card.body, {freeSize: freeUploadSize});
+				let body: React.ReactNode;
+				if (card.id === 'profile' && RuntimeConfig.usesUniqueUsernames) {
+					body = i18n._(SHOWCASE_PROFILE_BODY_WITHOUT_TAG_DESCRIPTOR);
+				} else if (card.id === 'profile') {
+					body = renderProfileBody(
+						i18n._(card.body, {footnote: '\u0000'}),
+						footnoteId,
+						onFootnoteClick,
+						i18n._(TAG_FOOTNOTE_MARKER_DESCRIPTOR),
+					);
+				} else {
+					body = i18n._(card.body, {freeSize: freeUploadSize});
+				}
 				return (
 					<article
 						key={card.id}
@@ -230,7 +362,16 @@ export function PlutoniumPageShowcase({
 					>
 						{showArt && (
 							<div className={styles.perkArtColumn} data-flx="premium.plutonium-page.perk-row.art-column">
-								<PerkArt card={card} eager={index === 0} />
+								<div
+									className={clsx(styles.tilt, flipped && styles.tiltReverse)}
+									data-flx="premium.plutonium-page.perk-row.tilt"
+								>
+									<PerkArt
+										card={card}
+										eager={index === 0}
+										data-flx="premium.plutonium-page.plutonium-page-showcase.perk-art"
+									/>
+								</div>
 							</div>
 						)}
 						<div className={styles.perkTextColumn} data-flx="premium.plutonium-page.perk-row.text-column">
@@ -244,7 +385,7 @@ export function PlutoniumPageShowcase({
 					</article>
 				);
 			})}
-		</>
+		</div>
 	);
 }
 
@@ -257,19 +398,29 @@ function renderProfileBody(
 	const [before, after = ''] = text.split('\u0000');
 	return (
 		<>
-			<span>{before}</span>
-			<FocusRing offset={-2}>
+			<span data-flx="premium.plutonium-page.plutonium-page-showcase.render-profile-body.span">{before}</span>
+			<FocusRing offset={-2} data-flx="premium.plutonium-page.plutonium-page-showcase.render-profile-body.focus-ring">
 				<a
 					href={`#${footnoteId}`}
 					className={styles.footnoteMarker}
 					onClick={onFootnoteClick}
 					data-flx="premium.plutonium-page.perk-row.footnote-marker"
 				>
-					<span aria-hidden="true">*</span>
-					<span className={styles.srOnly}>{markerLabel}</span>
+					<span
+						aria-hidden="true"
+						data-flx="premium.plutonium-page.plutonium-page-showcase.render-profile-body.span--2"
+					>
+						*
+					</span>
+					<span
+						className={styles.srOnly}
+						data-flx="premium.plutonium-page.plutonium-page-showcase.render-profile-body.sr-only"
+					>
+						{markerLabel}
+					</span>
 				</a>
 			</FocusRing>
-			<span>{after}</span>
+			<span data-flx="premium.plutonium-page.plutonium-page-showcase.render-profile-body.span--3">{after}</span>
 		</>
 	);
 }

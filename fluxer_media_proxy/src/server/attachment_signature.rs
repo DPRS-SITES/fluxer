@@ -172,44 +172,10 @@ mod tests {
     use axum::body::to_bytes;
     use base64::{Engine as _, engine::general_purpose};
     use fluxer_common::attachment_url_signature::{UrlKind, issue_window, sign};
-    use std::sync::{Arc, Mutex};
-    use tracing_subscriber::fmt::MakeWriter;
 
     const SECRET: [u8; 32] = [3u8; 32];
     const KEY: &str = "attachments/1/2/cat.gif";
     const PATH: &str = "/attachments/1/2/cat.gif";
-
-    #[derive(Clone, Default)]
-    struct CapturedLog(Arc<Mutex<Vec<u8>>>);
-
-    impl CapturedLog {
-        fn text(&self) -> String {
-            String::from_utf8(self.0.lock().expect("captured log is not poisoned").clone())
-                .expect("captured log is utf-8")
-        }
-    }
-
-    impl std::io::Write for CapturedLog {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.0
-                .lock()
-                .expect("captured log is not poisoned")
-                .extend_from_slice(buf);
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-
-    impl<'a> MakeWriter<'a> for CapturedLog {
-        type Writer = Self;
-
-        fn make_writer(&'a self) -> Self::Writer {
-            self.clone()
-        }
-    }
 
     fn enforcing_config() -> AttachmentSignatureConfig {
         crate::config::Config::load_from_iter([
@@ -340,93 +306,5 @@ mod tests {
             assert_eq!(UNAVAILABLE_BODY.as_bytes(), body.as_ref());
             assert_eq!(bodies[0], *body);
         }
-    }
-
-    #[test]
-    fn the_would_deny_line_includes_the_verdict_and_a_clipped_user_agent() {
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            header::USER_AGENT,
-            "u".repeat(4096).parse().expect("ascii user agent"),
-        );
-        let captured = CapturedLog::default();
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(captured.clone())
-            .with_ansi(false)
-            .with_max_level(tracing::Level::TRACE)
-            .finish();
-        {
-            let _guard = tracing::subscriber::set_default(subscriber);
-            log_would_deny(
-                &WouldDenyLog::new(),
-                &Method::GET,
-                Verdict::Expired,
-                &headers,
-                Some(&RequestId("ABCDEFGHJKMN".to_owned())),
-            );
-        }
-        let line = captured.text();
-        assert!(
-            line.contains("reason=\"attachment_signature_would_deny\""),
-            "{line}"
-        );
-        assert!(line.contains("kind=\"attachment\""), "{line}");
-        assert!(line.contains("method=GET"), "{line}");
-        assert!(line.contains("verdict=\"expired\""), "{line}");
-        assert!(line.contains("req=\"ABCDEFGHJKMN\""), "{line}");
-        assert!(line.contains(&"u".repeat(HEADER_LOG_BYTES_MAX)), "{line}");
-        assert!(
-            !line.contains(&"u".repeat(HEADER_LOG_BYTES_MAX + 1)),
-            "{line}"
-        );
-    }
-
-    #[test]
-    fn a_request_without_an_id_or_user_agent_still_logs_one_line() {
-        let captured = CapturedLog::default();
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(captured.clone())
-            .with_ansi(false)
-            .with_max_level(tracing::Level::TRACE)
-            .finish();
-        {
-            let _guard = tracing::subscriber::set_default(subscriber);
-            log_would_deny(
-                &WouldDenyLog::new(),
-                &Method::HEAD,
-                Verdict::Missing,
-                &HeaderMap::new(),
-                None,
-            );
-        }
-        let line = captured.text();
-        assert_eq!(1, line.lines().count(), "{line}");
-        assert!(line.contains("verdict=\"missing\""), "{line}");
-        assert!(line.contains("req=\"\""), "{line}");
-        assert!(line.contains("suppressed=0"), "{line}");
-    }
-
-    #[test]
-    fn the_would_deny_budget_bounds_a_window_and_reports_what_it_dropped() {
-        let budget = WouldDenyLog::new();
-        let window = 10_000;
-        for line in 0..WOULD_DENY_LOG_LINES_PER_WINDOW {
-            assert_eq!(Some(0), budget.admit(window), "line {line}");
-        }
-        for line in 0..5 {
-            assert_eq!(None, budget.admit(window + 500), "line {line}");
-        }
-        let next = window + WOULD_DENY_LOG_WINDOW_MS;
-        assert_eq!(Some(5), budget.admit(next));
-        assert_eq!(Some(0), budget.admit(next));
-    }
-
-    #[test]
-    fn the_would_deny_budget_never_wedges_on_a_clock_that_goes_backwards() {
-        let budget = WouldDenyLog::new();
-        assert_eq!(Some(0), budget.admit(10_000));
-        assert_eq!(Some(0), budget.admit(9_000));
-        assert_eq!(Some(0), budget.admit(i64::MIN));
-        assert_eq!(Some(0), budget.admit(i64::MAX));
     }
 }

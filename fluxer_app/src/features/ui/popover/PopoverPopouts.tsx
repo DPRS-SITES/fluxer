@@ -14,6 +14,7 @@ import {observePopoutKeyboardDismiss, resolvePopoutReturnFocus} from '@app/featu
 import KeyboardMode from '@app/features/ui/state/KeyboardMode';
 import LayerManager from '@app/features/ui/state/LayerManager';
 import PopoutState from '@app/features/ui/state/Popout';
+import {toDocumentPlacement} from '@app/features/ui/utils/DocumentPlacement';
 import {isScrollbarDragActive} from '@app/features/ui/utils/ScrollbarDragState';
 import {canUseWindowFocusedHoverControls} from '@app/features/ui/utils/WindowFocusInteractionGuard';
 import {wasPointerDownInside} from '@app/lib/overlay/DismissGuard';
@@ -192,14 +193,13 @@ const PopoutItem: React.FC<PopoutItemProps> = observer(
 			state,
 			style,
 			beginManualPositioning,
-		} = useAntiShiftFloating(positionReference, true, {
-			placement: position,
+		} = useAntiShiftFloating(positionReference, {
+			placement: toDocumentPlacement(position, target),
 			offsetMainAxis,
 			offsetCrossAxis,
 			shouldAutoUpdate: frozenTargetRect ? false : shouldAutoUpdate,
 			shouldObserveFloatingResize: !frozenTargetRect || !constrainHeight,
 			constrainHeight,
-			enableSmartBoundary: true,
 		});
 		const resizePositionController = useMemo(
 			() => ({begin: beginManualPositioning, placement: state.placement}),
@@ -240,11 +240,21 @@ const PopoutItem: React.FC<PopoutItemProps> = observer(
 				setTargetInDOM(true);
 			}
 		}, [target, ownerDocument, keepOpenOnTargetUnmount, beginClose]);
+		const wasClosingRequestedRef = useRef(isClosingRequested);
 		useEffect(() => {
+			const wasClosingRequested = wasClosingRequestedRef.current;
+			wasClosingRequestedRef.current = isClosingRequested;
 			if (isClosingRequested) {
 				beginClose();
+				return;
 			}
-		}, [isClosingRequested, beginClose]);
+			if (!wasClosingRequested) return;
+			if (closeTimerRef.current != null && ownerWindow != null) {
+				ownerWindow.clearTimeout(closeTimerRef.current);
+				closeTimerRef.current = null;
+			}
+			setIsVisible(true);
+		}, [isClosingRequested, beginClose, ownerWindow]);
 		useEffect(() => {
 			return () => {
 				if (closeTimerRef.current != null && ownerWindow != null) {
@@ -460,7 +470,7 @@ export const Popouts: React.FC<PopoutsProps> = observer(({ownerDocument}) => {
 	const portalHost = scopePortalHostToDocument(activePortalHost, scopeDocument);
 	const popouts = PopoutState.getPopouts(scopeDocument);
 	const topPopout = popouts.length ? popouts[popouts.length - 1] : null;
-	const needsBackdrop = Boolean(topPopout && !topPopout.disableBackdrop);
+	const needsBackdrop = PopoutState.requiresBackdrop(scopeDocument);
 	useEffect(() => {
 		const currentKeys = new Set(popouts.map((popout) => popout.key.toString()));
 		const prevKeys = prevPopoutKeysRef.current;

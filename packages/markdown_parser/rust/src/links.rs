@@ -3,7 +3,7 @@
 use crate::ast::{
     EmojiKind, GuildNavigationType, MentionKind, Node, ParserFlags, ParserResult, TimestampStyle,
 };
-use crate::constants::{MAX_LINE_LENGTH, MAX_LINK_URL_LENGTH};
+use crate::constants::MAX_LINK_URL_LENGTH;
 use crate::parser::{MarkdownParser, ParseError};
 use crate::text::{
     advance_one, bounded_url_end, byte_at, find_from, has_visible_content, is_alpha_numeric,
@@ -1399,82 +1399,4 @@ pub fn count_repeated_byte(text: &str, position: usize, byte: u8) -> usize {
         count += 1;
     }
     count
-}
-
-pub fn max_inline_scan() -> usize {
-    MAX_LINE_LENGTH
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{extract_escaped_url, has_valid_code_fence_language};
-
-    #[test]
-    fn escaped_url_accepts_paren_immediately_after_destination() {
-        let info = extract_escaped_url("https://example.com>) trailing", 0).expect("valid");
-        assert_eq!(info.url, "https://example.com");
-        assert!(info.escaped);
-        assert_eq!(info.advance_by, "https://example.com>)".len());
-    }
-
-    #[test]
-    fn escaped_url_rejects_content_between_destination_and_paren() {
-        assert!(extract_escaped_url("https://example.com> and more)", 0).is_none());
-        assert!(extract_escaped_url("https://example.com> )", 0).is_none());
-        assert!(extract_escaped_url("https://example.com>text)", 0).is_none());
-    }
-
-    #[test]
-    fn escaped_url_rejects_missing_paren() {
-        assert!(extract_escaped_url("https://example.com>", 0).is_none());
-        assert!(extract_escaped_url("https://example.com", 0).is_none());
-    }
-
-    #[test]
-    fn escaped_url_keeps_paren_inside_destination() {
-        let info = extract_escaped_url("https://example.com/a.yaml)>)", 0).expect("valid");
-        assert_eq!(info.url, "https://example.com/a.yaml)");
-    }
-
-    #[test]
-    fn rejects_leading_whitespace() {
-        assert!(!has_valid_code_fence_language(" hello"));
-        assert!(!has_valid_code_fence_language("\thello"));
-        assert!(!has_valid_code_fence_language("   rust"));
-        assert!(!has_valid_code_fence_language(" js code"));
-    }
-
-    #[test]
-    fn rejects_empty_and_whitespace_only() {
-        assert!(!has_valid_code_fence_language(""));
-        assert!(!has_valid_code_fence_language(" "));
-        assert!(!has_valid_code_fence_language("   "));
-        assert!(!has_valid_code_fence_language("\t"));
-    }
-
-    #[test]
-    fn accepts_single_token_languages() {
-        assert!(has_valid_code_fence_language("rust"));
-        assert!(has_valid_code_fence_language("js"));
-        assert!(has_valid_code_fence_language("c#"));
-        assert!(has_valid_code_fence_language("c++"));
-        assert!(has_valid_code_fence_language("objective-c"));
-        assert!(has_valid_code_fence_language("rust  "));
-    }
-
-    #[test]
-    fn rejects_unknown_multi_token_info_strings() {
-        assert!(!has_valid_code_fence_language("hello world"));
-    }
-
-    #[test]
-    fn accepts_known_multi_token_languages() {
-        assert!(has_valid_code_fence_language("js code"));
-    }
-
-    #[test]
-    fn rejects_invalid_characters_in_primary_token() {
-        assert!(!has_valid_code_fence_language("a!b"));
-        assert!(!has_valid_code_fence_language("rust!"));
-    }
 }

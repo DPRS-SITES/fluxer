@@ -88,10 +88,20 @@ pub fn simple_tab_content(
             csrf_token,
             admin_acls,
         ),
-        "emojis" => guild_detail_tabs::emojis::emojis_tab(config, &guild_info, &[], csrf_token),
-        "stickers" => {
-            guild_detail_tabs::stickers::stickers_tab(config, &guild_info, &[], csrf_token)
-        }
+        "emojis" => guild_detail_tabs::emojis::guild_assets_tab(
+            config,
+            &guild_info,
+            &[],
+            csrf_token,
+            guild_detail_tabs::emojis::GuildAssetKind::Emoji,
+        ),
+        "stickers" => guild_detail_tabs::emojis::guild_assets_tab(
+            config,
+            &guild_info,
+            &[],
+            csrf_token,
+            guild_detail_tabs::emojis::GuildAssetKind::Sticker,
+        ),
         _ => guild_detail_tabs::overview::overview_tab(config, guild, csrf_token),
     }
 }
@@ -105,11 +115,7 @@ fn render_guild_detail(
     username_sign_in: bool,
 ) -> Markup {
     let base = &config.base_path;
-    let admin_acls = auth
-        .admin_user
-        .as_ref()
-        .map(|user| user.acls.as_slice())
-        .unwrap_or(&[]);
+    let admin_acls = auth.acls();
     let effective_tab = if guild_tab_visible(config, active_tab, admin_acls) {
         active_tab
     } else {

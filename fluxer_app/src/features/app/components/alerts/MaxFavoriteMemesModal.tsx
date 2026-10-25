@@ -3,7 +3,6 @@
 import {GenericErrorModal} from '@app/features/app/components/alerts/GenericErrorModal';
 import {ConfirmModal} from '@app/features/app/components/dialogs/ConfirmModal';
 import {Limits} from '@app/features/app/utils/UserLimits';
-import {CLOSE_DESCRIPTOR} from '@app/features/i18n/utils/CommonMessageDescriptors';
 import * as PremiumModalCommands from '@app/features/premium/commands/PremiumModalCommands';
 import {getPremiumProductName, shouldShowPremiumFeatures} from '@app/features/premium/utils/PremiumUtils';
 import Users from '@app/features/user/state/Users';
@@ -40,7 +39,7 @@ export const MaxFavoriteMemesModal = observer(() => {
 	const {i18n} = useLingui();
 	const currentUser = Users.currentUser;
 	const showPremium = shouldShowPremiumFeatures();
-	const premiumLimit = Limits.getPremiumValue('max_favorite_memes', MAX_FAVORITE_MEMES_PREMIUM);
+	const premiumLimit = Limits.getStockValue('max_favorite_memes', MAX_FAVORITE_MEMES_PREMIUM);
 	const maxFavoriteMemes = currentUser?.maxFavoriteMemes ?? premiumLimit;
 	const canUpgradeFavoriteMemes = maxFavoriteMemes < premiumLimit;
 	if (!showPremium) {
@@ -64,8 +63,6 @@ export const MaxFavoriteMemesModal = observer(() => {
 			<ConfirmModal
 				title={i18n._(SAVED_MEDIA_LIMIT_REACHED_DESCRIPTOR)}
 				description={description}
-				secondaryText={i18n._(CLOSE_DESCRIPTOR)}
-				hideCloseButton
 				data-flx="app.max-favorite-memes-modal.confirm-modal--2"
 			/>
 		);

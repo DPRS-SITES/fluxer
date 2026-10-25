@@ -1,16 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-import {revokeAllAuthSessions} from '@app/api/auth/AuthSessionRevocation';
-import type {ISessionTerminator} from '@app/api/auth/ISessionTerminator';
 import {Config} from '@app/api/Config';
 import {getProductRegistry} from '@app/api/stripe/ProductRegistry';
-import {AgeVerificationService} from '@app/api/stripe/services/AgeVerificationService';
-import {StripeCheckoutService} from '@app/api/stripe/services/StripeCheckoutService';
-import {StripeGiftService} from '@app/api/stripe/services/StripeGiftService';
-import {StripePremiumService} from '@app/api/stripe/services/StripePremiumService';
-import {StripeRefundService} from '@app/api/stripe/services/StripeRefundService';
-import {StripeSubscriptionService} from '@app/api/stripe/services/StripeSubscriptionService';
+import {StripeService} from '@app/api/stripe/StripeService';
 import {StripeWebhookService} from '@app/api/stripe/services/StripeWebhookService';
+import {createWorkerEnforcementServices} from '@app/api/worker/tasks/admin_bulk/AdminBulkServices';
 import {getWorkerDependencies} from '@app/api/worker/WorkerContext';
 import type {WorkerTaskHandler} from '@pkgs/worker/src/contracts/WorkerTask';
 import {z} from 'zod';
@@ -32,63 +26,38 @@ const processStripeWebhook: WorkerTaskHandler = async (payload, helpers) => {
 		return;
 	}
 	const productRegistry = getProductRegistry();
-	const sessionTerminator: ISessionTerminator = {
-		async terminateAllUserSessions(userId) {
-			await revokeAllAuthSessions({users: deps.userRepository, gateway: deps.gatewayService}, userId);
-		},
-	};
-	const premiumService = new StripePremiumService(
+	const stripeService = new StripeService(
 		deps.userRepository,
 		deps.gatewayService,
 		deps.guildRepository,
 		deps.guildService,
-	);
-	const checkoutService = new StripeCheckoutService(stripe, deps.userRepository, productRegistry, deps.cacheService);
-	const subscriptionService = new StripeSubscriptionService(
-		stripe,
-		deps.userRepository,
-		productRegistry,
 		deps.cacheService,
-		deps.gatewayService,
+		deps.billingRepository,
+		null,
 		deps.storeEntitlementService,
+		deps.operatorPassServices,
 	);
-	const giftService = new StripeGiftService(
-		stripe,
-		deps.userRepository,
-		deps.cacheService,
-		deps.gatewayService,
-		checkoutService,
-		premiumService,
-		subscriptionService,
-		deps.storeEntitlementService,
-	);
-	const ageVerificationService = new AgeVerificationService(
-		stripe,
-		deps.userRepository,
-		deps.gatewayService,
-		deps.cacheService,
-	);
-	const refundService = new StripeRefundService(stripe, deps.userRepository, subscriptionService);
 	const webhookService = new StripeWebhookService(
 		stripe,
 		deps.userRepository,
 		deps.userCacheService,
-		sessionTerminator,
+		stripeService.subscriptions,
 		deps.emailService,
 		deps.gatewayService,
 		productRegistry,
 		deps.cacheService,
-		giftService,
-		premiumService,
+		stripeService.gifts,
+		stripeService.premium,
 		deps.donationRepository,
 		deps.deletionQueueService,
 		deps.premiumStateReconciliationQueueService,
-		ageVerificationService,
 		deps.adminRepository,
 		deps.snowflakeService,
 		deps.billingRepository,
-		refundService,
+		stripeService.refunds,
+		createWorkerEnforcementServices(deps).enforcementService,
 		deps.storeEntitlementService,
+		stripeService.operatorPassFulfilment,
 	);
 	await webhookService.handleWebhook({body, signature});
 };

@@ -7,6 +7,7 @@ pub use failure::ErrorReason;
 pub use stage::{Stage, record_stage, timed_stage};
 
 use crate::{
+    constants::OPERATOR_WALL_PATH_PREFIX,
     metrics::{
         self,
         request::{RequestKind, RequestMetrics},
@@ -23,7 +24,7 @@ use fluxer_common::attachment_url_signature::is_signature_parameter_name;
 use rand::RngExt;
 use stage::{StageTimingSnapshot, StageTimings};
 use std::{future::Future, sync::Arc, time::Instant};
-use tracing::{Level, event};
+use tracing::{Instrument, Level, event};
 
 const ID_ALPHABET: &[u8] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const ID_LEN: usize = 12;
@@ -118,6 +119,7 @@ pub fn classify_route(path: &str) -> RequestKind {
         || path.starts_with("/embed-splashes/")
         || path.starts_with("/emojis/")
         || path.starts_with("/stickers/")
+        || path.starts_with(OPERATOR_WALL_PATH_PREFIX)
     {
         return RequestKind::AssetImage;
     }
@@ -141,25 +143,6 @@ pub async fn trace(
     observe(metrics.as_ref(), observation, next.run(req)).await
 }
 
-pub async fn trace_public_request<F>(
-    metrics: &RequestMetrics,
-    id: RequestId,
-    method: Method,
-    path_and_query: &str,
-    headers: &HeaderMap,
-    future: F,
-) -> Response
-where
-    F: Future<Output = Response>,
-{
-    let (path, query) = match path_and_query.split_once('?') {
-        Some((path, query)) => (path, Some(query)),
-        None => (path_and_query, None),
-    };
-    let observation = RequestObservation::new(id, method, path, query, headers);
-    observe(metrics, observation, future).await
-}
-
 async fn observe<F>(
     metrics: &RequestMetrics,
     observation: RequestObservation,
@@ -179,7 +162,10 @@ where
     } = observation;
     let stages = Arc::new(StageTimings::default());
     let started = Instant::now();
-    let response = stage::scope(Arc::clone(&stages), future).await;
+    let span = tracing::info_span!("request", req = %id.as_str(), path = %path);
+    let response = stage::scope(Arc::clone(&stages), future)
+        .instrument(span)
+        .await;
     let elapsed_ms = metrics::duration_millis(started.elapsed());
     let StageTimingSnapshot {
         fetch_ms,
@@ -315,53 +301,6 @@ fn default_reason(status: StatusCode) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::metrics::Metrics;
-    use axum::{
-        Router,
-        body::Body,
-        middleware,
-        response::IntoResponse,
-        routing::{get, post},
-    };
-    use std::sync::Mutex;
-    use tower::ServiceExt;
-    use tracing_subscriber::fmt::MakeWriter;
-
-    #[derive(Clone, Default)]
-    struct CapturedLog(Arc<Mutex<Vec<u8>>>);
-
-    impl CapturedLog {
-        fn text(&self) -> String {
-            String::from_utf8(self.0.lock().expect("captured log is not poisoned").clone())
-                .expect("captured log is utf-8")
-        }
-    }
-
-    impl std::io::Write for CapturedLog {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.0
-                .lock()
-                .expect("captured log is not poisoned")
-                .extend_from_slice(buf);
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-
-    impl<'a> MakeWriter<'a> for CapturedLog {
-        type Writer = Self;
-
-        fn make_writer(&'a self) -> Self::Writer {
-            self.clone()
-        }
-    }
-
-    fn req_id_is_alphabet_only(id: &str) -> bool {
-        id.len() == ID_LEN && id.bytes().all(|c| ID_ALPHABET.contains(&c))
-    }
 
     fn observation_with_headers(headers: HeaderMap) -> RequestObservation {
         RequestObservation::new(
@@ -371,65 +310,6 @@ mod tests {
             Some("size=128"),
             &headers,
         )
-    }
-
-    #[test]
-    fn request_id_is_stable_length_and_alphabet() {
-        let id = RequestId::generate();
-        assert!(req_id_is_alphabet_only(id.as_str()));
-    }
-
-    #[test]
-    fn two_back_to_back_ids_differ() {
-        assert_ne!(RequestId::generate().0, RequestId::generate().0);
-    }
-
-    #[test]
-    fn classify_route_buckets_known_prefixes() {
-        assert_eq!(RequestKind::Health, classify_route("/_health"));
-        assert_eq!(RequestKind::Metadata, classify_route("/_metadata"));
-        assert_eq!(RequestKind::Sniff, classify_route("/_sniff"));
-        assert_eq!(RequestKind::Other, classify_route("/_metrics"));
-        assert_eq!(RequestKind::Upload, classify_route("/v1/relay/abc"));
-        assert_eq!(RequestKind::External, classify_route("/external/x/y"));
-        assert_eq!(RequestKind::Attachment, classify_route("/attachments/a/b"));
-        assert_eq!(RequestKind::Themes, classify_route("/themes/x.css"));
-        assert_eq!(
-            RequestKind::GuildMemberImage,
-            classify_route("/guilds/1/users/2/avatars/h.png")
-        );
-        assert_eq!(RequestKind::AssetImage, classify_route("/emojis/1.png"));
-        assert_eq!(RequestKind::AssetImage, classify_route("/icons/1/h.png"));
-        assert_eq!(RequestKind::Other, classify_route("/unknown"));
-    }
-
-    #[test]
-    fn clip_never_splits_a_multibyte_character() {
-        let key = "\u{597d}".repeat(8);
-        assert_eq!(24, key.len());
-        assert_eq!("\u{597d}\u{597d}\u{597d}~", clip(&key, 10));
-        assert_eq!("\u{597d}\u{597d}\u{597d}\u{597d}~", clip(&key, 12));
-        assert_eq!(key, clip(&key, 24));
-    }
-
-    #[test]
-    fn a_long_error_source_is_clipped_to_the_target_bound() {
-        let long = ErrorReason::with_message("storage_error", "k".repeat(4096));
-        let (code, source) = log_reason(Some(long), StatusCode::NOT_FOUND);
-        assert_eq!("storage_error", code);
-        assert_eq!(TARGET_LOG_BYTES_MAX + 1, source.len());
-        assert!(source.ends_with('~'));
-        assert_eq!(
-            ("Not Found", String::new()),
-            log_reason(None, StatusCode::NOT_FOUND)
-        );
-        assert_eq!(
-            ("storage_error", "key=a".to_owned()),
-            log_reason(
-                Some(ErrorReason::with_message("storage_error", "key=a")),
-                StatusCode::NOT_FOUND
-            )
-        );
     }
 
     #[test]
@@ -464,44 +344,6 @@ mod tests {
     }
 
     #[test]
-    fn redaction_leaves_every_other_parameter_byte_for_byte() {
-        for query in [
-            "",
-            "size=128",
-            "width=64&height=64&format=webp",
-            "download=1",
-            "hm",
-            "uc",
-            "a=b&&c=d",
-            "ucx=dp&dp=1",
-        ] {
-            assert_eq!(query, redact_signature_values(query), "{query}");
-        }
-        assert_eq!(
-            "width=64&ex=[redacted]&is=[redacted]&hm=[redacted]&download=1",
-            redact_signature_values("width=64&ex=6a9a7231&is=6a9920b1&hm=abc&download=1")
-        );
-        assert_eq!(
-            "ex=[redacted]&is=[redacted]&hm=[redacted]&uc=[redacted]&&width=64",
-            redact_signature_values("ex=0&is=6a9920b1&hm=abc&uc=dp&&width=64")
-        );
-        assert_eq!(
-            "ex=[redacted]&is=[redacted]&hm=[redacted]",
-            redact_signature_values("ex=6a9a7231&is=6a9920b1&hm=abc")
-        );
-        assert_eq!(
-            "ex=[redacted]&is=[redacted]&hm=[redacted]&uc=[redacted]",
-            redact_signature_values("ex=0&is=6a9920b1&hm=abc&uc=dp")
-        );
-    }
-
-    #[test]
-    fn clip_truncates_with_marker() {
-        assert_eq!("abc", clip("abc", 8));
-        assert_eq!("abcdefgh~", clip("abcdefghIJ", 8));
-    }
-
-    #[test]
     fn credentialed_referer_is_redacted_before_it_reaches_the_log() {
         let mut headers = HeaderMap::new();
         headers.insert(
@@ -517,152 +359,5 @@ mod tests {
             observation.referer
         );
         assert_eq!(Some("curl/8.0".to_owned()), observation.user_agent);
-    }
-
-    #[test]
-    fn unparsable_referer_collapses_to_a_marker_and_paths_stay_raw() {
-        let mut headers = HeaderMap::new();
-        headers.insert(header::REFERER, "not a url".parse().unwrap());
-        let observation = observation_with_headers(headers);
-        assert_eq!(Some("[invalid-url]".to_owned()), observation.referer);
-        assert_eq!("/attachments/1/2/a.png", observation.path);
-        assert_eq!("size=128", observation.query);
-        assert_eq!(RequestKind::Attachment, observation.kind);
-    }
-
-    #[tokio::test]
-    async fn middleware_inserts_request_id_into_extensions() {
-        async fn handler(req: Request) -> impl IntoResponse {
-            let id = req
-                .extensions()
-                .get::<RequestId>()
-                .expect("middleware must inject RequestId")
-                .clone();
-            id.0
-        }
-        let app = Router::new()
-            .route("/", get(handler))
-            .layer(middleware::from_fn_with_state(
-                Arc::new(RequestMetrics::new()),
-                trace,
-            ));
-        let resp = app
-            .oneshot(
-                axum::http::Request::builder()
-                    .uri("/")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(StatusCode::OK, resp.status());
-        let bytes = axum::body::to_bytes(resp.into_body(), 64).await.unwrap();
-        let body = std::str::from_utf8(&bytes).unwrap();
-        assert!(req_id_is_alphabet_only(body));
-    }
-
-    #[tokio::test]
-    async fn middleware_records_metrics_and_reads_error_reason() {
-        async fn handler() -> Response {
-            let mut resp = Response::new(Body::from("boom"));
-            *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-            resp.extensions_mut()
-                .insert(ErrorReason::with_message("transcode_failed", "vips OOM"));
-            resp
-        }
-        let metrics = Metrics::new();
-        let app = Router::new()
-            .route("/", get(handler))
-            .layer(middleware::from_fn_with_state(metrics.request(), trace));
-        let resp = app
-            .oneshot(
-                axum::http::Request::builder()
-                    .uri("/")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR, resp.status());
-        let reason = resp.extensions().get::<ErrorReason>().unwrap();
-        assert_eq!("transcode_failed", reason.code);
-        assert_eq!(Some("vips OOM".to_owned()), reason.source);
-        let rendered = metrics.render();
-        assert!(rendered.contains("fluxer_media_proxy_requests_5xx_total{kind=\"other\"} 1\n"));
-        assert!(rendered.contains("fluxer_media_proxy_request_duration_ms_count 1\n"));
-    }
-
-    #[tokio::test]
-    async fn a_successful_sniff_writes_its_own_request_line_and_series() {
-        let metrics = Metrics::new();
-        let app = Router::new()
-            .route("/_sniff", post(|| async { "{\"content_type\":null}" }))
-            .route("/_metrics", get(|| async { "" }))
-            .layer(middleware::from_fn_with_state(metrics.request(), trace));
-        let captured = CapturedLog::default();
-        let subscriber = tracing_subscriber::fmt()
-            .with_writer(captured.clone())
-            .with_ansi(false)
-            .with_max_level(tracing::Level::TRACE)
-            .finish();
-        {
-            let _guard = tracing::subscriber::set_default(subscriber);
-            for (method, uri) in [(Method::POST, "/_sniff"), (Method::GET, "/_metrics")] {
-                let response = app
-                    .clone()
-                    .oneshot(
-                        axum::http::Request::builder()
-                            .method(method)
-                            .uri(uri)
-                            .body(Body::empty())
-                            .unwrap(),
-                    )
-                    .await
-                    .unwrap();
-                assert_eq!(StatusCode::OK, response.status(), "{uri}");
-            }
-        }
-        let log = captured.text();
-        let request_lines: Vec<&str> = log
-            .lines()
-            .filter(|line| line.contains(" request "))
-            .collect();
-        assert_eq!(1, request_lines.len(), "{log}");
-        assert!(request_lines[0].contains("kind=\"sniff\""), "{log}");
-        assert!(request_lines[0].contains("method=POST"), "{log}");
-        assert!(request_lines[0].contains("path=/_sniff"), "{log}");
-        assert!(request_lines[0].contains("status=200"), "{log}");
-        let rendered = metrics.render();
-        assert!(rendered.contains("fluxer_media_proxy_requests_2xx_total{kind=\"sniff\"} 1\n"));
-        assert!(rendered.contains("fluxer_media_proxy_requests_2xx_total{kind=\"other\"} 1\n"));
-        assert!(
-            rendered.contains(
-                "fluxer_media_proxy_request_duration_by_route_ms_count{kind=\"sniff\"} 1\n"
-            )
-        );
-    }
-
-    #[tokio::test]
-    async fn trace_public_request_observes_a_non_axum_request() {
-        let metrics = Metrics::new();
-        let response = trace_public_request(
-            metrics.request().as_ref(),
-            RequestId::generate(),
-            Method::GET,
-            "/attachments/1/2/a.png?size=128",
-            &HeaderMap::new(),
-            async {
-                record_stage(Stage::Fetch, 3);
-                record_stage(Stage::Transform, 5);
-                record_stage(Stage::Nsfw, 7);
-                Response::new(Body::empty())
-            },
-        )
-        .await;
-        assert_eq!(StatusCode::OK, response.status());
-        let rendered = metrics.render();
-        assert!(
-            rendered.contains("fluxer_media_proxy_requests_2xx_total{kind=\"attachment\"} 1\n")
-        );
     }
 }

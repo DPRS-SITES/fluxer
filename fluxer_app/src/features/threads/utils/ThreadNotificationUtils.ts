@@ -20,8 +20,15 @@ export function getThreadParent(thread: Channel): Channel | undefined {
 	return thread.parentId ? Channels.getChannel(thread.parentId) : undefined;
 }
 
-export function isThreadParentMuted(thread: Channel): boolean {
+function isThreadParentMuted(thread: Channel): boolean {
 	return thread.parentId != null && UserGuildSettings.isMutedAtAnyLevel(thread.guildId ?? null, thread.parentId);
+}
+
+export function isThreadMutedInSidebar(thread: Channel): boolean {
+	return (
+		ThreadMemberships.isMuted(thread.id) ||
+		(thread.parentId != null && UserGuildSettings.isChannelDirectlyMuted(thread.guildId ?? null, thread.parentId))
+	);
 }
 
 export function isThreadMuted(thread: Channel): boolean {

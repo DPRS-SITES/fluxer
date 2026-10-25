@@ -14,7 +14,7 @@ use axum::{
 };
 use serde::Deserialize;
 
-use super::system_actions;
+use super::{limit_config_actions, system_actions};
 
 #[derive(Deserialize)]
 struct GatewayQuery {
@@ -62,9 +62,8 @@ pub fn router() -> Router<AppState> {
         )
         .route(
             "/limit-config",
-            get(limit_config_page).post(system_actions::limit_config_post),
+            get(limit_config_page).post(limit_config_actions::limit_config_post),
         )
-        .route("/strange-place", get(strange_place_page))
 }
 
 async fn gateway_page(
@@ -260,15 +259,6 @@ async fn limit_config_page(
         query.rule.as_deref(),
         limit_config.as_ref(),
     );
-    Html(markup.into_string()).into_response()
-}
-
-async fn strange_place_page(
-    State(state): State<AppState>,
-    auth: axum::Extension<AuthContext>,
-) -> Response {
-    let config = state.config();
-    let markup = templates::pages::strange_place::strange_place_page(config, &auth.0);
     Html(markup.into_string()).into_response()
 }
 

@@ -9,11 +9,10 @@ import {action, computed, makeAutoObservable, runInAction} from 'mobx';
 
 type FetchStatus = 'idle' | 'pending' | 'success' | 'error';
 
-interface InviteSlot {
-	loading: boolean;
-	error: Error | null;
-	data: Invite | null;
-}
+type InviteSlot =
+	| {loading: true; error: null; data: null}
+	| {loading: false; error: null; data: Invite | null}
+	| {loading: false; error: unknown; data: null};
 
 const SETTIMEOUT_LIMIT_MS = 0x7fff_ffff;
 
@@ -108,29 +107,8 @@ class Invites {
 		return slot?.data && expired(slot.data, Date.now()) ? null : slot;
 	}
 
-	getInvites(target: InstanceHTTPTarget): Map<string, InviteSlot> {
-		const at = Date.now();
-		const prefix = `${instanceTargetIdentity(target)}\u0000`;
-		const visible = new Map<string, InviteSlot>();
-		for (const [resourceKey, slot] of this.inviteSlots) {
-			if (!resourceKey.startsWith(prefix) || (slot.data && expired(slot.data, at))) {
-				continue;
-			}
-			visible.set(resourceKey.slice(prefix.length), slot);
-		}
-		return visible;
-	}
-
-	getChannelInvites(channelId: string): Array<Invite> | null {
-		return this.channelInvites.get(channelId) ?? null;
-	}
-
 	getChannelInvitesFetchStatus(channelId: string): FetchStatus {
 		return this.channelFetchStatus.get(channelId) ?? 'idle';
-	}
-
-	getGuildInvites(guildId: string): Array<Invite> | null {
-		return this.guildInvites.get(guildId) ?? null;
 	}
 
 	getGuildInvitesFetchStatus(guildId: string): FetchStatus {
@@ -233,7 +211,7 @@ class Invites {
 				nextPending.delete(resourceKey);
 				this.inviteSlots = new Map(this.inviteSlots).set(resourceKey, {
 					loading: false,
-					error: error as Error,
+					error,
 					data: null,
 				});
 				this.pendingRequests = nextPending;

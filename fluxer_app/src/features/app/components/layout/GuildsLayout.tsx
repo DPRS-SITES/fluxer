@@ -45,7 +45,7 @@ import {
 	type GuildDropPosition,
 	type GuildDropResult,
 } from '@app/features/app/components/layout/types/DndTypes';
-import {UserArea} from '@app/features/app/components/layout/UserArea';
+import {getResizeObserverEntryBlockSize, UserArea} from '@app/features/app/components/layout/UserArea';
 import {getChannelUnreadState} from '@app/features/app/components/layout/utils/ChannelUnreadState';
 import {
 	getRememberedSkeletonGuildRailScrollTopPx,
@@ -63,8 +63,6 @@ import {
 	SkeletonGuildRailItemKind,
 	SkeletonNagbarTone,
 } from '@app/features/app/components/skeleton/SkeletonLayoutMemory';
-import {WHATS_NEW_ENTRIES} from '@app/features/app/components/whats_new/WhatsNewEntries';
-import {openWhatsNewModal} from '@app/features/app/components/whats_new/WhatsNewModal';
 import {ConnectionNoticeTone, resolveConnectionNoticeShape} from '@app/features/app/hooks/useConnectionNotice';
 import {useMergeRefs} from '@app/features/app/hooks/useMergeRefs';
 import {
@@ -75,23 +73,23 @@ import {
 	useNavigationList,
 } from '@app/features/app/hooks/useNavigationList';
 import {useRovingFocusList} from '@app/features/app/hooks/useRovingFocusList';
-import Initialization from '@app/features/app/state/Initialization';
 import RuntimeConfig from '@app/features/app/state/RuntimeConfig';
-import {openClaimAccountModal} from '@app/features/auth/components/modals/ClaimAccountModal';
 import type {Channel} from '@app/features/channel/models/Channel';
 import Channels from '@app/features/channel/state/Channels';
+import type {Guild} from '@app/features/guild/models/Guild';
 import GuildAvailability from '@app/features/guild/state/GuildAvailability';
 import GuildFolderExpanded from '@app/features/guild/state/GuildFolderExpanded';
 import GuildListState, {type OrganizedItem} from '@app/features/guild/state/GuildList';
 import GuildReadState from '@app/features/guild/state/GuildReadState';
 import HiddenGuildListButtons from '@app/features/guild/state/HiddenGuildListButtons';
 import {PRIMARY_NAVIGATION_LANDMARK_DESCRIPTOR} from '@app/features/i18n/utils/CommonMessageDescriptors';
+import {preloadMacPermissionsModal} from '@app/features/permissions/system/commands/MacPermissionsModalCommands';
 import {useLocation} from '@app/features/platform/components/router/RouterReact';
 import {Platform} from '@app/features/platform/types/Platform';
 import {ComponentBus} from '@app/features/platform/utils/ComponentBus';
 import ReadStates from '@app/features/read_state/state/ReadStates';
 import {getRemScaleForDocument} from '@app/features/theme/layout/RemFromPx';
-import {AxisOrientation, type VerticalEdge} from '@app/features/ui/AxisOrientation';
+import type {VerticalEdge} from '@app/features/ui/AxisOrientation';
 import * as DimensionCommands from '@app/features/ui/commands/DimensionCommands';
 import {Scroller, type ScrollerHandle} from '@app/features/ui/components/Scroller';
 import {useHoverDeferredOrderedItems} from '@app/features/ui/hooks/UseHoverDeferredOrderedItems';
@@ -100,10 +98,8 @@ import {RelativePosition} from '@app/features/ui/RelativePosition';
 import Dimension from '@app/features/ui/state/Dimension';
 import KeyboardMode from '@app/features/ui/state/KeyboardMode';
 import MobileLayout from '@app/features/ui/state/MobileLayout';
-import Nagbar from '@app/features/ui/state/Nagbar';
 import SidebarPreferences from '@app/features/ui/state/SidebarPreferences';
 import SidebarWidth from '@app/features/ui/state/SidebarWidth';
-import WhatsNew from '@app/features/ui/state/WhatsNew';
 import {Tooltip} from '@app/features/ui/tooltip/Tooltip';
 import * as UserSettingsCommands from '@app/features/user/commands/UserSettingsCommands';
 import StatusPage from '@app/features/user/state/StatusPage';
@@ -120,7 +116,6 @@ import {
 	GuildFolderFlags,
 	UNCATEGORIZED_FOLDER_ID,
 } from '@fluxer/constants/src/UserConstants';
-import * as SnowflakeUtils from '@fluxer/snowflake/src/SnowflakeUtils';
 import {msg, plural} from '@lingui/core/macro';
 import {useLingui} from '@lingui/react/macro';
 import {ExclamationMarkIcon} from '@phosphor-icons/react';
@@ -147,7 +142,6 @@ const DOM_DELTA_PAGE = 2;
 const getChannelId = (channel: Channel): string => channel.id;
 const EMPTY_CHANNELS: ReadonlyArray<Channel> = Object.freeze([]);
 const ESTIMATED_GUILD_ROW_HEIGHT = 54;
-const GUILD_BOTTOM_DROP_ZONE_HEIGHT = 24;
 const GUILD_LIST_SCROLLER_IDENTITY = 'guild-list-scroller';
 const GUILD_LIST_SCROLL_PERSIST_IDLE_MS = 150;
 const GUILD_ROW_STYLE: React.CSSProperties = Object.freeze({width: '100%', paddingBottom: 0});
@@ -169,12 +163,6 @@ function resolveGuildsLayoutSidebarStyle(
 	return style;
 }
 
-function getResizeObserverEntryBlockSize(entry: ResizeObserverEntry): number {
-	const borderBoxSize = entry.borderBoxSize;
-	const firstBorderBoxSize = Array.isArray(borderBoxSize) ? borderBoxSize[0] : borderBoxSize;
-	return firstBorderBoxSize?.blockSize ?? entry.contentRect.height;
-}
-
 function resolveGuildFolderId(folderId: number | null): number {
 	if (folderId != null) return folderId;
 	return UNCATEGORIZED_FOLDER_ID;
@@ -193,13 +181,14 @@ type GuildNavigationRow =
 	| (NavigationRow & {readonly kind: 'outage'})
 	| (NavigationRow & {readonly kind: 'organized-item'; readonly item: OrganizedItem})
 	| (NavigationRow & {readonly kind: 'bottom-drop-zone'})
+	| (NavigationRow & {readonly kind: 'visiting-divider'})
+	| (NavigationRow & {readonly kind: 'visiting-guild'; readonly guild: Guild})
 	| (NavigationRow & {readonly kind: 'discovery'})
 	| (NavigationRow & {readonly kind: 'add-guild'})
 	| (NavigationRow & {readonly kind: 'download'})
 	| (NavigationRow & {readonly kind: 'help'});
 
 interface GuildNavigationVisibility {
-	readonly fluxerVisible: boolean;
 	readonly favoritesVisible: boolean;
 	readonly discoveryVisible: boolean;
 	readonly addGuildVisible: boolean;
@@ -209,21 +198,20 @@ interface GuildNavigationVisibility {
 
 function useGuildNavigationVisibility(): GuildNavigationVisibility {
 	const communityActionsVisible = !RuntimeConfig.singleCommunityEnabled;
-	const fluxerVisible = !RuntimeConfig.directMessagesDisabled;
+	const discoveryVisible = RuntimeConfig.discoveryAvailable;
 	const favoritesVisible = Accessibility.showFavorites;
 	const downloadVisible = !Platform.isElectron && !Platform.isPWA && !HiddenGuildListButtons.downloadButtonHidden;
-	const helpVisible = !HiddenGuildListButtons.helpButtonHidden;
+	const helpVisible = !HiddenGuildListButtons.helpButtonHidden && Routes.help() != null;
 	return useMemo(
 		() =>
 			Object.freeze({
-				fluxerVisible,
 				favoritesVisible,
-				discoveryVisible: communityActionsVisible,
+				discoveryVisible,
 				addGuildVisible: communityActionsVisible,
 				downloadVisible,
 				helpVisible,
 			}),
-		[communityActionsVisible, downloadVisible, favoritesVisible, fluxerVisible, helpVisible],
+		[communityActionsVisible, discoveryVisible, downloadVisible, favoritesVisible, helpVisible],
 	);
 }
 
@@ -234,6 +222,7 @@ interface CreateGuildNavigationRowsRequest {
 	readonly shouldRenderGuildListItems: boolean;
 	readonly visibleDMListRows: ReadonlyArray<DMListRow>;
 	readonly visibility: GuildNavigationVisibility;
+	readonly visitingGuilds: ReadonlyArray<Guild>;
 }
 
 interface ResolveSelectedGuildNavigationKeyRequest {
@@ -250,16 +239,16 @@ function createGuildNavigationRows({
 	shouldRenderGuildListItems,
 	visibleDMListRows,
 	visibility,
+	visitingGuilds,
 }: CreateGuildNavigationRowsRequest): Array<GuildNavigationRow> {
-	const rows: Array<GuildNavigationRow> = [];
-	if (visibility.fluxerVisible) {
-		rows.push({
+	const rows: Array<GuildNavigationRow> = [
+		{
 			kind: 'fluxer',
 			key: 'fluxer',
 			focusable: true,
 			focusTargetIdentity: 'fluxer',
-		});
-	}
+		},
+	];
 	if (visibility.favoritesVisible) {
 		rows.push({
 			kind: 'favorites',
@@ -309,6 +298,23 @@ function createGuildNavigationRows({
 				key: 'bottom-drop-zone',
 				focusable: false,
 				focusTargetIdentity: 'bottom-drop-zone',
+			});
+		}
+	}
+	if (visitingGuilds.length > 0) {
+		rows.push({
+			kind: 'visiting-divider',
+			key: 'visiting-divider',
+			focusable: false,
+			focusTargetIdentity: 'visiting-divider',
+		});
+		for (const guild of visitingGuilds) {
+			rows.push({
+				kind: 'visiting-guild',
+				key: `visiting:${guild.id}`,
+				focusable: true,
+				focusTargetIdentity: guild,
+				guild,
 			});
 		}
 	}
@@ -364,6 +370,8 @@ function hasGapAfterGuildNavigationRow(row: GuildNavigationRow, nextRow: GuildNa
 				return true;
 			}
 			return nextRow.kind !== 'organized-item';
+		case 'visiting-guild':
+			return nextRow == null || nextRow.kind !== 'visiting-guild';
 		default:
 			return false;
 	}
@@ -395,7 +403,7 @@ function resolveSelectedGuildNavigationKey({
 	}
 	if (visibility.favoritesVisible && pathname === Routes.FAVORITES) return 'favorites';
 	if (visibility.discoveryVisible && Routes.isDiscoverRoute(pathname)) return 'discovery';
-	if (visibility.fluxerVisible && pathname === Routes.ME) return 'fluxer';
+	if (pathname === Routes.ME) return 'fluxer';
 	return null;
 }
 
@@ -1267,8 +1275,9 @@ const SKELETON_NAGBAR_ROW_SHAPES: Record<NagbarType, SkeletonNagbarRowShape> = {
 	[NagbarType.CONNECTION]: {tone: SkeletonNagbarTone.NEUTRAL, hasActions: false},
 	[NagbarType.CORRUPTED_INSTALLATION]: {tone: SkeletonNagbarTone.CRITICAL, hasActions: true},
 	[NagbarType.SCHEDULED_MAINTENANCE]: {tone: SkeletonNagbarTone.MAINTENANCE_SCHEDULED, hasActions: true},
-	[NagbarType.UNCLAIMED_ACCOUNT]: {tone: SkeletonNagbarTone.ALERT, hasActions: true},
-	[NagbarType.EMAIL_VERIFICATION]: {tone: SkeletonNagbarTone.ALERT, hasActions: true},
+	[NagbarType.INSTANCE_NOTICE]: {tone: SkeletonNagbarTone.MAINTENANCE, hasActions: true},
+	[NagbarType.UNCLAIMED_ACCOUNT]: {tone: SkeletonNagbarTone.NEUTRAL, hasActions: true},
+	[NagbarType.EMAIL_VERIFICATION]: {tone: SkeletonNagbarTone.NEUTRAL, hasActions: true},
 	[NagbarType.ACCOUNT_LIMITED]: {tone: SkeletonNagbarTone.NEUTRAL, hasActions: false},
 	[NagbarType.DESKTOP_NOTIFICATION]: {tone: SkeletonNagbarTone.BRAND, hasActions: true},
 	[NagbarType.PREMIUM_GRACE_PERIOD]: {tone: SkeletonNagbarTone.PREMIUM, hasActions: true},
@@ -1278,7 +1287,6 @@ const SKELETON_NAGBAR_ROW_SHAPES: Record<NagbarType, SkeletonNagbarRowShape> = {
 	[NagbarType.LEGACY_PRICE_OPT_IN]: {tone: SkeletonNagbarTone.BRAND, hasActions: true},
 	[NagbarType.GIFT_INVENTORY]: {tone: SkeletonNagbarTone.BRAND, hasActions: true},
 	[NagbarType.DESKTOP_DOWNLOAD]: {tone: SkeletonNagbarTone.BRAND, hasActions: true},
-	[NagbarType.DESKTOP_UPDATE_READY]: {tone: SkeletonNagbarTone.BRAND, hasActions: true},
 	[NagbarType.GUILD_MEMBERSHIP_CTA]: {tone: SkeletonNagbarTone.BRAND, hasActions: true},
 	[NagbarType.VISIONARY_MFA]: {tone: SkeletonNagbarTone.BRAND, hasActions: true},
 	[NagbarType.VOICE_SESSION_RESTORE]: {tone: SkeletonNagbarTone.VOICE, hasActions: true},
@@ -1286,6 +1294,7 @@ const SKELETON_NAGBAR_ROW_SHAPES: Record<NagbarType, SkeletonNagbarRowShape> = {
 	[NagbarType.SOFTWARE_ENCODER]: {tone: SkeletonNagbarTone.ENCODER, hasActions: true},
 	[NagbarType.STREAMER_MODE]: {tone: SkeletonNagbarTone.STREAMER, hasActions: true},
 	[NagbarType.DOMAIN_MOVED]: {tone: SkeletonNagbarTone.BRAND, hasActions: true},
+	[NagbarType.WINDOWS_FONT]: {tone: SkeletonNagbarTone.BRAND, hasActions: true},
 };
 
 const CONNECTION_SKELETON_NAGBAR_TONES: Record<ConnectionNoticeTone, SkeletonNagbarTone> = {
@@ -1487,7 +1496,7 @@ function createGuildRailSkeletonLayout({
 			isSelectedPath(pathname, Routes.dmChannel(channelId)),
 		),
 		outageVisible: hasUnavailableGuilds,
-		fluxerVisible: visibility.fluxerVisible,
+		fluxerVisible: true,
 		favoritesVisible: visibility.favoritesVisible,
 		discoveryVisible: visibility.discoveryVisible,
 		addGuildVisible: visibility.addGuildVisible,
@@ -1504,6 +1513,7 @@ const GuildList = observer(() => {
 	const isDragging = activeDragItem != null;
 	const guildNavigationVisibility = useGuildNavigationVisibility();
 	const organizedItems = GuildListState.getOrganizedGuildList();
+	const visitingGuilds = GuildListState.visitingGuilds;
 	const guildNavigationIndexes = useMemo(() => buildGuildNavigationIndexMap(organizedItems), [organizedItems]);
 	const unavailableCount = GuildAvailability.totalUnavailableGuilds;
 	const privateReadStateVersion = ReadStates.privateChannelVersion;
@@ -1652,11 +1662,9 @@ const GuildList = observer(() => {
 	}, []);
 	const guildListNavigationRef = useRovingFocusList<HTMLElement>({
 		focusableSelector: GUILD_LIST_FOCUSABLE_SELECTOR,
-		orientation: AxisOrientation.VERTICAL,
-		loop: true,
+
 		enabled: keyboardModeEnabled,
 		restoreFocusOnWindowFocus: false,
-		manageTabIndex: true,
 	});
 	useEffect(() => {
 		const controller = new DMChannelVisibilityController({
@@ -1721,6 +1729,7 @@ const GuildList = observer(() => {
 				shouldRenderGuildListItems,
 				visibleDMListRows,
 				visibility: guildNavigationVisibility,
+				visitingGuilds,
 			}),
 		[
 			hasUnavailableGuilds,
@@ -1729,6 +1738,7 @@ const GuildList = observer(() => {
 			shouldRenderGuildListItems,
 			visibleDMListRows,
 			guildNavigationVisibility,
+			visitingGuilds,
 		],
 	);
 	const selectedGuildNavigationKey = useMemo(
@@ -1756,7 +1766,6 @@ const GuildList = observer(() => {
 		focusableSelector: GUILD_LIST_FOCUSABLE_SELECTOR,
 		keyboardNavigationEnabled: keyboardModeEnabled,
 		preferredActiveKey: selectedGuildNavigationKey,
-		resolveMissingActiveKey: null,
 	});
 	const mergedGuildNavigationRef = useMergeRefs<HTMLElement>([guildListNavigationRef, guildNavigationListRef]);
 	const previousSelectedGuildNavigationKeyRef = useRef(selectedGuildNavigationKey);
@@ -2033,7 +2042,7 @@ const GuildList = observer(() => {
 			case 'bottom-drop-zone':
 				return (
 					<flx-app-guild-list-drop-zone
-						style={{position: 'relative', display: 'block', height: GUILD_BOTTOM_DROP_ZONE_HEIGHT}}
+						className={flxElementClassName(styles.guildListDropZoneSlot)}
 						data-flx="app.guilds-layout.render-guild-navigation-row.flx-app-guild-list-drop-zone"
 					>
 						<BottomDropZone
@@ -2044,6 +2053,35 @@ const GuildList = observer(() => {
 							data-flx="app.guilds-layout.render-guild-navigation-row.bottom-drop-zone"
 						/>
 					</flx-app-guild-list-drop-zone>
+				);
+			case 'visiting-divider':
+				return (
+					<GuildListDivider
+						nextRowExtended={true}
+						data-flx="app.guilds-layout.render-guild-navigation-row.visiting-divider"
+					/>
+				);
+			case 'visiting-guild':
+				return (
+					<flx-app-guild-list-item-slot
+						className={flxElementClassName(styles.guildListItemSlot)}
+						data-flx="app.guilds-layout.render-guild-navigation-row.visiting-guild-slot"
+					>
+						<GuildListItem
+							isSortingList={false}
+							guild={row.guild}
+							isSelected={isSelectedPath(location.pathname, Routes.guildChannel(row.guild.id))}
+							guildIndex={null}
+							selectedGuildIndex={selectedGuildIndex}
+							onGuildDrop={null}
+							onDragStateChange={null}
+							disableDrag={true}
+							insideFolderId={null}
+							isLastInsideFolder={false}
+							scrollTargetRef={scrollTargetRegistry.register(`guild-${row.guild.id}`)}
+							data-flx="app.guilds-layout.render-guild-navigation-row.visiting-guild"
+						/>
+					</flx-app-guild-list-item-slot>
 				);
 			case 'discovery':
 				return <DiscoveryButton data-flx="app.guilds-layout.render-guild-navigation-row.discovery-button" />;
@@ -2165,7 +2203,6 @@ export const GuildsLayout = observer(({children}: {children: React.ReactNode}) =
 		[skeletonNagbarRows],
 	);
 	const prevNagbarCount = useRef(activeNagbars.length);
-	const isReady = Initialization.isReady;
 	useEffect(() => {
 		if (prevNagbarCount.current !== activeNagbars.length) {
 			prevNagbarCount.current = activeNagbars.length;
@@ -2217,26 +2254,9 @@ export const GuildsLayout = observer(({children}: {children: React.ReactNode}) =
 			clearOverlayHeight();
 		};
 	}, [shouldReserveUserAreaSpace]);
-	const THIRTY_MINUTES_MS = 30 * 60 * 1000;
 	useEffect(() => {
-		if (!isReady) return;
-		if (!user) return;
-		if (Nagbar.claimAccountModalShownThisSession) return;
-		if (user.isClaimed()) return;
-		const accountAgeMs = SnowflakeUtils.age(user.id);
-		if (accountAgeMs < THIRTY_MINUTES_MS) return;
-		Nagbar.markClaimAccountModalShown();
-		openClaimAccountModal();
-	}, [isReady, user, location.pathname]);
-	useEffect(() => {
-		if (!isReady) return;
-		if (!user) return;
-		if (RuntimeConfig.isSelfHosted()) return;
-		const latestEntry = WHATS_NEW_ENTRIES[0];
-		if (!latestEntry) return;
-		if (!WhatsNew.shouldShow(latestEntry.id, latestEntry.date, user.createdAt)) return;
-		openWhatsNewModal();
-	}, [isReady, user]);
+		preloadMacPermissionsModal();
+	}, []);
 	const shouldShowSidebarDivider = !mobileLayout.enabled;
 	return (
 		<div

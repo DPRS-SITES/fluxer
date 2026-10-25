@@ -44,9 +44,9 @@ export default {
 		{
 			path: 'src/features/i18n/locales/{locale}/messages',
 			include: ['src'],
-			exclude: ['**/node_modules/**', '**/*.d.ts', '**/*.test.*', '**/*.spec.*', '**/testing/**'],
+			exclude: ['**/node_modules/**', '**/*.d.ts'],
 		},
 	],
-	format: formatter(),
+	format: formatter({lineNumbers: false}),
 	compileNamespace: 'es',
 };

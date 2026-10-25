@@ -39,14 +39,6 @@ export class ReadStateEntry {
 	private storedMentionCount = 0;
 	inFlightAckMessageId: string | null = null;
 	serverVersion: string | null = null;
-	snapshot?: {
-		unread: boolean;
-		mentionCount: number;
-		guildUnread: boolean | null;
-		guildMentionCount: number | null;
-		takenAt: number;
-	};
-
 	constructor(channelId: string) {
 		this.channelId = channelId;
 	}
@@ -63,10 +55,6 @@ export class ReadStateEntry {
 	set lastMessageId(messageId: string | null) {
 		this.storedLastMessageId = messageId;
 		this.storedLastMessageTimestamp = snowflakeTimestamp(messageId);
-	}
-
-	get lastMessageTimestamp(): number {
-		return this.storedLastMessageTimestamp;
 	}
 
 	get ackMessageId(): string | null {
@@ -119,10 +107,6 @@ export class ReadStateEntry {
 		this.storedMentionCount = normalizeCount(count);
 	}
 
-	get oldestUnreadMessageTimestamp(): number {
-		return snowflakeTimestamp(this.oldestUnreadMessageId);
-	}
-
 	get ackTimestamp(): number {
 		if (this.storedAckMessageTimestamp !== 0 && !Number.isNaN(this.storedAckMessageTimestamp)) {
 			return this.storedAckMessageTimestamp;
@@ -154,7 +138,10 @@ export class ReadStateEntry {
 	}
 
 	supportsUnreadTracking(): boolean {
-		return Channels.getChannel(this.channelId) != null || this.storedGuildId != null;
+		const channel = Channels.getChannel(this.channelId);
+		const guildId = channel?.guildId ?? this.storedGuildId;
+		if (guildId != null && Guilds.getGuild(guildId)?.visiting === true) return false;
+		return channel != null || this.storedGuildId != null;
 	}
 
 	private get statusModel() {
@@ -196,31 +183,6 @@ export class ReadStateEntry {
 
 	isUnreadOrMentioned(): boolean {
 		return this.statusModel.isUnreadOrMentioned;
-	}
-
-	computeGuildChannelBadge(
-		channel: {
-			isPrivate(): boolean;
-			guildId?: string;
-		},
-		_isOptInEnabled: boolean,
-		isChannelMuted: boolean,
-		isGuildMuted: boolean,
-	): {
-		mentionCount: number;
-		unread: boolean;
-	} {
-		if (!channel.isPrivate() && !this.supportsUnreadTracking()) {
-			return {mentionCount: 0, unread: false};
-		}
-		const mentionCount = this.supportsMentions() ? this.mentionCount : 0;
-		if (isChannelMuted || isGuildMuted) {
-			return {mentionCount, unread: false};
-		}
-		return {
-			mentionCount,
-			unread: this.hasUnread(),
-		};
 	}
 
 	rebuild(

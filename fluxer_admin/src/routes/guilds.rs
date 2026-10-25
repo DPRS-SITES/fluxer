@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use crate::{
-    api::client::{AdminApiClient, ApiResultExt},
+    api::{
+        client::{AdminApiClient, ApiResultExt},
+        generated::types::CommunityRemovalBasis,
+    },
     middleware::{
         auth::AuthContext,
         csrf,
@@ -10,7 +13,10 @@ use crate::{
     },
     routes::guild_tabs,
     state::AppState,
-    templates,
+    templates::{
+        self,
+        components::enforcement_fields::{BasisSubmission, basis_from_form},
+    },
     utils::forms::MultiValueForm,
 };
 use axum::{
@@ -128,12 +134,7 @@ async fn guild_detail(
         .flatten();
 
     let tq = to_tab_query(&query);
-    let admin_acls = auth
-        .0
-        .admin_user
-        .as_ref()
-        .map(|user| user.acls.as_slice())
-        .unwrap_or(&[]);
+    let admin_acls = auth.0.acls();
     let username_sign_in = state.account_identity(&client).await.is_username();
     let tab_body = if let Some(guild) = guild.as_ref() {
         guild_tabs::render(
@@ -186,10 +187,10 @@ async fn guild_detail_post(
     let form = match MultiValueForm::from_request(request).await {
         Some(form) => form,
         None => {
-            return flash::redirect_with_flash(
+            return flash::redirect_error(
+                config,
                 &format!("{base}/guilds/{guild_id}"),
-                FlashData::error("Invalid form data"),
-                config.secure_cookies(),
+                "Invalid form data",
             );
         }
     };
@@ -308,11 +309,7 @@ async fn dispatch_guild_action(
             "Guild shutdown requested",
             "Failed to shut down guild",
         ),
-        "delete_guild" => action_result(
-            client.delete_guild(guild_id).await,
-            "Guild deleted",
-            "Failed to delete guild",
-        ),
+        "delete_guild" => remove_community(client, guild_id, form).await,
         "update_settings" => {
             let mut settings = serde_json::Map::new();
             for key in &[
@@ -455,6 +452,37 @@ async fn dispatch_guild_action(
     }
 }
 
+async fn remove_community(
+    client: &AdminApiClient,
+    guild_id: &str,
+    form: &MultiValueForm,
+) -> FlashData {
+    let basis = match basis_from_form(form) {
+        Ok(basis) => basis,
+        Err(message) => return FlashData::error(message),
+    };
+    let community_basis = match &basis {
+        BasisSubmission::Enforcement(submission) => {
+            CommunityRemovalBasis::Enforcement(submission.decision.clone())
+        }
+        BasisSubmission::HolderRequest(_) => CommunityRemovalBasis::HolderRequest,
+        BasisSubmission::Housekeeping(_) => return FlashData::error("Choose a basis"),
+    };
+    match client
+        .delete_guild(guild_id, community_basis, basis.internal_note())
+        .await
+    {
+        Ok(_) => FlashData::success("Community removed"),
+        Err(error) => {
+            tracing::warn!(%error, guild_id, "admin API request failed: remove community");
+            FlashData::error(error.detail_message().map_or_else(
+                || "Failed to remove the community".to_owned(),
+                |message| format!("Failed to remove the community: {message}"),
+            ))
+        }
+    }
+}
+
 fn action_result<T, E: std::fmt::Display>(
     result: Result<T, E>,
     success_message: &'static str,
@@ -487,12 +515,7 @@ async fn guild_tab(
     let config = state.config();
     let csrf_token = csrf::get_csrf_token(&request);
     let client = AdminApiClient::new(state.http_client(), config, &auth.0.session);
-    let admin_acls = auth
-        .0
-        .admin_user
-        .as_ref()
-        .map(|user| user.acls.as_slice())
-        .unwrap_or(&[]);
+    let admin_acls = auth.0.acls();
 
     let tq = to_tab_query(&query);
     if let Some(markup) = guild_tabs::render(

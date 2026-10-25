@@ -2,12 +2,11 @@
 
 import {createHash} from 'node:crypto';
 import {BUILD_CHANNEL} from '@electron/common/BuildChannel';
-import {
-	blockingModuleNames,
-	type DesktopLinuxSecurityMinimum,
-	type DesktopModuleUpdateManifest,
-	resolveDesktopModuleArchitecture,
-} from '@electron/main/ModuleManifest';
+import {errorMessage} from '@electron/common/ErrorMessage';
+import {jitteredExponentialDelay} from '@electron/common/ExponentialBackoff';
+import type {DesktopUpdateProbe} from '@electron/main/DesktopUpdateRun';
+import {ModuleDownloadRate} from '@electron/main/ModuleDownloadRate';
+import {type DesktopModuleUpdateManifest, resolveDesktopModuleArchitecture} from '@electron/main/ModuleManifest';
 import {
 	type ModuleManifestDocument,
 	ModuleManifestFetchError,
@@ -16,6 +15,7 @@ import {
 import {
 	describeErrorChain,
 	isDeterministicPackageFailure,
+	isModulePackageStall,
 	isTransientServerStatus,
 	ModulePackageFetchError,
 	ModulePackageInstaller,
@@ -24,7 +24,6 @@ import {
 	ModulePackageInstallPhase,
 } from '@electron/main/ModulePackageInstaller';
 import {
-	type LinuxModuleSecurityMinimum,
 	MODULE_BOOT_ATTEMPT_ROLLBACK_THRESHOLD,
 	type ModuleLaunchAttempt,
 	ModuleManifestEquivocationError,
@@ -41,11 +40,12 @@ import {
 	ModuleUnreachableLaunchDecision,
 	ModuleUpdatePlanner,
 	ModuleUpdaterBlockReason,
+	type ServedModuleSelection,
 } from '@electron/main/ModuleUpdatePlanner';
-import {compareModuleVersions, parseModuleVersion} from '@electron/main/ModuleVersion';
+import {compareModuleVersions, type ModuleVersion, parseModuleVersion} from '@electron/main/ModuleVersion';
 import {resolveDesktopPackageOrigin} from '@electron/main/ShellDownloadFormats';
 import type {DesktopModuleEnsureResult} from '@fluxer/desktop_ipc/src/ModuleContract';
-import {DesktopModuleEnsureStatus} from '@fluxer/desktop_ipc/src/ModuleContract';
+import {DESKTOP_RENDERER_MODULE_NAME, DesktopModuleEnsureStatus} from '@fluxer/desktop_ipc/src/ModuleContract';
 
 const MODULE_UPDATER_BACKOFF_BASE_MS = 1000;
 const MODULE_UPDATER_BACKOFF_CAP_MS = 30000;
@@ -69,21 +69,6 @@ export const ModuleUpdaterStatus = Object.freeze({
 
 export type ModuleUpdaterStatus = (typeof ModuleUpdaterStatus)[keyof typeof ModuleUpdaterStatus];
 
-const ModuleRefreshStatus = Object.freeze({
-	UNCHANGED: 'unchanged',
-	AWAITING_RENDERER: 'awaiting-renderer',
-	ACTIVATED: 'activated',
-} as const);
-
-type ModuleRefreshResult =
-	| {readonly status: typeof ModuleRefreshStatus.UNCHANGED}
-	| {readonly status: typeof ModuleRefreshStatus.AWAITING_RENDERER}
-	| {
-			readonly status: typeof ModuleRefreshStatus.ACTIVATED;
-			readonly modules: ReadonlyArray<string>;
-			readonly launchAttempt: ModuleLaunchAttempt;
-	  };
-
 const ModuleUpdaterReportType = Object.freeze({
 	NETWORK_ERROR: 'network-error',
 	MANIFEST_ROLLBACK: 'manifest-rollback',
@@ -94,6 +79,8 @@ const ModuleUpdaterReportType = Object.freeze({
 	STORAGE_ERROR: 'storage-error',
 	ROLLBACK: 'rollback',
 	ROLLBACK_FLOOR_BYPASS: 'rollback-floor-bypass',
+	BUNDLED_RENDERER_PREFERRED: 'bundled-renderer-preferred',
+	SHELL_INCOMPATIBLE_RETIRED: 'shell-incompatible-retired',
 	BLOCKED: 'blocked',
 } as const);
 
@@ -109,6 +96,8 @@ const MODULE_UPDATER_REPORT_SAMPLE_RATES: Readonly<Record<ModuleUpdaterReportTyp
 	[ModuleUpdaterReportType.STORAGE_ERROR]: 1,
 	[ModuleUpdaterReportType.ROLLBACK]: 1,
 	[ModuleUpdaterReportType.ROLLBACK_FLOOR_BYPASS]: 1,
+	[ModuleUpdaterReportType.BUNDLED_RENDERER_PREFERRED]: 1,
+	[ModuleUpdaterReportType.SHELL_INCOMPATIBLE_RETIRED]: 1,
 	[ModuleUpdaterReportType.BLOCKED]: 1,
 });
 
@@ -116,13 +105,23 @@ export {ModuleUpdaterBlockReason};
 
 export interface ModuleUpdaterSplashState {
 	readonly status: ModuleUpdaterStatus;
-	readonly requiredSecurityUpdate: boolean;
 	readonly current: number | null;
 	readonly total: number | null;
 	readonly progress: number | null;
 	readonly seconds: number | null;
 	readonly moduleName: string | null;
 	readonly detail: string | null;
+	readonly receivedBytes: number | null;
+	readonly totalBytes: number | null;
+	readonly bytesPerSecond: number | null;
+	readonly stalled: boolean;
+}
+
+export interface ModuleUpdaterDiagnostics {
+	readonly state: ModuleUpdaterSplashState;
+	readonly packageOrigin: string;
+	readonly lastError: string | null;
+	readonly lastErrorAt: number | null;
 }
 
 interface ModuleUpdaterReport {
@@ -151,14 +150,12 @@ export type ModuleUpdaterOutcome =
 			readonly reason: ModuleUpdaterBlockReason;
 			readonly modules: ReadonlyArray<string>;
 			readonly message: string;
-			readonly requiredSecurityUpdate: boolean;
 			readonly updateServerUnreachable: boolean;
 	  }
 	| {
 			readonly status: typeof ModuleUpdaterStatus.BLOCKED_SHELL_UPDATE;
 			readonly latestVersion: string;
 			readonly minimumVersion: string;
-			readonly requiredSecurityUpdate: boolean;
 	  };
 
 class ModuleUpdaterStorageFullError extends Error {
@@ -166,10 +163,6 @@ class ModuleUpdaterStorageFullError extends Error {
 		super(message, options);
 		this.name = 'ModuleUpdaterStorageFullError';
 	}
-}
-
-function errorMessage(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
 }
 
 function hasErrorCode(error: unknown, codes: ReadonlySet<string>): boolean {
@@ -199,6 +192,17 @@ function isUpdateServerUnreachable(error: unknown): boolean {
 	return false;
 }
 
+function parseBundledRendererVersion(source: string | null): ModuleVersion | null {
+	if (source == null) {
+		return null;
+	}
+	try {
+		return parseModuleVersion(source, 'bundled renderer version');
+	} catch {
+		return null;
+	}
+}
+
 function defaultSleep(ms: number): Promise<void> {
 	return new Promise((resolve) => {
 		setTimeout(resolve, ms);
@@ -224,8 +228,12 @@ class ModuleUpdaterBackoff {
 		if (exponential >= MODULE_UPDATER_BACKOFF_CAP_MS) {
 			this.ceiling = true;
 		}
-		const capped = Math.min(exponential, MODULE_UPDATER_BACKOFF_CAP_MS);
-		return Math.round(capped * (0.5 + this.random() * 0.5));
+		return jitteredExponentialDelay(
+			MODULE_UPDATER_BACKOFF_BASE_MS,
+			MODULE_UPDATER_BACKOFF_CAP_MS,
+			this.attempt - 1,
+			this.random,
+		);
 	}
 
 	public reset(): void {
@@ -240,14 +248,6 @@ interface ModulePlanResult {
 	readonly blocked: ReadonlyArray<string>;
 	readonly blockedError: unknown;
 }
-
-const ModuleStartupUpdatePolicy = Object.freeze({
-	REQUIRED: 'required',
-	OPTIONAL: 'optional',
-	REQUIRED_SECURITY: 'required-security',
-} as const);
-
-type ModuleStartupUpdatePolicy = (typeof ModuleStartupUpdatePolicy)[keyof typeof ModuleStartupUpdatePolicy];
 
 const ModuleManifestObservationMode = Object.freeze({
 	READ_ONLY: 'read-only',
@@ -264,6 +264,13 @@ interface ModuleUpdaterOptions {
 	readonly arch?: NodeJS.Architecture;
 	readonly packageOrigin?: string;
 	readonly hasOfflineRenderer?: boolean;
+	readonly bundledRendererVersion?: string | null;
+	readonly preferUnversionedBundle?: boolean;
+	readonly forceStartupUpdate?: boolean;
+	readonly startupUpdateRequested?: boolean;
+	readonly moduleUpdatesDisabled?: boolean;
+	readonly updateOnDemand?: boolean;
+	readonly selfUpdateShellFirst?: (latestVersion: string) => Promise<{readonly reason: string}>;
 	readonly onState?: (state: ModuleUpdaterSplashState) => void;
 	readonly report?: (report: ModuleUpdaterReport) => void;
 	readonly fetch: typeof globalThis.fetch;
@@ -277,8 +284,15 @@ function isRejectedManifestError(error: unknown): boolean {
 }
 
 export class ModuleUpdater {
-	public readonly store: ModuleStore;
+	private readonly store: ModuleStore;
 	private readonly platform: string;
+	private readonly shellVersion: ModuleVersion;
+	private readonly hasOfflineRenderer: boolean;
+	private readonly forceStartupUpdate: boolean;
+	private readonly moduleUpdatesDisabled: boolean;
+	private readonly launchInstalledOnDemand: boolean;
+	private readonly selfUpdateShellFirst: ((latestVersion: string) => Promise<{readonly reason: string}>) | null;
+	private readonly shellFirstAttempts = new Map<string, {readonly reason: string} | null>();
 	private readonly manifestFeed: ModuleManifestFeedIdentity;
 	private readonly manifestRepository: ModuleManifestRepository;
 	private readonly planner: ModuleUpdatePlanner;
@@ -289,21 +303,39 @@ export class ModuleUpdater {
 	private readonly random: () => number;
 	private readonly now: () => number;
 	private lastState: ModuleUpdaterSplashState;
+	private readonly packageOrigin: string;
+	private readonly downloadRate = new ModuleDownloadRate();
+	private downloadProgressed = false;
+	private lastError: string | null = null;
+	private lastErrorAt: number | null = null;
 	private ensureBlockedUntil = 0;
-	private startupUpdatePolicy: ModuleStartupUpdatePolicy;
+	private readonly startupUpdateEnforced: boolean;
 	private manifestObservationTail: Promise<void> = Promise.resolve();
 	private recordedManifestSha256: string | null = null;
-	private pendingRendererLaunch: ModuleLaunchAttempt | null = null;
+	private lastAccepted: {readonly document: ModuleManifestDocument; readonly metadataVersion: number} | null = null;
 
 	public constructor(options: ModuleUpdaterOptions) {
 		this.store = options.store;
-		const shellVersion = parseModuleVersion(options.shellVersion, 'desktop shell version');
+		this.shellVersion = parseModuleVersion(options.shellVersion, 'desktop shell version');
+		this.hasOfflineRenderer = options.hasOfflineRenderer ?? false;
+		const startupUpdateRequested = options.startupUpdateRequested ?? false;
+		this.forceStartupUpdate = (options.forceStartupUpdate ?? false) || startupUpdateRequested;
+		this.moduleUpdatesDisabled = options.moduleUpdatesDisabled ?? false;
+		this.launchInstalledOnDemand = (options.updateOnDemand ?? false) && !startupUpdateRequested;
+		this.selfUpdateShellFirst = options.selfUpdateShellFirst ?? null;
 		const releaseChannel = options.releaseChannel ?? BUILD_CHANNEL;
 		this.platform = options.platform ?? process.platform;
 		const arch = resolveDesktopModuleArchitecture(options.arch ?? process.arch);
 		this.manifestFeed = {releaseChannel, platform: this.platform, arch};
 		const packageOrigin = (options.packageOrigin ?? resolveDesktopPackageOrigin()).replace(/\/+$/u, '');
-		this.planner = new ModuleUpdatePlanner(this.store, shellVersion, options.hasOfflineRenderer ?? false);
+		this.packageOrigin = packageOrigin;
+		this.planner = new ModuleUpdatePlanner(
+			this.store,
+			this.shellVersion,
+			this.hasOfflineRenderer,
+			parseBundledRendererVersion(options.bundledRendererVersion ?? null),
+			options.preferUnversionedBundle ?? false,
+		);
 		this.onState = options.onState ?? (() => {});
 		this.reporter = options.report ?? (() => {});
 		this.sleep = options.sleep ?? defaultSleep;
@@ -323,10 +355,15 @@ export class ModuleUpdater {
 			store: this.store,
 			packageOrigin,
 			fetch: options.fetch,
+			now: () => this.now(),
 			onProgress: (progress) => {
 				switch (progress.phase) {
 					case ModulePackageInstallPhase.DOWNLOADING:
-						this.emit(ModuleUpdaterStatus.DOWNLOADING, progress);
+						this.recordDownloadProgress(progress.receivedBytes);
+						this.emit(ModuleUpdaterStatus.DOWNLOADING, {
+							...progress,
+							bytesPerSecond: this.downloadRate.sample(progress.receivedBytes, this.now()) ?? undefined,
+						});
 						break;
 					case ModulePackageInstallPhase.INSTALLING:
 						this.emit(ModuleUpdaterStatus.INSTALLING, progress);
@@ -335,18 +372,36 @@ export class ModuleUpdater {
 			},
 			report: (report) => this.handlePackageInstallerReport(report),
 		});
-		this.startupUpdatePolicy =
-			this.platform === 'linux' ? ModuleStartupUpdatePolicy.OPTIONAL : ModuleStartupUpdatePolicy.REQUIRED;
+		this.startupUpdateEnforced = this.platform !== 'linux';
 		this.lastState = {
 			status: ModuleUpdaterStatus.CHECKING,
-			requiredSecurityUpdate: false,
 			current: null,
 			total: null,
 			progress: null,
 			seconds: null,
 			moduleName: null,
 			detail: null,
+			receivedBytes: null,
+			totalBytes: null,
+			bytesPerSecond: null,
+			stalled: false,
 		};
+	}
+
+	public diagnostics(): ModuleUpdaterDiagnostics {
+		return {
+			state: this.lastState,
+			packageOrigin: this.packageOrigin,
+			lastError: this.lastError,
+			lastErrorAt: this.lastErrorAt,
+		};
+	}
+
+	private recordDownloadProgress(receivedBytes: number): void {
+		const previous = this.lastState.status === ModuleUpdaterStatus.DOWNLOADING ? this.lastState.receivedBytes : null;
+		if (previous != null && receivedBytes > previous) {
+			this.downloadProgressed = true;
+		}
 	}
 
 	public getLastState(): ModuleUpdaterSplashState {
@@ -354,8 +409,13 @@ export class ModuleUpdater {
 	}
 
 	public async run(): Promise<ModuleUpdaterOutcome> {
-		const attempt = await this.store.beginBootAttempt();
-		await this.restoreCachedUpdatePolicy();
+		let attempt = await this.store.beginBootAttempt({bundled: this.planner.bundledModules()});
+		const retiredRenderer = await this.retireRendererCoveredByBundle();
+		const retiredMissing = await this.retireUninstalledModules();
+		const retiredIncompatible = await this.retireIncompatibleModules();
+		if (retiredRenderer || retiredMissing || retiredIncompatible) {
+			attempt = {...attempt, committed: this.store.getCommitted()};
+		}
 		if (attempt.rolledBack) {
 			this.report({
 				type: ModuleUpdaterReportType.ROLLBACK,
@@ -366,28 +426,46 @@ export class ModuleUpdater {
 				return reverted;
 			}
 		}
+		if (this.moduleUpdatesDisabled || this.launchInstalledOnDemand) {
+			const decision = await this.planner.evaluateUnreachableLaunch(this.startupUpdateEnforced);
+			if (decision.kind === ModuleUnreachableLaunchDecision.LAUNCH) {
+				return await this.launchUnreachable(
+					this.moduleUpdatesDisabled ? ModuleUpdaterStatus.UNREACHABLE_LAUNCH : ModuleUpdaterStatus.LAUNCHING,
+				);
+			}
+			if (this.moduleUpdatesDisabled) {
+				return this.blockUpdateRequired(decision.reason, [], 'module updates are disabled', {
+					updateServerUnreachable: true,
+				});
+			}
+		}
 		if (this.platform === 'linux' && !(await this.startupUpdateRequired())) {
 			return await this.launchIfAtFloor();
 		}
 		const backoff = new ModuleUpdaterBackoff(this.random);
 		for (;;) {
 			this.emit(ModuleUpdaterStatus.CHECKING);
+			this.downloadRate.reset();
+			this.downloadProgressed = false;
 			let fetched = false;
 			try {
 				const document = await this.manifestRepository.fetchLatest();
 				fetched = true;
-				const manifest = await this.observeManifest(document);
-				const startupUpdateRequired = await this.startupUpdateRequired();
-				if (!startupUpdateRequired) {
+				const manifest = await this.acceptManifest(document);
+				if (!(await this.startupUpdateRequired())) {
 					return await this.launchIfAtFloor();
 				}
-				if (this.planner.shellUpdateRequired(manifest)) {
+				const shellFirst = await this.updateShellFirst(manifest);
+				if (
+					this.startupUpdateEnforced &&
+					this.planner.shellUpdateRequired(manifest) &&
+					shellFirst?.reason !== 'no-update'
+				) {
 					this.emit(ModuleUpdaterStatus.BLOCKED_SHELL_UPDATE);
 					return {
 						status: ModuleUpdaterStatus.BLOCKED_SHELL_UPDATE,
 						latestVersion: manifest.shell.latestVersion.source,
 						minimumVersion: manifest.shell.minimumVersion.source,
-						requiredSecurityUpdate: this.isSecurityUpdateRequired(),
 					};
 				}
 				const plan = await this.planner.plan(manifest);
@@ -408,30 +486,28 @@ export class ModuleUpdater {
 					this.emit(ModuleUpdaterStatus.VERIFYING, {current: plan.items.length, total: plan.items.length});
 				}
 				await this.commitIfChanged(executed.desired);
-				await this.applyUpdatePolicy(manifest);
 				if (executed.installed.length === 0) {
 					return await this.launchIfAtFloor();
 				}
 				backoff.reset();
 			} catch (error) {
 				this.reportFailure(error);
+				this.lastError = describeErrorChain(error);
+				this.lastErrorAt = this.now();
 				const detail = isStorageFullError(error) ? 'Not enough disk space to install the update' : null;
 				const updateServerUnreachable = !isRejectedManifestError(error) && isUpdateServerUnreachable(error);
+				if (this.downloadProgressed) {
+					backoff.reset();
+				}
 				const delayMs = backoff.fail();
-				const exhausted = backoff.reachedCeiling || isRejectedManifestError(error);
+				const exhausted =
+					backoff.reachedCeiling ||
+					error instanceof ModuleManifestEquivocationError ||
+					(await this.forcedButLaunchable());
 				if (exhausted || !fetched) {
-					const decision = await this.planner.evaluateUnreachableLaunch(
-						this.isStartupUpdateEnforced(),
-						this.isSecurityUpdateRequired(),
-					);
+					const decision = await this.planner.evaluateUnreachableLaunch(this.startupUpdateEnforced);
 					if (decision.kind === ModuleUnreachableLaunchDecision.LAUNCH) {
-						const launchAttempt = await this.recordRendererLaunchAttempt();
-						this.emit(ModuleUpdaterStatus.UNREACHABLE_LAUNCH);
-						return {
-							status: ModuleUpdaterStatus.UNREACHABLE_LAUNCH,
-							committed: this.store.getCommitted(),
-							launchAttempt,
-						};
+						return await this.launchUnreachable();
 					}
 					if (exhausted) {
 						return this.blockUpdateRequired(decision.reason, [], describeErrorChain(error), {
@@ -441,9 +517,18 @@ export class ModuleUpdater {
 						});
 					}
 				}
+				const stalled = isModulePackageStall(error);
+				const position = stalled && this.lastState.status === ModuleUpdaterStatus.DOWNLOADING ? this.lastState : null;
 				this.emit(ModuleUpdaterStatus.RETRY_WAIT, {
 					seconds: Math.max(1, Math.round(delayMs / 1000)),
 					detail,
+					stalled,
+					current: position?.current ?? undefined,
+					total: position?.total ?? undefined,
+					progress: position?.progress ?? undefined,
+					moduleName: position?.moduleName ?? undefined,
+					receivedBytes: position?.receivedBytes ?? undefined,
+					totalBytes: position?.totalBytes ?? undefined,
 				});
 				await this.sleep(delayMs);
 			}
@@ -462,19 +547,16 @@ export class ModuleUpdater {
 			this.reportFailure(error);
 			return {module: moduleName, status: DesktopModuleEnsureStatus.UNAVAILABLE};
 		}
-		if (this.planner.shellUpdateRequired(manifest)) {
-			return {module: moduleName, status: DesktopModuleEnsureStatus.UNAVAILABLE};
-		}
-		if (!Object.hasOwn(manifest.modules, moduleName)) {
-			return {module: moduleName, status: DesktopModuleEnsureStatus.UNAVAILABLE};
-		}
-		const entry = manifest.modules[moduleName];
-		if (!this.planner.isShellCompatible(entry)) {
-			return {module: moduleName, status: DesktopModuleEnsureStatus.UNAVAILABLE};
-		}
 		const committed = this.store.getCommitted()[moduleName];
 		if (committed != null && (await this.planner.isInstalled(moduleName, committed))) {
 			return {module: moduleName, status: DesktopModuleEnsureStatus.ALREADY_INSTALLED};
+		}
+		const entry = this.planner.compatibleEntry(manifest, moduleName);
+		if (
+			entry == null ||
+			(this.planner.isRendererAssetModule(moduleName) && !this.planner.rendererFollowsFeed(manifest))
+		) {
+			return {module: moduleName, status: DesktopModuleEnsureStatus.UNAVAILABLE};
 		}
 		if (this.store.isRejected(moduleName, entry.sha256)) {
 			return {module: moduleName, status: DesktopModuleEnsureStatus.UNAVAILABLE};
@@ -498,28 +580,152 @@ export class ModuleUpdater {
 		return {module: moduleName, status: DesktopModuleEnsureStatus.INSTALLED};
 	}
 
-	private async resolveManifestForEnsure(): Promise<DesktopModuleUpdateManifest> {
-		return this.observeManifest(await this.manifestRepository.resolveMemoizedDocument());
+	private async retireRendererCoveredByBundle(): Promise<boolean> {
+		const stale = await this.planner.staleRendererModule();
+		if (stale == null) {
+			return false;
+		}
+		if (!(await this.store.retireModule(DESKTOP_RENDERER_MODULE_NAME))) {
+			return false;
+		}
+		this.report({
+			type: ModuleUpdaterReportType.BUNDLED_RENDERER_PREFERRED,
+			module: DESKTOP_RENDERER_MODULE_NAME,
+			message: `retired installed renderer ${stale} because the renderer bundled with this shell is at least as new`,
+		});
+		return true;
 	}
 
-	public async refreshInstalledModules(): Promise<ModuleRefreshResult> {
-		if (this.pendingRendererLaunch != null) {
-			return {status: ModuleRefreshStatus.AWAITING_RENDERER};
+	private async retireUninstalledModules(): Promise<boolean> {
+		let retired = false;
+		for (const moduleName of await this.planner.uninstalledCommittedModules()) {
+			if (await this.store.retireModule(moduleName)) {
+				retired = true;
+				this.report({
+					type: ModuleUpdaterReportType.PACKAGE_MISSING,
+					module: moduleName,
+					message: 'dropped a committed module whose files are gone, the bundled renderer does not need it to launch',
+				});
+			}
 		}
+		return retired;
+	}
+
+	private async retireIncompatibleModules(): Promise<boolean> {
+		const cached = await this.readCachedManifest();
+		const retired = await this.store.retireIncompatible((moduleName, sha256) =>
+			this.planner.isRunnable(moduleName, sha256, cached),
+		);
+		for (const moduleName of retired) {
+			this.report({
+				type: ModuleUpdaterReportType.SHELL_INCOMPATIBLE_RETIRED,
+				module: moduleName,
+				message: `retired module ${moduleName} because shell ${this.shellVersion.source} cannot run it`,
+			});
+		}
+		return retired.length > 0;
+	}
+
+	private async readCachedManifest(): Promise<DesktopModuleUpdateManifest | null> {
+		try {
+			const document = await this.manifestRepository.readCached();
+			return document == null ? null : this.manifestRepository.parse(document);
+		} catch {
+			return null;
+		}
+	}
+
+	private async resolveManifestForEnsure(): Promise<DesktopModuleUpdateManifest> {
+		return this.acceptManifest(await this.manifestRepository.resolveMemoizedDocument());
+	}
+
+	private async updateShellFirst(manifest: DesktopModuleUpdateManifest): Promise<{readonly reason: string} | null> {
+		const latestVersion = manifest.shell.latestVersion.source;
+		if (
+			this.selfUpdateShellFirst == null ||
+			compareModuleVersions(manifest.shell.latestVersion, this.shellVersion) <= 0
+		) {
+			return null;
+		}
+		if (this.shellFirstAttempts.has(latestVersion)) {
+			return this.shellFirstAttempts.get(latestVersion) ?? null;
+		}
+		this.shellFirstAttempts.set(latestVersion, null);
+		const result = await this.selfUpdateShellFirst(latestVersion);
+		this.shellFirstAttempts.set(latestVersion, result);
+		this.emit(ModuleUpdaterStatus.CHECKING);
+		return result;
+	}
+
+	public async checkForUpdate(): Promise<DesktopUpdateProbe> {
+		const [manifest, feedLatest] = await Promise.all([
+			this.fetchFreshManifest(ModuleManifestObservationMode.READ_ONLY),
+			this.manifestRepository.fetchShellLatestVersion().catch((error: unknown) => {
+				this.reportFailure(error);
+				return null;
+			}),
+		]);
+		const shellLatest =
+			feedLatest != null && compareModuleVersions(feedLatest, manifest.shell.latestVersion) > 0
+				? feedLatest
+				: manifest.shell.latestVersion;
+		const shellLatestVersion = shellLatest.source;
+		const shellNewer = compareModuleVersions(shellLatest, this.shellVersion) > 0;
+		return {
+			shellLatestVersion,
+			shellNewer,
+			modulesChanged: (await this.collectPendingItems(manifest, this.planner)).length > 0,
+		};
+	}
+
+	public async installPending(): Promise<ModuleLaunchAttempt | null> {
+		this.emit(ModuleUpdaterStatus.CHECKING);
+		this.downloadRate.reset();
+		const manifest = await this.fetchFreshManifest(ModuleManifestObservationMode.RECORD_FETCH);
+		const items = await this.collectPendingItems(manifest, this.planner);
+		const {installed, unresolved} = await this.installItems(items);
+		if (Object.keys(installed).length > 0) {
+			this.emit(ModuleUpdaterStatus.VERIFYING, {current: items.length, total: items.length});
+		}
+		return await this.store.activateMergedForRendererReload(installed, unresolved);
+	}
+
+	private async fetchFreshManifest(mode: ModuleManifestObservationMode): Promise<DesktopModuleUpdateManifest> {
 		this.manifestRepository.clearMemo();
-		const manifest = await this.observeManifest(await this.manifestRepository.fetchLatest());
-		if (this.planner.shellUpdateRequired(manifest)) {
-			return {status: ModuleRefreshStatus.UNCHANGED};
+		return await this.acceptManifest(await this.manifestRepository.fetchLatest(), mode);
+	}
+
+	private async acceptManifest(
+		document: ModuleManifestDocument,
+		mode: ModuleManifestObservationMode = ModuleManifestObservationMode.RECORD_FETCH,
+	): Promise<DesktopModuleUpdateManifest> {
+		try {
+			return await this.observeManifest(document, mode);
+		} catch (error) {
+			if (!(error instanceof ModuleManifestRollbackError)) {
+				throw error;
+			}
+			const fallback = this.lastAccepted?.document ?? (await this.manifestRepository.readCached());
+			if (fallback == null || fallback === document) {
+				throw error;
+			}
+			return await this.observeManifest(fallback, mode);
 		}
+	}
+
+	private async collectPendingItems(
+		manifest: DesktopModuleUpdateManifest,
+		planner: ModuleUpdatePlanner,
+	): Promise<Array<ModulePlanItem>> {
 		const committed = this.store.getCommitted();
-		const names = new Set<string>([...Object.keys(committed), ...blockingModuleNames(manifest)]);
+		const names = new Set<string>([...Object.keys(committed), ...manifest.requiredModules]);
 		const wanted: Array<ModulePlanItem> = [];
 		for (const moduleName of Array.from(names).sort()) {
 			const entry = manifest.modules[moduleName];
-			if (entry == null || !this.planner.isShellCompatible(entry)) {
+			if (entry == null || planner.skipsFeedEntry(manifest, moduleName)) {
 				continue;
 			}
-			if (committed[moduleName] === entry.sha256 && (await this.planner.isInstalled(moduleName, entry.sha256))) {
+			if (committed[moduleName] === entry.sha256 && (await planner.isInstalled(moduleName, entry.sha256))) {
 				continue;
 			}
 			if (this.store.isRejected(moduleName, entry.sha256)) {
@@ -527,15 +733,19 @@ export class ModuleUpdater {
 			}
 			wanted.push({module: moduleName, entry, requirement: ModulePlanItemRequirement.OPTIONAL});
 		}
-		if (wanted.length === 0) {
-			return {status: ModuleRefreshStatus.UNCHANGED};
-		}
+		return wanted;
+	}
+
+	private async installItems(
+		items: ReadonlyArray<ModulePlanItem>,
+	): Promise<{readonly installed: Readonly<Record<string, string>>; readonly unresolved: ReadonlySet<string>}> {
+		const committed = this.store.getCommitted();
 		const installed: Record<string, string> = {};
 		const unresolved = new Set<string>();
-		for (let index = 0; index < wanted.length; index += 1) {
-			const item = wanted[index];
+		for (let index = 0; index < items.length; index += 1) {
+			const item = items[index];
 			try {
-				await this.packageInstaller.install(item, index + 1, wanted.length);
+				await this.packageInstaller.install(item, index + 1, items.length);
 			} catch (error) {
 				if (isStorageFullError(error) || !isDeterministicPackageFailure(error)) {
 					throw error;
@@ -554,50 +764,33 @@ export class ModuleUpdater {
 			}
 			installed[item.module] = item.entry.sha256;
 		}
-		const activated = await this.store.activateMergedForRendererReload(installed, unresolved);
-		if (activated == null) {
-			return {status: ModuleRefreshStatus.UNCHANGED};
+		return {installed, unresolved};
+	}
+
+	public async selectServedModules(modules: Readonly<Record<string, string>>): Promise<ServedModuleSelection> {
+		return await this.planner.selectServedModules(modules);
+	}
+
+	public async revertLaunch(attempt: ModuleLaunchAttempt): Promise<Readonly<Record<string, string>> | null> {
+		const reverted = await this.store.revertLaunchAttempt(attempt, this.planner.bundledModules());
+		if (reverted != null) {
+			this.report({
+				type: ModuleUpdaterReportType.ROLLBACK,
+				message: 'reverted an in place module update whose renderer never confirmed it started',
+			});
 		}
-		this.pendingRendererLaunch = activated;
-		return {
-			status: ModuleRefreshStatus.ACTIVATED,
-			modules: Object.keys(installed),
-			launchAttempt: activated,
-		};
+		return reverted;
 	}
 
 	public async markLaunchSucceeded(attempt: ModuleLaunchAttempt): Promise<void> {
 		if (!(await this.store.markLaunchAttemptSucceeded(attempt))) {
 			return;
 		}
-		if (this.pendingRendererLaunch === attempt) {
-			this.pendingRendererLaunch = null;
-		}
 		await this.store.collectGarbage({now: this.now()});
 	}
 
-	public abandonPendingLaunch(attempt: ModuleLaunchAttempt): void {
-		if (this.pendingRendererLaunch === attempt) {
-			this.pendingRendererLaunch = null;
-		}
-	}
-
-	public async canLaunchWhileUnreachable(): Promise<boolean> {
-		return (
-			(await this.planner.evaluateUnreachableLaunch(this.isStartupUpdateEnforced(), this.isSecurityUpdateRequired()))
-				.kind === ModuleUnreachableLaunchDecision.LAUNCH
-		);
-	}
-
 	private async launchIfAtFloor(): Promise<ModuleUpdaterOutcome> {
-		if (this.isSecurityUpdateRequired()) {
-			return this.blockUpdateRequired(
-				ModuleUpdaterBlockReason.BELOW_FLOOR,
-				[],
-				'the installed shell or module set is below the required Linux security minimum',
-			);
-		}
-		const below = await this.planner.modulesBelowFloor(this.isStartupUpdateEnforced());
+		const below = await this.planner.modulesBelowFloor(this.startupUpdateEnforced);
 		if (below.length > 0) {
 			return this.blockUpdateRequired(
 				ModuleUpdaterBlockReason.BELOW_FLOOR,
@@ -612,7 +805,8 @@ export class ModuleUpdater {
 				'no module is committed and this build carries no offline renderer',
 			);
 		}
-		const launchAttempt = await this.recordRendererLaunchAttempt();
+		await this.store.recordShellVersionConverged();
+		const launchAttempt = await this.store.recordLaunchAttempt();
 		this.emit(ModuleUpdaterStatus.LAUNCHING);
 		return {
 			status: ModuleUpdaterStatus.LAUNCHING,
@@ -623,12 +817,21 @@ export class ModuleUpdater {
 		};
 	}
 
+	private async launchUnreachable(
+		splashStatus: ModuleUpdaterStatus = ModuleUpdaterStatus.UNREACHABLE_LAUNCH,
+	): Promise<ModuleUpdaterOutcome> {
+		const launchAttempt = await this.store.recordLaunchAttempt();
+		this.emit(splashStatus);
+		return {
+			status: ModuleUpdaterStatus.UNREACHABLE_LAUNCH,
+			committed: this.store.getCommitted(),
+			launchAttempt,
+		};
+	}
+
 	private async launchRevertedSetBypassingFloor(
 		committed: Readonly<Record<string, string>>,
 	): Promise<ModuleUpdaterOutcome | null> {
-		if (this.isSecurityUpdateRequired()) {
-			return null;
-		}
 		const names = Object.keys(committed);
 		if (names.length === 0) {
 			return null;
@@ -638,14 +841,14 @@ export class ModuleUpdater {
 				return null;
 			}
 		}
-		const belowFloor = await this.planner.modulesBelowFloor(this.isStartupUpdateEnforced());
+		const belowFloor = await this.planner.modulesBelowFloor(this.startupUpdateEnforced);
 		if (belowFloor.length > 0) {
 			this.report({
 				type: ModuleUpdaterReportType.ROLLBACK_FLOOR_BYPASS,
 				message: `launching the reverted set below the persisted floor for ${belowFloor.join(', ')}, because recovering a bricked install outranks enforcing the forced update`,
 			});
 		}
-		const launchAttempt = await this.recordRendererLaunchAttempt();
+		const launchAttempt = await this.store.recordLaunchAttempt();
 		this.emit(ModuleUpdaterStatus.LAUNCHING);
 		return {
 			status: ModuleUpdaterStatus.LAUNCHING,
@@ -673,85 +876,8 @@ export class ModuleUpdater {
 			reason,
 			modules,
 			message,
-			requiredSecurityUpdate: this.isSecurityUpdateRequired(),
 			updateServerUnreachable,
 		};
-	}
-
-	private async applyUpdatePolicy(manifest: DesktopModuleUpdateManifest): Promise<void> {
-		if (this.platform !== 'linux') {
-			this.startupUpdatePolicy = ModuleStartupUpdatePolicy.REQUIRED;
-			return;
-		}
-		await this.applyLinuxUpdatePolicy(manifest.linuxSecurityMinimum);
-	}
-
-	private persistedLinuxSecurityMinimum(): DesktopLinuxSecurityMinimum | null {
-		const persisted = this.store.getState().linux_security_minimum;
-		if (persisted == null) {
-			return null;
-		}
-		return {
-			version: parseModuleVersion(persisted.version, 'persisted Linux security minimum'),
-			requiredModules: persisted.requiredModules,
-		};
-	}
-
-	private effectiveLinuxSecurityMinimum(
-		manifestMinimum: DesktopLinuxSecurityMinimum | null,
-	): DesktopLinuxSecurityMinimum | null {
-		const persisted = this.persistedLinuxSecurityMinimum();
-		if (manifestMinimum == null) {
-			return persisted;
-		}
-		if (persisted == null) {
-			return manifestMinimum;
-		}
-		const comparison = compareModuleVersions(manifestMinimum.version, persisted.version);
-		if (comparison < 0) {
-			throw new Error(
-				`manifest attempts to lower the Linux security minimum from ${persisted.version.source} to ${manifestMinimum.version.source}`,
-			);
-		}
-		if (comparison === 0 && manifestMinimum.requiredModules.join('\0') !== persisted.requiredModules.join('\0')) {
-			throw new Error(`manifest changes the required modules at Linux security minimum ${persisted.version.source}`);
-		}
-		return manifestMinimum;
-	}
-
-	private async applyLinuxUpdatePolicy(manifestMinimum: DesktopLinuxSecurityMinimum | null): Promise<void> {
-		const minimum = this.effectiveLinuxSecurityMinimum(manifestMinimum);
-		if (minimum != null) {
-			this.startupUpdatePolicy = (await this.planner.securityUpdateRequired(minimum))
-				? ModuleStartupUpdatePolicy.REQUIRED_SECURITY
-				: ModuleStartupUpdatePolicy.OPTIONAL;
-			return;
-		}
-		this.startupUpdatePolicy = ModuleStartupUpdatePolicy.OPTIONAL;
-	}
-
-	private isStartupUpdateEnforced(): boolean {
-		return this.startupUpdatePolicy !== ModuleStartupUpdatePolicy.OPTIONAL;
-	}
-
-	private isSecurityUpdateRequired(): boolean {
-		return this.startupUpdatePolicy === ModuleStartupUpdatePolicy.REQUIRED_SECURITY;
-	}
-
-	private async restoreCachedUpdatePolicy(): Promise<void> {
-		if (this.platform !== 'linux') {
-			return;
-		}
-		await this.applyLinuxUpdatePolicy(null);
-		const document = await this.manifestRepository.readCached();
-		if (document == null) {
-			return;
-		}
-		try {
-			await this.observeManifest(document, ModuleManifestObservationMode.READ_ONLY);
-		} catch (error) {
-			this.reportFailure(error);
-		}
 	}
 
 	private observeManifest(
@@ -760,13 +886,17 @@ export class ModuleUpdater {
 	): Promise<DesktopModuleUpdateManifest> {
 		const observe = async (): Promise<DesktopModuleUpdateManifest> => {
 			const manifest = this.manifestRepository.parse(document);
+			const accepted = this.lastAccepted;
+			if (accepted != null && manifest.metadataVersion < accepted.metadataVersion) {
+				throw new ModuleManifestRollbackError(this.manifestFeed, manifest.metadataVersion, accepted.metadataVersion);
+			}
 			const observation: ModuleManifestFeedObservation = {
 				feed: this.manifestFeed,
 				metadataVersion: manifest.metadataVersion,
 				manifestSha256: createHash('sha256').update(document.bytes).digest('hex'),
 			};
 			this.store.requireManifestFresh(observation);
-			await this.applyUpdatePolicy(manifest);
+			await this.backfillShellRanges(manifest);
 			if (
 				mode === ModuleManifestObservationMode.RECORD_FETCH &&
 				this.recordedManifestSha256 !== observation.manifestSha256
@@ -774,6 +904,7 @@ export class ModuleUpdater {
 				await this.persistManifest(document, manifest, observation);
 				this.recordedManifestSha256 = observation.manifestSha256;
 			}
+			this.lastAccepted = {document, metadataVersion: manifest.metadataVersion};
 			return manifest;
 		};
 		const observed = this.manifestObservationTail.then(observe, observe);
@@ -784,8 +915,29 @@ export class ModuleUpdater {
 		return observed;
 	}
 
+	private async backfillShellRanges(manifest: DesktopModuleUpdateManifest): Promise<void> {
+		const ranges = [];
+		for (const [moduleName, sha256] of Object.entries(this.store.getCommitted())) {
+			const entry = manifest.modules[moduleName];
+			if (entry?.sha256 !== sha256) {
+				continue;
+			}
+			ranges.push({
+				module: moduleName,
+				sha256,
+				minimum: entry.minimumShellVersion?.source ?? null,
+				maximum: entry.maximumShellVersion?.source ?? null,
+			});
+		}
+		await this.store.recordShellRanges(ranges);
+	}
+
+	private async forcedButLaunchable(): Promise<boolean> {
+		return this.forceStartupUpdate && !this.startupUpdateEnforced && (await this.planner.canLaunchCommittedModules());
+	}
+
 	private async startupUpdateRequired(): Promise<boolean> {
-		return this.isStartupUpdateEnforced() || !(await this.planner.canLaunchCommittedModules());
+		return this.forceStartupUpdate || this.startupUpdateEnforced || !(await this.planner.canLaunchCommittedModules());
 	}
 
 	private async execute(plan: ModulePlan): Promise<ModulePlanResult> {
@@ -824,15 +976,6 @@ export class ModuleUpdater {
 		return {desired, installed, blocked, blockedError};
 	}
 
-	private async recordRendererLaunchAttempt(): Promise<ModuleLaunchAttempt> {
-		if (this.pendingRendererLaunch != null) {
-			throw new Error('cannot begin a module renderer launch while another launch is awaiting readiness');
-		}
-		const launchAttempt = await this.store.recordLaunchAttempt();
-		this.pendingRendererLaunch = launchAttempt;
-		return launchAttempt;
-	}
-
 	private async persistManifest(
 		document: ModuleManifestDocument,
 		manifest: DesktopModuleUpdateManifest,
@@ -843,17 +986,16 @@ export class ModuleUpdater {
 		for (const [moduleName, entry] of Object.entries(manifest.modules)) {
 			advertised[moduleName] = entry.sha256;
 		}
-		let linuxSecurityMinimum: LinuxModuleSecurityMinimum | undefined;
-		if (this.platform === 'linux') {
-			if (manifest.linuxSecurityMinimum != null) {
-				linuxSecurityMinimum = {
-					version: manifest.linuxSecurityMinimum.version.source,
-					requiredModules: manifest.linuxSecurityMinimum.requiredModules,
-				};
-			}
-		} else {
-			for (const moduleName of blockingModuleNames(manifest)) {
-				floor[moduleName] = manifest.modules[moduleName].sha256;
+		if (this.startupUpdateEnforced) {
+			const enforced = this.store.getState().floor;
+			for (const moduleName of manifest.requiredModules) {
+				if (this.planner.bundleCoversModule(moduleName, manifest)) {
+					continue;
+				}
+				const sha256 = this.planner.compatibleEntry(manifest, moduleName)?.sha256 ?? enforced[moduleName];
+				if (sha256 != null) {
+					floor[moduleName] = sha256;
+				}
 			}
 		}
 		await this.manifestRepository.persist(document);
@@ -862,7 +1004,6 @@ export class ModuleUpdater {
 			fetchedAt: new Date(this.now()).toISOString(),
 			manifest: observation,
 			floor,
-			linuxSecurityMinimum,
 			advertised,
 		});
 	}
@@ -934,17 +1075,24 @@ export class ModuleUpdater {
 			readonly seconds?: number;
 			readonly moduleName?: string;
 			readonly detail?: string | null;
+			readonly receivedBytes?: number;
+			readonly totalBytes?: number;
+			readonly bytesPerSecond?: number;
+			readonly stalled?: boolean;
 		} = {},
 	): void {
 		this.lastState = {
 			status,
-			requiredSecurityUpdate: this.isSecurityUpdateRequired(),
 			current: patch.current ?? null,
 			total: patch.total ?? null,
 			progress: patch.progress ?? null,
 			seconds: patch.seconds ?? null,
 			moduleName: patch.moduleName ?? null,
 			detail: patch.detail ?? null,
+			receivedBytes: patch.receivedBytes ?? null,
+			totalBytes: patch.totalBytes ?? null,
+			bytesPerSecond: patch.bytesPerSecond ?? null,
+			stalled: patch.stalled === true,
 		};
 		this.onState(this.lastState);
 	}

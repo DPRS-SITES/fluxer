@@ -78,8 +78,12 @@ pub async fn render(
                 .map(|response| response.emojis)
                 .map_err(|error| tracing::warn!(%error, guild_id, "admin API request failed: list guild emojis"))
                 .unwrap_or_default();
-            Some(tabs::emojis::emojis_tab(
-                config, &guild, &emojis, csrf_token,
+            Some(tabs::emojis::guild_assets_tab(
+                config,
+                &guild,
+                &emojis,
+                csrf_token,
+                tabs::emojis::GuildAssetKind::Emoji,
             ))
         }
         "stickers" => {
@@ -92,8 +96,12 @@ pub async fn render(
                 .map(|response| response.stickers)
                 .map_err(|error| tracing::warn!(%error, guild_id, "admin API request failed: list guild stickers"))
                 .unwrap_or_default();
-            Some(tabs::stickers::stickers_tab(
-                config, &guild, &stickers, csrf_token,
+            Some(tabs::emojis::guild_assets_tab(
+                config,
+                &guild,
+                &stickers,
+                csrf_token,
+                tabs::emojis::GuildAssetKind::Sticker,
             ))
         }
         "threads" => {
@@ -106,20 +114,11 @@ pub async fn render(
                 .map(|response| response.threads)
                 .map_err(|error| tracing::warn!(%error, guild_id, "admin API request failed: list guild threads"))
                 .unwrap_or_default();
-            let threads_enabled = client
-                .get_instance_config()
-                .await
-                .map(|instance| instance.channel_threads.enabled)
-                .map_err(
-                    |error| tracing::warn!(%error, "admin API request failed: get instance config"),
-                )
-                .unwrap_or(false);
             Some(tabs::threads::threads_tab(
                 config,
                 &guild,
                 &threads,
                 acl::has_permission(admin_acls, acl::MESSAGE_DELETE_ALL),
-                threads_enabled,
                 csrf_token,
             ))
         }
@@ -190,7 +189,14 @@ pub async fn render(
                 .await
                 .map_err(|error| tracing::warn!(%error, guild_id, "admin API request failed: list guild applications"))
                 .unwrap_or_default();
-            Some(tabs::applications::applications_tab(config, &guild, &apps))
+            Some(
+                crate::templates::pages::user_detail_tabs::applications::applications_tab(
+                    config,
+                    &apps,
+                    "No applications installed",
+                    "This guild does not have any installed applications.",
+                ),
+            )
         }
         "archives" => {
             if !acl::has_any_permission(

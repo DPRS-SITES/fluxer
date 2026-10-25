@@ -4,21 +4,12 @@ import {showPremiumActionErrorModal} from '@app/features/app/components/dialogs/
 import {Logger} from '@app/features/platform/utils/AppLogger';
 import * as PremiumCommands from '@app/features/premium/commands/PremiumCommands';
 import * as ToastCommands from '@app/features/ui/commands/ToastCommands';
-import {openExternalUrl} from '@app/features/ui/utils/NativeUtils';
 import * as LocaleUtils from '@app/features/user/utils/LocaleUtils';
 import {getFormattedLongDate} from '@fluxer/date_utils/src/DateFormatting';
 import {msg} from '@lingui/core/macro';
 import {useLingui} from '@lingui/react/macro';
 import {useCallback, useState} from 'react';
 
-const CUSTOMER_PORTAL_FAILED_TITLE_DESCRIPTOR = msg({
-	message: "Couldn't open the billing portal",
-	comment: 'Title of the generic fallback error modal shown when opening the billing customer portal fails.',
-});
-const CUSTOMER_PORTAL_FAILED_MESSAGE_DESCRIPTOR = msg({
-	message: 'Something went wrong while opening the billing portal. Please try again in a moment.',
-	comment: 'Body of the generic fallback error modal shown when opening the billing customer portal fails.',
-});
 const YOUR_SUBSCRIPTION_HAS_BEEN_SET_TO_CANCEL_AT_DESCRIPTOR = msg({
 	message: 'Your subscription has been set to cancel at the end of your billing period.',
 	comment: 'Toast success shown after a Plutonium subscription is set to cancel at the end of the billing period.',
@@ -71,6 +62,16 @@ const YOUR_SUBSCRIPTION_WILL_SWITCH_TO_MONTHLY_BILLING_DESCRIPTOR = msg({
 	message: 'Your subscription will switch to monthly billing at the next renewal.',
 	comment: 'Toast success shown after a Plutonium subscription is scheduled to switch to monthly billing.',
 });
+const BILLING_CYCLE_CHANGED_DESCRIPTORS = {
+	now: {
+		yearly: YOUR_SUBSCRIPTION_HAS_BEEN_SWITCHED_TO_YEARLY_BILLING_DESCRIPTOR,
+		monthly: YOUR_SUBSCRIPTION_HAS_BEEN_SWITCHED_TO_MONTHLY_BILLING_DESCRIPTOR,
+	},
+	period_end: {
+		yearly: YOUR_SUBSCRIPTION_WILL_SWITCH_TO_YEARLY_BILLING_DESCRIPTOR,
+		monthly: YOUR_SUBSCRIPTION_WILL_SWITCH_TO_MONTHLY_BILLING_DESCRIPTOR,
+	},
+} as const;
 const YOUR_PENDING_BILLING_CHANGE_HAS_BEEN_CANCELED_DESCRIPTOR = msg({
 	message: 'Your pending billing change has been canceled.',
 	comment: 'Toast success shown after a scheduled Plutonium billing cycle change is canceled.',
@@ -131,22 +132,13 @@ export const useSubscriptionActions = (countryCode?: string | null) => {
 	const handleOpenCustomerPortal = useCallback(async () => {
 		setLoadingPortal(true);
 		try {
-			const url = await PremiumCommands.createCustomerPortalSession();
-			void openExternalUrl(url);
-		} catch (error) {
-			logger.error('Failed to open customer portal', error);
-			showPremiumActionErrorModal(
-				error,
-				{
-					fallbackTitle: CUSTOMER_PORTAL_FAILED_TITLE_DESCRIPTOR,
-					fallbackMessage: CUSTOMER_PORTAL_FAILED_MESSAGE_DESCRIPTOR,
-				},
+			await PremiumCommands.openCustomerPortalWithErrorModal(
 				'app.plutonium.use-subscription-actions.open-customer-portal.generic-error-modal',
 			);
 		} finally {
 			setLoadingPortal(false);
 		}
-	}, [i18n]);
+	}, []);
 	const handleCancelSubscription = useCallback(async () => {
 		setLoadingCancel(true);
 		try {
@@ -216,15 +208,7 @@ export const useSubscriptionActions = (countryCode?: string | null) => {
 			try {
 				await PremiumCommands.changeSubscriptionBillingCycle(billingCycle, effectiveAt);
 				await PremiumCommands.refreshPremiumState(countryCode ?? undefined);
-				ToastCommands.success(
-					effectiveAt === 'period_end'
-						? billingCycle === 'yearly'
-							? i18n._(YOUR_SUBSCRIPTION_WILL_SWITCH_TO_YEARLY_BILLING_DESCRIPTOR)
-							: i18n._(YOUR_SUBSCRIPTION_WILL_SWITCH_TO_MONTHLY_BILLING_DESCRIPTOR)
-						: billingCycle === 'yearly'
-							? i18n._(YOUR_SUBSCRIPTION_HAS_BEEN_SWITCHED_TO_YEARLY_BILLING_DESCRIPTOR)
-							: i18n._(YOUR_SUBSCRIPTION_HAS_BEEN_SWITCHED_TO_MONTHLY_BILLING_DESCRIPTOR),
-				);
+				ToastCommands.success(i18n._(BILLING_CYCLE_CHANGED_DESCRIPTORS[effectiveAt][billingCycle]));
 			} catch (error) {
 				logger.error('Failed to change subscription billing cycle', error);
 				showPremiumActionErrorModal(

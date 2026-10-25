@@ -1,18 +1,18 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+import type {
+	OperatorPassPriceTable,
+	OperatorPassReleaseListTable,
+	OperatorPassWithdrawalCountryTable,
+} from '@app/api/operator_pass/OperatorPassPrices';
 import type {WorkerTaskName} from '@app/api/worker/WorkerLaneConfig';
 import type {CachePurgeAdapterName, StoreProductSlotName} from '@fluxer/config/src/MasterConfig';
 import type {AccountIdentityMode, TagStyle} from '@fluxer/constants/src/AccountIdentityConstants';
+import type {SmtpTlsMode} from '@fluxer/constants/src/SmtpConstants';
+import type {OperatorPassCurrency} from '@fluxer/schema/src/domains/operator_pass/OperatorPassSchemas';
 
 export type APIWorkerMode = 'all_lanes' | 'single_lane' | 'single_task';
 export type APIWorkerLaneName = 'realtime' | 'unfurl' | 'lifecycle' | 'batch' | 'crosspost';
-export type PushProviderEnvironment = 'production' | 'development';
-
-export interface PushProviderAppConfig {
-	appId: string;
-	topic?: string;
-	environment?: PushProviderEnvironment;
-}
 
 export interface AppStoreAppConfig {
 	bundleId: string;
@@ -25,13 +25,41 @@ export interface TrustedCallerConfig {
 	buckets: Array<string>;
 }
 
+interface SmtpConfig {
+	host: string;
+	port: number;
+	username: string;
+	password: string;
+	tlsMode: SmtpTlsMode | null;
+}
+
+interface APICachePurgeTarget {
+	endpoint: string;
+	token: string;
+	timeoutMs: number;
+}
+
+export interface OperatorPassConfig {
+	saleOpensAt: Date | null;
+	priceRisesAt: Date | null;
+	graceMs: number;
+	clockOffsetMs: number;
+	labsGuildId: bigint | null;
+	labsOperatorRoleId: bigint | null;
+	standardPricesMinor: OperatorPassPriceTable | null;
+	releaseLists: OperatorPassReleaseListTable;
+	transferLockMs: number;
+	withdrawalCountries: OperatorPassWithdrawalCountryTable;
+	stoppedCountries: ReadonlySet<string>;
+	disabledCurrencies: ReadonlySet<OperatorPassCurrency>;
+	wallTierMinimums: ReadonlyArray<number>;
+	maxQuantity: number;
+}
+
 export interface APICachePurgeConfig {
 	adapter: CachePurgeAdapterName;
-	http: {
-		endpoint: string;
-		token: string;
-		timeoutMs: number;
-	};
+	http: APICachePurgeTarget;
+	controller: APICachePurgeTarget;
 }
 
 interface APIGeoipFilesystemConfig {
@@ -46,7 +74,7 @@ interface APIGeoipS3Config {
 	s3Key: string;
 }
 
-export type APIGeoipConfig = APIGeoipFilesystemConfig | APIGeoipS3Config;
+type APIGeoipConfig = APIGeoipFilesystemConfig | APIGeoipS3Config;
 
 export interface APIConfig {
 	nodeEnv: 'development' | 'production';
@@ -95,7 +123,7 @@ export interface APIConfig {
 		skipBuckets: Array<string>;
 	};
 	search: {
-		engine: 'elasticsearch' | 'meilisearch';
+		engine: 'elasticsearch' | 'meilisearch' | 'none';
 		url: string;
 		apiKey: string;
 		username: string;
@@ -165,12 +193,10 @@ export interface APIConfig {
 		fromName: string;
 		replyToEmail: string;
 		appBaseUrl: string;
-		smtp?: {
-			host: string;
-			port: number;
-			username: string;
-			password: string;
-			secure: boolean;
+		smtp?: SmtpConfig;
+		fallback?: {
+			domains: Array<string>;
+			smtp: SmtpConfig & {headers?: Record<string, string>};
 		};
 	};
 	blocklistFeeds: {
@@ -192,6 +218,7 @@ export interface APIConfig {
 			latitude: number;
 			longitude: number;
 		};
+		p2pStunUrls?: Array<string>;
 	};
 	stripe: {
 		enabled: boolean;
@@ -203,6 +230,7 @@ export interface APIConfig {
 			monthlyBrl?: string;
 			monthlyDkk?: string;
 			monthlyInr?: string;
+			monthlyIsk?: string;
 			monthlyNok?: string;
 			monthlyPln?: string;
 			monthlySek?: string;
@@ -212,6 +240,7 @@ export interface APIConfig {
 			yearlyBrl?: string;
 			yearlyDkk?: string;
 			yearlyInr?: string;
+			yearlyIsk?: string;
 			yearlyNok?: string;
 			yearlyPln?: string;
 			yearlySek?: string;
@@ -224,6 +253,8 @@ export interface APIConfig {
 			gift1YearDkk?: string;
 			gift1MonthNok?: string;
 			gift1YearNok?: string;
+			gift1MonthIsk?: string;
+			gift1YearIsk?: string;
 			gift1MonthBrl?: string;
 			gift1MonthInr?: string;
 			gift1MonthPln?: string;
@@ -257,11 +288,6 @@ export interface APIConfig {
 			rpId: string;
 			allowedOrigins: Array<string>;
 		};
-		vapid: {
-			publicKey: string;
-			privateKey: string;
-			email?: string;
-		};
 		bluesky: BlueskyOAuthConfig;
 	};
 	klipy: {
@@ -283,12 +309,15 @@ export interface APIConfig {
 			logoUrl?: string;
 			wordmarkUrl?: string;
 			faviconUrl?: string;
+			faviconDarkUrl?: string;
+			signInBackdropUrl?: string;
 			themeColor?: string;
 			statusPageUrl?: string;
 			statusPageIncidentHistoryUrl?: string;
 		};
 		setup: {
 			configured: boolean;
+			token: string | null;
 		};
 		accountIdentity: AccountIdentityMode | null;
 		tagStyle: TagStyle | null;
@@ -296,6 +325,10 @@ export interface APIConfig {
 	discovery: {
 		enabled: boolean;
 		minMemberCount: number;
+	};
+	operatorPass: OperatorPassConfig;
+	paymentDisputes: {
+		closureEffectiveAt: Date | null;
 	};
 	dev: {
 		relaxRegistrationRateLimits: boolean;
@@ -308,17 +341,13 @@ export interface APIConfig {
 	presignedHarvestDownloadsEnabled: boolean;
 	attachmentDecayEnabled: boolean;
 	deletionGracePeriodHours: number;
+	reportRetention: {
+		days: number;
+		dryRun: boolean;
+	};
 	inactivityDeletionThresholdDays?: number;
 	push: {
 		publicVapidKey?: string;
-		apns: {
-			enabled: boolean;
-			teamId?: string;
-			keyId?: string;
-			privateKey?: string;
-			privateKeyPath?: string;
-			apps: Array<PushProviderAppConfig>;
-		};
 	};
 	appStore: {
 		enabled: boolean;
@@ -340,6 +369,7 @@ export interface APIConfig {
 		products: Record<string, StoreProductSlotName>;
 		pushAudience?: string;
 		pushServiceAccountEmail?: string;
+		selfServiceRefunds: boolean;
 	};
 	storeBilling: {
 		sandboxUserIds: Array<string>;
@@ -351,6 +381,7 @@ export interface APIConfig {
 		taskName?: WorkerTaskName;
 		enableCronScheduler?: boolean;
 		metricsPort?: number;
+		embedded: boolean;
 		laneConcurrencyOverrides: {
 			realtime?: number;
 			unfurl?: number;
@@ -358,13 +389,6 @@ export interface APIConfig {
 			batch?: number;
 			crosspost?: number;
 		};
-	};
-	ncmec: {
-		enabled: boolean;
-		baseUrl?: string;
-		username?: string;
-		password?: string;
-		reporterEmail?: string;
 	};
 }
 

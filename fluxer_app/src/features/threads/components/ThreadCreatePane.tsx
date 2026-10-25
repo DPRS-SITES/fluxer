@@ -4,60 +4,41 @@ import {Message as MessageComponent} from '@app/features/channel/components/Chan
 import {LexicalChannelTextareaContent} from '@app/features/channel/components/LexicalChannelTextareaContent';
 import type {Channel} from '@app/features/channel/models/Channel';
 import * as DraftCommands from '@app/features/messaging/commands/DraftCommands';
+import {MarkdownContext} from '@app/features/messaging/components/markdown/renderers/RendererTypes';
 import type {SendMessageFunction} from '@app/features/messaging/hooks/useMessageSubmission';
 import Drafts from '@app/features/messaging/state/MessagingDrafts';
 import Messages from '@app/features/messaging/state/MessagingMessages';
 import {CloudUpload} from '@app/features/messaging/upload/CloudUpload';
 import * as MessageSubmitUtils from '@app/features/messaging/utils/MessageSubmitUtils';
+import {getParserFlagsForContext} from '@app/features/messaging/utils/markdown/MarkdownParserFlags';
+import {parseAndRenderToPlaintext} from '@app/features/messaging/utils/markdown/Plaintext';
 import {formatUploadingAttachmentSummary} from '@app/features/messaging/utils/UploadingAttachmentLabelUtils';
-import Permission from '@app/features/permissions/state/Permission';
+import {shouldDisableAutofocusOnMobile} from '@app/features/platform/utils/AutofocusUtils';
 import * as ThreadCommands from '@app/features/threads/commands/ThreadCommands';
 import {openThread} from '@app/features/threads/commands/ThreadNavigation';
 import styles from '@app/features/threads/components/ThreadCreatePane.module.css';
 import ThreadPanel from '@app/features/threads/state/ThreadPanel';
 import {canCreateThreadIn} from '@app/features/threads/utils/ThreadActionRules';
 import * as D from '@app/features/threads/utils/ThreadMessageDescriptors';
-import {sendThreadStarter} from '@app/features/threads/utils/ThreadStarterSend';
+import {
+	resolveStarterArgs,
+	sendThreadStarter,
+	useThreadCreateCooldownSeconds,
+} from '@app/features/threads/utils/ThreadStarterSend';
 import * as ToastCommands from '@app/features/ui/commands/ToastCommands';
 import {Input} from '@app/features/ui/components/form/FormInput';
 import {Switch} from '@app/features/ui/components/form/FormSwitch';
 import Users from '@app/features/user/state/Users';
 import * as FormUtils from '@app/lib/forms';
-import {ChannelTypes, MessagePreviewContext, Permissions} from '@fluxer/constants/src/ChannelConstants';
+import {ChannelTypes, MessagePreviewContext} from '@fluxer/constants/src/ChannelConstants';
 import {publicThreadTypeFor, THREAD_NAME_MAX_LENGTH} from '@fluxer/constants/src/ThreadConstants';
-import type {MessageStickerItem} from '@fluxer/schema/src/domains/message/MessageResponseSchemas';
 import * as SnowflakeUtils from '@fluxer/snowflake/src/SnowflakeUtils';
 import {useLingui} from '@lingui/react/macro';
 import {ChatsIcon} from '@phosphor-icons/react';
 import {observer} from 'mobx-react-lite';
 import {useCallback, useEffect, useRef, useState} from 'react';
 
-function useCooldownSeconds(until: number): number {
-	const [now, setNow] = useState(() => Date.now());
-	useEffect(() => {
-		if (until <= Date.now()) return;
-		const timer = window.setInterval(() => setNow(Date.now()), 1000);
-		return () => window.clearInterval(timer);
-	}, [until]);
-	return Math.max(0, Math.ceil((until - now) / 1000));
-}
-
-function resolveStarterArgs(
-	stickersOrTts?: Array<MessageStickerItem> | boolean,
-	favoriteMemeIdOrStickers?: string | Array<MessageStickerItem>,
-	maybeFavoriteMemeId?: string,
-): {stickers: Array<MessageStickerItem>; favoriteMemeId?: string} {
-	if (typeof stickersOrTts === 'boolean') {
-		return {
-			stickers: Array.isArray(favoriteMemeIdOrStickers) ? favoriteMemeIdOrStickers : [],
-			favoriteMemeId: maybeFavoriteMemeId,
-		};
-	}
-	return {
-		stickers: stickersOrTts ?? [],
-		favoriteMemeId: typeof favoriteMemeIdOrStickers === 'string' ? favoriteMemeIdOrStickers : undefined,
-	};
-}
+const THREAD_NAME_PARSER_FLAGS = getParserFlagsForContext(MarkdownContext.STANDARD_WITHOUT_JUMBO);
 
 interface ThreadCreatePaneProps {
 	parent: Channel;
@@ -71,7 +52,36 @@ export const ThreadCreatePane = observer(({parent, messageId}: ThreadCreatePaneP
 	const [isPrivate, setIsPrivate] = useState(false);
 	const nameRef = useRef(name);
 	nameRef.current = name;
+	const nameInputRef = useRef<HTMLInputElement>(null);
+	useEffect(() => {
+		const input = nameInputRef.current;
+		if (!input || shouldDisableAutofocusOnMobile()) return;
+		const inertRoot = input.closest('[inert]');
+		if (!inertRoot) {
+			input.focus();
+			return;
+		}
+		const observer = new MutationObserver(() => {
+			if (input.closest('[inert]')) return;
+			observer.disconnect();
+			input.focus();
+		});
+		observer.observe(inertRoot, {attributes: true, attributeFilter: ['inert']});
+		return () => observer.disconnect();
+	}, []);
+	void Messages.version;
 	const sourceMessage = messageId ? Messages.getMessage(parent.id, messageId) : undefined;
+	const suggestedName = sourceMessage?.content
+		? parseAndRenderToPlaintext(sourceMessage.content, THREAD_NAME_PARSER_FLAGS, {
+				channelId: parent.id,
+				includeEmojiNames: true,
+				mentionChannels: sourceMessage.mentionChannels,
+				i18n,
+			})
+				.replace(/\s+/g, ' ')
+				.trim()
+				.slice(0, THREAD_NAME_MAX_LENGTH)
+		: '';
 	const draftKey = `thread-create:${parent.id}`;
 	const accountKey = Users.viewAccountKey;
 	const draft = Drafts.getDraft(draftKey);
@@ -79,16 +89,13 @@ export const ThreadCreatePane = observer(({parent, messageId}: ThreadCreatePaneP
 	const canPrivate =
 		messageId == null && parent.type === ChannelTypes.GUILD_TEXT && canCreateThreadIn(parent, 'private');
 	const canPublic = canCreateThreadIn(parent, messageId ? 'from_message' : 'public');
-	const bypassesSlowmode = Permission.can(Permissions.BYPASS_SLOWMODE, parent);
-	const cooldownSeconds = useCooldownSeconds(bypassesSlowmode ? 0 : ThreadPanel.getCreateCooldownUntil(parent.id));
+
+	const cooldownSeconds = useThreadCreateCooldownSeconds(parent);
 	const privateSelected = canPrivate && (isPrivate || !canPublic);
 	const disabled = cooldownSeconds > 0 || (!canPublic && !canPrivate);
 	const handleSubmit: SendMessageFunction = useCallback(
 		(content, hasAttachments, stickersOrTts, favoriteMemeIdOrStickers, maybeFavoriteMemeId) => {
-			const threadName = (nameRef.current.trim() || sourceMessage?.content.trim() || '').slice(
-				0,
-				THREAD_NAME_MAX_LENGTH,
-			);
+			const threadName = (nameRef.current.trim() || suggestedName).slice(0, THREAD_NAME_MAX_LENGTH);
 			if (!threadName) {
 				setNameError(i18n._(D.THREAD_NAME_REQUIRED_DESCRIPTOR));
 				return false;
@@ -129,7 +136,7 @@ export const ThreadCreatePane = observer(({parent, messageId}: ThreadCreatePaneP
 				});
 			return true;
 		},
-		[draftKey, i18n, messageId, parent, privateSelected, sourceMessage],
+		[draftKey, i18n, messageId, parent, privateSelected, suggestedName],
 	);
 	return (
 		<div className={styles.pane} data-flx="threads.thread-create-pane.pane">
@@ -138,15 +145,15 @@ export const ThreadCreatePane = observer(({parent, messageId}: ThreadCreatePaneP
 					<ChatsIcon className={styles.iconGlyph} data-flx="threads.thread-create-pane.icon-glyph" />
 				</div>
 				<Input
+					ref={nameInputRef}
 					value={name}
 					onChange={(event) => {
 						setName(event.target.value);
 						setNameError(undefined);
 					}}
 					label={i18n._(D.THREAD_NAME_DESCRIPTOR)}
-					placeholder={sourceMessage?.content.slice(0, THREAD_NAME_MAX_LENGTH) || i18n._(D.NEW_THREAD_DESCRIPTOR)}
+					placeholder={suggestedName || i18n._(D.NEW_THREAD_DESCRIPTOR)}
 					maxLength={THREAD_NAME_MAX_LENGTH}
-					autoFocus
 					autoComplete="off"
 					error={nameError}
 					data-flx="threads.thread-create-pane.input.name"

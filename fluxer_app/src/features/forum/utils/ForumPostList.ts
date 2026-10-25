@@ -15,11 +15,11 @@ export function isPinnedPost(post: Channel): boolean {
 	return (post.flags & ChannelFlags.PINNED) !== 0;
 }
 
-export function postSortKey(post: Channel, sortOrder: ForumSortOrderType): string {
+function postSortKey(post: Channel, sortOrder: ForumSortOrderType): string {
 	return sortOrder === ForumSortOrderTypes.CREATION_TIME ? post.id : lastActivityId(post);
 }
 
-export function matchesTagFilter(
+function matchesTagFilter(
 	appliedTags: ReadonlyArray<string>,
 	tagIds: ReadonlyArray<string>,
 	tagSetting: ForumTagSetting,
@@ -30,7 +30,7 @@ export function matchesTagFilter(
 }
 
 export interface ForumPostListInput {
-	active: ReadonlyArray<Channel>;
+	known: ReadonlyArray<Channel>;
 	extra: ReadonlyArray<Channel>;
 	sortOrder: ForumSortOrderType;
 	tagIds: ReadonlyArray<string>;
@@ -44,7 +44,7 @@ export interface ForumPostListResult {
 }
 
 export function buildForumPostList({
-	active,
+	known,
 	extra,
 	sortOrder,
 	tagIds,
@@ -54,7 +54,7 @@ export function buildForumPostList({
 	const activePosts: Array<Channel> = [];
 	const archivedPosts: Array<Channel> = [];
 	let pinned: Channel | null = null;
-	for (const post of [...active, ...extra]) {
+	for (const post of [...known, ...extra]) {
 		if (seen.has(post.id)) continue;
 		seen.add(post.id);
 		if (!matchesTagFilter(post.appliedTags, tagIds, tagSetting)) continue;
@@ -67,5 +67,6 @@ export function buildForumPostList({
 	const byKey = (a: Channel, b: Channel) =>
 		SnowflakeUtils.compare(postSortKey(b, sortOrder), postSortKey(a, sortOrder));
 	activePosts.sort(byKey);
+	archivedPosts.sort(byKey);
 	return {pinned, active: activePosts, archived: archivedPosts};
 }
