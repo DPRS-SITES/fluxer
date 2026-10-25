@@ -29,6 +29,7 @@ env:
   CHANNEL: ${{ inputs.channel }}
   BUILD_CHANNEL: ${{ inputs.channel == 'canary' && 'canary' || 'stable' }}
   TEST_BUILD: "true"
+  FLUXER_ELECTRON_REPO: fluxerapp/fluxer
 
 jobs:
   meta:
@@ -43,14 +44,14 @@ jobs:
       source_sha: ${{ steps.meta.outputs.source_sha }}
     steps:
       - name: Checkout source
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: main
 
       - name: Set up Rust toolchain (CI helpers)
-        uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9
+        uses: dtolnay/rust-toolchain@02cb101ec7c40f2c49e1d9714d64511d8e1b74de
         with:
-          toolchain: "1.94.1"
+          toolchain: "1.98.1"
 
       - name: Set metadata
         id: meta
@@ -396,15 +397,43 @@ jobs:
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step create_portable_zip_windows
 
+      - name: Download patched Electron distribution (Linux)
+        if: matrix.platform == 'linux'
+        working-directory: ${{ env.WORKDIR }}/fluxer_desktop
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ELECTRON_ARCH: ${{ matrix.arch }}
+          FLUXER_ELECTRON_DIST: ${{ runner.temp }}/fluxer-electron-dist
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_tag=$(jq -er .releaseTag electron/runtime.json)
+          version=$(jq -er .electronVersion electron/runtime.json)
+          gh release download "$release_tag" --repo "$FLUXER_ELECTRON_REPO" \
+            --pattern "electron-v$version-linux-$ELECTRON_ARCH.zip" \
+            --pattern "electron-v$version-linux-$ELECTRON_ARCH.fluxer.json" \
+            --dir "$FLUXER_ELECTRON_DIST"
+
       - name: Build Electron app (Linux)
         if: matrix.platform == 'linux'
         working-directory: ${{ env.WORKDIR }}/fluxer_desktop
         env:
           BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
           USE_SYSTEM_FPM: true
+          FLUXER_ELECTRON_DIST: ${{ runner.temp }}/fluxer-electron-dist
         run: >-
           cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
           --step build_app_linux
+
+      - name: Verify the packaged shell boots its bundled renderer (Linux)
+        if: matrix.platform == 'linux' && matrix.arch == 'x64'
+        working-directory: ${{ env.WORKDIR }}/fluxer_desktop
+        env:
+          BUILD_CHANNEL: ${{ env.BUILD_CHANNEL }}
+          BUILD_VERSION: ${{ env.VERSION }}
+        run: >-
+          cargo run --locked --quiet --manifest-path ${{ github.workspace }}/_ci/tools/ci/Cargo.toml -- build-desktop
+          --step verify_bundled_renderer_linux
 
       - name: Upload artifacts to GitHub Actions
         uses: actions/upload-artifact@v4
