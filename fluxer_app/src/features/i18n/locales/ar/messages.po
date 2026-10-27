@@ -6097,6 +6097,11 @@ msgstr "الرموز الاحتياطية"
 msgid "Backup codes regenerated"
 msgstr "تم تجديد الرموز الاحتياطية"
 
+#. Public Operator Pass count in private settings, separate from current holdings. {count} is a number, including valid purchases passed on.
+#: src/features/premium/utils/OperatorPassRecognitionMessages.ts
+msgid "Badge and wall count: {count}"
+msgstr "العدد للشارة والجدار: {count}"
+
 #. Title of the profile settings section that lists the badges you hold and lets you hide each one.
 #: src/features/user/utils/UserMessageDescriptors.ts
 msgid "Badges"
@@ -8264,6 +8269,7 @@ msgid "Choose a destination"
 msgstr "اختر وجهة"
 
 #. Button on a short link error screen that returns to the instance chooser.
+#: src/features/auth/flow/AuthRuntimeTargetBoundary.tsx
 #: src/features/auth/flow/AuthRuntimeTargetResetAction.tsx
 msgid "Choose a different instance"
 msgstr "اختر مثيلاً مختلفًا"
@@ -10706,6 +10712,7 @@ msgid "Could not load the instance configuration. Try reloading the page."
 msgstr "تعذر تحميل إعدادات المثيل. حاول إعادة تحميل الصفحة."
 
 #: src/features/auth/flow/AuthRouteLoadError.tsx
+#: src/features/auth/flow/AuthRuntimeTargetBoundary.tsx
 msgid "Could not load this page"
 msgstr "تعذر تحميل هذه الصفحة"
 
@@ -19502,6 +19509,11 @@ msgstr "ضم رموز النسخ الاحتياطي للمصادقة الثنا�
 #: src/features/moderation/components/pages/ReportPage.tsx
 msgid "Include the community ID."
 msgstr "أدخل معرف المجتمع."
+
+#. Explains the public Operator Pass count. Each valid pass counts once per account, including purchases passed on. Holding an active pass is still required for benefits.
+#: src/features/premium/utils/OperatorPassRecognitionMessages.ts
+msgid "Includes valid passes you have and passes you bought and passed on. Keep at least one active pass to retain your badge and wall listing. Paused or ended passes do not count."
+msgstr "يشمل التصاريح السارية التي تملكها والتصاريح التي اشتريتها ونقلتها إلى غيرك. احتفظ بتصريح نشط واحد على الأقل للاحتفاظ بشارتك وموضعك على الجدار. لا تُحتسب التصاريح الموقوفة مؤقتًا أو المنتهية."
 
 #. Note under the Operator Pass price when buying one pass. The price includes tax and is paid once, it never renews.
 #: src/features/premium/components/modals/OperatorPassCheckoutPresentation.tsx
@@ -38495,6 +38507,7 @@ msgstr "جرّب بحثًا مختلفًا."
 #. Generic action label for retrying a failed or interrupted operation.
 #: src/features/app/components/layout/app_layout/nagbars/ConnectionNagbar.tsx
 #: src/features/auth/flow/AuthRouteLoadError.tsx
+#: src/features/auth/flow/AuthRuntimeTargetBoundary.tsx
 #: src/features/i18n/utils/CommonMessageDescriptors.ts
 #: src/features/premium/components/modals/OperatorPassCheckoutModal.tsx
 msgid "Try again"
@@ -38521,6 +38534,7 @@ msgid "Try again or go back to the applications list."
 msgstr "حاول مرة أخرى أو ارجع إلى قائمة التطبيقات."
 
 #: src/features/auth/flow/AuthRouteLoadError.tsx
+#: src/features/auth/flow/AuthRuntimeTargetBoundary.tsx
 msgid "Try again, or refresh {productName} if the problem continues."
 msgstr "حاول مرة أخرى، أو أعد تحميل {productName} إذا استمرت المشكلة."
 

@@ -6097,6 +6097,11 @@ msgstr "Резервные коды"
 msgid "Backup codes regenerated"
 msgstr "Резервные коды обновлены"
 
+#. Public Operator Pass count in private settings, separate from current holdings. {count} is a number, including valid purchases passed on.
+#: src/features/premium/utils/OperatorPassRecognitionMessages.ts
+msgid "Badge and wall count: {count}"
+msgstr "Количество для значка и стены: {count}"
+
 #. Title of the profile settings section that lists the badges you hold and lets you hide each one.
 #: src/features/user/utils/UserMessageDescriptors.ts
 msgid "Badges"
@@ -8264,6 +8269,7 @@ msgid "Choose a destination"
 msgstr "Выберите место назначения"
 
 #. Button on a short link error screen that returns to the instance chooser.
+#: src/features/auth/flow/AuthRuntimeTargetBoundary.tsx
 #: src/features/auth/flow/AuthRuntimeTargetResetAction.tsx
 msgid "Choose a different instance"
 msgstr "Выбрать другой экземпляр"
@@ -10706,6 +10712,7 @@ msgid "Could not load the instance configuration. Try reloading the page."
 msgstr "Не удалось загрузить конфигурацию экземпляра. Попробуйте перезагрузить страницу."
 
 #: src/features/auth/flow/AuthRouteLoadError.tsx
+#: src/features/auth/flow/AuthRuntimeTargetBoundary.tsx
 msgid "Could not load this page"
 msgstr "Не удалось загрузить эту страницу"
 
@@ -19502,6 +19509,11 @@ msgstr "Включить мои резервные коды двухфактор
 #: src/features/moderation/components/pages/ReportPage.tsx
 msgid "Include the community ID."
 msgstr "Укажите ID сообщества."
+
+#. Explains the public Operator Pass count. Each valid pass counts once per account, including purchases passed on. Holding an active pass is still required for benefits.
+#: src/features/premium/utils/OperatorPassRecognitionMessages.ts
+msgid "Includes valid passes you have and passes you bought and passed on. Keep at least one active pass to retain your badge and wall listing. Paused or ended passes do not count."
+msgstr "Включает действующие пропуски у вас и пропуски, которые вы купили и передали другим. Сохраните хотя бы один активный пропуск, чтобы сохранить значок и место на стене. Приостановленные или прекратившие действие пропуски не учитываются."
 
 #. Note under the Operator Pass price when buying one pass. The price includes tax and is paid once, it never renews.
 #: src/features/premium/components/modals/OperatorPassCheckoutPresentation.tsx
@@ -38495,6 +38507,7 @@ msgstr "Попробуйте другой запрос."
 #. Generic action label for retrying a failed or interrupted operation.
 #: src/features/app/components/layout/app_layout/nagbars/ConnectionNagbar.tsx
 #: src/features/auth/flow/AuthRouteLoadError.tsx
+#: src/features/auth/flow/AuthRuntimeTargetBoundary.tsx
 #: src/features/i18n/utils/CommonMessageDescriptors.ts
 #: src/features/premium/components/modals/OperatorPassCheckoutModal.tsx
 msgid "Try again"
@@ -38521,6 +38534,7 @@ msgid "Try again or go back to the applications list."
 msgstr "Повторите попытку или вернитесь к списку приложений."
 
 #: src/features/auth/flow/AuthRouteLoadError.tsx
+#: src/features/auth/flow/AuthRuntimeTargetBoundary.tsx
 msgid "Try again, or refresh {productName} if the problem continues."
 msgstr "Попробуйте еще раз или обновите {productName}, если проблема не исчезнет."
 
